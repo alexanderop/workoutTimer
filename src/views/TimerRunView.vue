@@ -42,6 +42,7 @@ const session = computed(() => sessions.value.find((item) => item.id === String(
 const fallbackSettings: TimerSettings = {
   id: 'timer',
   soundEnabled: true,
+  soundVolume: 1,
   hapticsEnabled: true,
   spokenCountdownEnabled: false,
   startCountdownMs: 3_000,

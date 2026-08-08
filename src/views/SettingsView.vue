@@ -22,6 +22,7 @@ import {
   type TimerSettings,
   updateTimerSettings,
 } from '@/db'
+import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import type { SupportedLocale } from '@/i18n'
 import { downloadBackup, readBackupFile } from '@/lib/backupFile'
 import { timerSettingsAtom } from '@/stores/timerData'
@@ -40,6 +41,7 @@ const settingsResult = useAtomValue(() => timerSettingsAtom)
 const fallbackSettings: TimerSettings = {
   id: 'timer',
   soundEnabled: true,
+  soundVolume: 1,
   hapticsEnabled: true,
   spokenCountdownEnabled: false,
   startCountdownMs: 3_000,
@@ -65,6 +67,20 @@ function saveSetting(patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>): P
       ),
     ),
   )
+}
+
+function handleVolumeChange(event: Event): Promise<unknown> {
+  const value = Number((event.target as HTMLInputElement).value)
+  if (!Number.isFinite(value) || value < 0 || value > 100) return Promise.resolve()
+  const soundVolume = value / 100
+  // Play the round cue at the new level so the user hears what they picked.
+  // Haptics and speech are muted for the preview — only the volume is on trial.
+  unlockTimerAudio()
+  emitTimerCue(
+    { ...settings.value, soundVolume, hapticsEnabled: false, spokenCountdownEnabled: false },
+    'round',
+  )
+  return saveSetting({ soundVolume })
 }
 
 function handleCountdownChange(event: Event): Promise<unknown> {
@@ -129,6 +145,25 @@ async function handleImportFile(event: Event): Promise<void> {
               id="sound-switch"
               :model-value="settings.soundEnabled"
               @update:model-value="saveSetting({ soundEnabled: $event })"
+            />
+          </label>
+          <label class="flex flex-col gap-2 p-4 text-sm font-medium" for="sound-volume">
+            <span class="flex items-center justify-between">
+              <span>{{ t('settings.timer.soundVolume') }}</span>
+              <span class="font-normal text-muted-foreground">
+                {{ Math.round(settings.soundVolume * 100) }}%
+              </span>
+            </span>
+            <input
+              id="sound-volume"
+              type="range"
+              min="0"
+              max="100"
+              step="10"
+              class="h-touch-target w-full accent-primary"
+              :value="Math.round(settings.soundVolume * 100)"
+              :disabled="!settings.soundEnabled"
+              @change="handleVolumeChange"
             />
           </label>
           <label
