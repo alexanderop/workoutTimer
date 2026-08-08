@@ -12,6 +12,11 @@
     "repository": "unovue/shadcn-vue",
     "description": "The component style this project copies but does not depend on. apps/v4/registry/new-york-v4/ui/<name>/ is the canonical file shape for a primitive — props plus class, reactiveOmit, useForwardProps, data-slot, cn(defaults, props.class) — and apps/v4/registry/bases/reka/ shows the same parts against a different base. Copy the structure, not the classes: this app has its own tokens. See docs/ui-components.md for the deviations that are deliberate."
   },
+  "storybook": {
+    "repository": "storybookjs/storybook",
+    "branch": "pinned/10.5.7",
+    "description": "Storybook source, pinned to the 10.5.7 release (the clone's default branch is `next`, an alpha — do not read it as shipped behaviour). The monorepo lives under code/: frameworks/vue3-vite/src/ is the Vue integration (preset.ts wires builder + renderer, plugins/vue-docgen.ts and plugins/vue-component-meta.ts are the two docgen backends the `docgen` framework option picks between); builders/builder-vite/ is how the dev server and static build are produced; addons/vitest/src/vitest-plugin/index.ts is the authority on what storybookTest() does to a Vitest config — it replaces test.include with a glob derived from main.ts#stories, appends its own setup file, and overrides the project name, which is why it belongs in its own entry of test.projects. Peer ranges in each package.json are the real compatibility answer: vue3-vite and builder-vite accept vite ^5–^8, addon-vitest accepts vitest ^3–^4 with @vitest/browser-playwright ^4."
+  },
   "stryker-js": {
     "repository": "stryker-mutator/stryker-js",
     "description": "Stryker source, for questions docs/mutation-testing.md does not answer. packages/vitest-runner/src/ is how mutants reach Vitest (one long-lived createVitest instance, mutant selected via ctx.provide, related mode per mutant); packages/instrumenter/src/ is which mutators fire on which syntax, including the .vue and ignorer-plugin paths; e2e/test/vitest-* are working fixtures for projects, property-based tests, and Vue+TS setups. packages/api/schema/stryker-core.json is the authoritative option list with defaults."
