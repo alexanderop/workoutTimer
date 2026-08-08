@@ -1,50 +1,34 @@
 import { Effect } from 'effect'
-import { page } from 'vitest/browser'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createSession, listPresets, listSessions, runDb, updateTimerSettings } from '@/db'
-import { renderApp } from '../../helpers/renderApp'
-import { resetAppState } from '../../helpers/reset'
+import { describe, expect } from 'vitest'
+import { listPresets, listSessions, runDb } from '@/db'
+import { it } from '../../fixtures'
+
+const storedSessions = () => runDb(listSessions.pipe(Effect.orDie))
 
 describe('workout timer flow', () => {
-  let cleanup: (() => void) | undefined
+  it('starts, records a round, completes, and saves a result', async ({ timer }) => {
+    await timer.chooseMode('AMRAP')
+    await timer.setup.chooseTime('1 min')
+    await timer.setup.start()
+    await timer.run.expectRunning()
 
-  beforeEach(async () => {
-    await resetAppState()
-    await runDb(updateTimerSettings({ startCountdownMs: 0 }).pipe(Effect.orDie))
-  })
-  afterEach(() => cleanup?.())
+    await timer.run.addRound()
+    await timer.run.expectRounds(1)
 
-  it('starts, records a round, completes, and saves a result', async () => {
-    ;({ cleanup } = await renderApp())
+    await timer.run.finish()
+    await timer.result.expectReady()
+    await timer.result.save('Felt strong')
+    await timer.result.expectNotes('Felt strong')
 
-    await page.getByRole('button', { name: /AMRAP/ }).click()
-    await page.getByRole('button', { name: '1 min', exact: true }).click()
-    await page.getByRole('button', { name: 'Start', exact: true }).click()
-
-    await expect.element(page.getByText('Work', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Add round' }).click()
-    await expect.element(page.getByText('1 rounds')).toBeVisible()
-
-    await page.getByRole('button', { name: 'Finish workout' }).click()
-    await page.getByRole('button', { name: 'Tap again to finish' }).click()
-    await expect.element(page.getByRole('heading', { name: 'Workout complete' })).toBeVisible()
-
-    await page.getByLabelText('Result notes').fill('Felt strong')
-    await page.getByRole('button', { name: 'Save result' }).click()
-    await expect.element(page.getByText('Felt strong')).toBeVisible()
-
-    const [stored] = await runDb(listSessions.pipe(Effect.orDie))
+    const [stored] = await storedSessions()
     expect(stored).toMatchObject({ status: 'completed', notes: 'Felt strong' })
     expect(stored?.rounds).toHaveLength(1)
   })
 
-  it('saves and reuses a preset', async () => {
-    ;({ cleanup } = await renderApp())
-
-    await page.getByRole('button', { name: /Tabata/ }).click()
-    await page.getByLabelText('Preset name').fill('Fast eight')
-    await page.getByRole('button', { name: 'Save as preset' }).click()
-    await expect.element(page.getByText('Preset saved')).toBeVisible()
+  it('saves and reuses a preset', async ({ timer }) => {
+    await timer.chooseMode('Tabata')
+    await timer.setup.savePreset('Fast eight')
+    await timer.expectToast('Preset saved')
 
     expect(await runDb(listPresets.pipe(Effect.orDie))).toMatchObject([
       { name: 'Fast eight', config: { mode: 'tabata', rounds: 8 } },
@@ -57,50 +41,54 @@ describe('workout timer flow', () => {
    * "re-seed whenever presets change" left the user staring at the mode
    * default and a Start button that would run a workout they never configured.
    */
-  it('keeps the configured values after saving them as a preset', async () => {
-    ;({ cleanup } = await renderApp('/timer/amrap'))
+  it('keeps the configured values after saving them as a preset', async ({ timer }) => {
+    await timer.chooseMode('AMRAP')
+    await timer.setup.chooseTime('20 min')
+    await timer.setup.savePreset('Twenty minute grind')
+    await timer.expectToast('Preset saved')
+    await timer.setup.start()
+    await timer.run.expectRunning()
 
-    await page.getByRole('button', { name: '20 min', exact: true }).click()
-    await page.getByLabelText('Preset name').fill('Twenty minute grind')
-    await page.getByRole('button', { name: 'Save as preset' }).click()
-    await expect.element(page.getByText('Preset saved')).toBeVisible()
-
-    await page.getByRole('button', { name: 'Start', exact: true }).click()
-    await expect.element(page.getByText('Work', { exact: true })).toBeVisible()
-
-    expect(await runDb(listSessions.pipe(Effect.orDie))).toMatchObject([
+    expect(await storedSessions()).toMatchObject([
       { config: { mode: 'amrap', durationMs: 1_200_000 } },
     ])
   })
 
-  it('offers 15-second shortcuts and accepts a custom raw time', async () => {
-    ;({ cleanup } = await renderApp('/timer/amrap'))
+  it('offers 15-second shortcuts and accepts a custom raw time', async ({ timer }) => {
+    await timer.chooseMode('AMRAP')
+    await timer.setup.expectTimeShortcut('15 sec')
+    await timer.setup.chooseCustomTime('2', '7')
+    await timer.setup.start()
+    await timer.run.expectRunning()
 
-    await expect.element(page.getByRole('button', { name: '15 sec', exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Custom time', exact: true }).click()
-    await page.getByLabelText('Minutes').fill('2')
-    await page.getByLabelText('Seconds').fill('7')
-    await page.getByRole('button', { name: 'Start', exact: true }).click()
-
-    await expect.element(page.getByText('Work', { exact: true })).toBeVisible()
-    expect(await runDb(listSessions.pipe(Effect.orDie))).toMatchObject([
+    expect(await storedSessions()).toMatchObject([
       { config: { mode: 'amrap', durationMs: 127_000 } },
     ])
   })
 
-  it('offers recovery for an active session', async () => {
-    const created = await runDb(
-      createSession({
-        config: { mode: 'forTime' },
-        workoutNotes: '',
-        countdownDurationMs: 0,
-      }).pipe(Effect.orDie),
-    )
-    ;({ cleanup } = await renderApp())
-
-    await expect.element(page.getByText('Workout in progress')).toBeVisible()
-    await page.getByRole('button', { name: 'Resume timer' }).click()
-    await expect.element(page.getByRole('heading', { name: 'For Time' })).toBeVisible()
-    expect(created.status).toBe('running')
+  it('offers recovery for an active session', async ({ recoverableTimer }) => {
+    const { session, timer } = recoverableTimer
+    await timer.expectRecovery()
+    await timer.resume()
+    await timer.run.expectMode('For Time')
+    expect(session.status).toBe('running')
   })
+
+  // This deliberately races two taps against the repository write. The tag
+  // carries the CI-only retry policy instead of copying it onto the test.
+  it(
+    'records one round when Add round is tapped twice in one tick',
+    { tags: ['flaky'] },
+    async ({ timer }) => {
+      await timer.chooseMode('AMRAP')
+      await timer.setup.chooseTime('1 min')
+      await timer.setup.start()
+      await timer.run.expectRunning()
+
+      timer.run.addRoundTwiceInOneTick()
+
+      await expect.poll(async () => (await storedSessions())[0]?.rounds.length).toBe(1)
+      await timer.run.expectRounds(1)
+    },
+  )
 })

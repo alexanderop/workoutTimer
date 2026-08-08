@@ -54,6 +54,11 @@ For a feature the size of the timer, the full set is roughly:
 | arch | nothing to write — the generic rules pick up new features automatically |
 | e2e | only if the feature carries a load-bearing journey (like persistence-across-reload) |
 
+Anything that drives a screen goes through a page object first: a class in
+`src/__tests__/pages/` for Vitest browser tiers, and one in `test/e2e/pages/`
+when the journey reaches Playwright. `TimerScreen` and `WorkoutPage` are the
+worked examples; [vitest-practices.md](vitest-practices.md) owns the details.
+
 ## 6. Ship
 
 ```bash

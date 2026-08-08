@@ -1,34 +1,36 @@
-import { page } from 'vitest/browser'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe } from 'vitest'
+import { it } from '../fixtures'
 import { assertNoPageLevelViolations, assertNoViolations } from '../helpers/a11y'
-import { renderApp } from '../helpers/renderApp'
-import { resetAppState } from '../helpers/reset'
 
 describe('accessibility', () => {
-  let cleanup: (() => void) | undefined
-
-  beforeEach(resetAppState)
-  afterEach(() => cleanup?.())
-
-  it.each([
-    ['timer home', '/'],
-    ['AMRAP setup', '/timer/amrap'],
-    ['history', '/history'],
-    ['presets', '/presets'],
-    ['settings', '/settings'],
-  ])('%s has no violations', async (_name, path) => {
-    const app = await renderApp(path)
-    cleanup = app.cleanup
-    await expect.element(page.getByTestId('app')).toBeVisible()
-    await assertNoViolations(app.container)
+  it('timer home has no violations', async ({ timer }) => {
+    await timer.expectHome()
+    await assertNoViolations(timer.container)
   })
 
-  it.each([
-    ['timer home', '/'],
-    ['settings', '/settings'],
-  ])('%s has a sound page structure', async (_name, path) => {
-    const app = await renderApp(path)
-    cleanup = app.cleanup
-    await assertNoPageLevelViolations()
+  it('AMRAP setup has no violations', async ({ timer }) => {
+    await timer.chooseMode('AMRAP')
+    await timer.setup.expectTimeShortcut('15 sec')
+    await assertNoViolations(timer.container)
+  })
+
+  it('history has no violations', async ({ history }) => {
+    await assertNoViolations(history.container)
+  })
+
+  it('presets has no violations', async ({ presets }) => {
+    await assertNoViolations(presets.container)
+  })
+
+  it('settings has no violations', async ({ settings }) => {
+    await assertNoViolations(settings.container)
+  })
+
+  it('timer home has a sound page structure', async ({ timer }) => {
+    await assertNoPageLevelViolations(timer)
+  })
+
+  it('settings has a sound page structure', async ({ settings }) => {
+    await assertNoPageLevelViolations(settings)
   })
 })

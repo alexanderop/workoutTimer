@@ -1,0 +1,17 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`accessibility tree > the tab bar names all destinations 1`] = `
+- navigation "Main navigation":
+  - button "Timer"
+  - button "History"
+  - button "Settings"
+`;
+
+exports[`accessibility tree > the timer home exposes each workout mode as a button 1`] = `
+- region "Workout Timer":
+  - heading "Workout Timer" [level=2]
+  - button "AMRAP As many rounds as possible"
+  - button "For Time Finish the work as fast as you can"
+  - button "EMOM Start work on every interval"
+  - button "Tabata Alternate focused work and rest"
+`;

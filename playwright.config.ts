@@ -9,7 +9,9 @@ const baseURL = 'http://127.0.0.1:5678'
 // Playwright spec files produced from test/e2e/features/**.
 const bddTestDir = defineBddConfig({
   features: 'test/e2e/features/**/*.feature',
-  steps: 'test/e2e/steps/**/*.ts',
+  // playwright-bdd scans these files to find the custom test instance whose
+  // fixtures the generated specs should use.
+  steps: ['test/e2e/fixtures.ts', 'test/e2e/steps/**/*.ts'],
 })
 
 export default defineConfig({

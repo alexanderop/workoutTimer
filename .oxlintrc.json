@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "overrides": [
+    {
+      "files": ["src/__tests__/**", "test/**"],
+      "rules": {
+        "no-empty-pattern": ["warn", { "allowObjectPatternsAsParameters": true }]
+      }
+    }
+  ]
+}

@@ -21,6 +21,7 @@ There is no `CLAUDE.md` and no `AGENTS.md`. A `SessionStart` hook (`.claude/hook
 | [Local-first](local-first.md) | Deciding whether something belongs on-device, or how a schema change stays readable |
 | [Adding a feature](adding-a-feature.md) | Building a new feature — the build order and the test home for each step |
 | [Testing strategy](testing-strategy.md) | Choosing which tier a test belongs in, or whether to write a property |
+| [Vitest practices](vitest-practices.md) | Writing browser specs with fixtures, screen objects, helpers, tags, and ARIA snapshots |
 | [Driving the app with agent-browser](agent-browser.md) | Verifying a feature yourself in a real browser — before claiming it works |
 | [Mutation testing](mutation-testing.md) | Reading a surviving mutant, or changing what `pnpm test:mutation` grades |
 | [UI components](ui-components.md) | Any work in `src/components/ui/` — adding a primitive, or wondering why a component takes `class` |
@@ -38,7 +39,7 @@ pnpm check          # ← verify your work: lint + format + types + knip + unit 
 pnpm dev            # Dev server
 pnpm test:unit      # Node unit tier — pure logic, ~100 ms
 pnpm test           # Browser tier (Vitest browser mode)
-pnpm test:a11y      # axe-core sweeps
+pnpm test:a11y      # axe-core sweeps + ARIA snapshots (-- --update to rebaseline)
 pnpm test:visual    # Screenshot comparisons (test:visual:update to rebaseline)
 pnpm test:arch      # ArchUnitTS boundary rules
 pnpm test:mutation  # Stryker over the unit tier (~10 s) — grades the assertions,

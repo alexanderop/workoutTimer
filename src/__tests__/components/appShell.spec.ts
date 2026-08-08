@@ -2,12 +2,13 @@ import type { Router } from 'vue-router'
 import { NotebookPen, Settings } from '@lucide/vue'
 import { page } from 'vitest/browser'
 import { render } from 'vitest-browser-vue'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
 import { i18n } from '@/i18n'
 import type { NavItem } from '@/types/navigation'
+import { it as base } from '../fixtures'
 
 const Stub = defineComponent({ render: () => h('div', 'stub view') })
 
@@ -27,32 +28,35 @@ const items: Array<NavItem> = [
   { routeName: 'second', icon: Settings, label: 'Second' },
 ]
 
-async function renderShell(initialPath: string, withCenterAction = false) {
-  const router = makeRouter()
-  await router.push(initialPath)
-  await router.isReady()
-
-  const screen = render(AppShell, {
-    props: { items },
-    slots: {
-      default: () => h('div', 'page content'),
-      ...(withCenterAction
-        ? { 'center-action': () => h('button', { type: 'button' }, 'center') }
-        : {}),
-    },
-    global: { plugins: [i18n, router] },
+const it = base.extend('renderShell', async ({}, { onCleanup }) => {
+  let mounted: { unmount: () => Promise<void> } | undefined
+  onCleanup(async () => {
+    await mounted?.unmount()
   })
 
-  return { screen, router }
-}
+  return async (initialPath: string, withCenterAction = false): Promise<{ router: Router }> => {
+    const router = makeRouter()
+    await router.push(initialPath)
+    await router.isReady()
+
+    mounted = render(AppShell, {
+      props: { items },
+      slots: {
+        default: () => h('div', 'page content'),
+        ...(withCenterAction
+          ? { 'center-action': () => h('button', { type: 'button' }, 'center') }
+          : {}),
+      },
+      global: { plugins: [i18n, router] },
+    })
+
+    return { router }
+  }
+})
 
 describe('AppShell', () => {
-  let unmount: (() => void) | undefined
-  afterEach(() => unmount?.())
-
-  it('renders the tabs and marks the active route with aria-current', async () => {
-    const { screen } = await renderShell('/')
-    unmount = () => screen.unmount()
+  it('renders the tabs and marks the active route with aria-current', async ({ renderShell }) => {
+    await renderShell('/')
 
     await expect
       .element(page.getByRole('button', { name: 'Home' }))
@@ -62,26 +66,23 @@ describe('AppShell', () => {
       .not.toHaveAttribute('aria-current')
   })
 
-  it('navigates when a tab is tapped', async () => {
-    const { screen, router } = await renderShell('/')
-    unmount = () => screen.unmount()
+  it('navigates when a tab is tapped', async ({ renderShell }) => {
+    const { router } = await renderShell('/')
 
     await page.getByRole('button', { name: 'Second' }).click()
 
     await expect.poll(() => router.currentRoute.value.name).toBe('second')
   })
 
-  it('hides the tab bar on routes with meta.hideNav', async () => {
-    const { screen } = await renderShell('/focus')
-    unmount = () => screen.unmount()
+  it('hides the tab bar on routes with meta.hideNav', async ({ renderShell }) => {
+    await renderShell('/focus')
 
     await expect.element(page.getByText('page content')).toBeVisible()
     expect(page.getByRole('navigation').query()).toBeNull()
   })
 
-  it('renders the center action between the split tab halves', async () => {
-    const { screen } = await renderShell('/', true)
-    unmount = () => screen.unmount()
+  it('renders the center action between the split tab halves', async ({ renderShell }) => {
+    await renderShell('/', true)
 
     const nav = page.getByRole('navigation')
     await expect.element(nav.getByRole('button', { name: 'center' })).toBeVisible()

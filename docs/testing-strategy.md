@@ -37,7 +37,10 @@ Work down this list and stop at the first match:
 - Verify observable behavior through the public interface — what a user or caller sees.
 - Mock only at system boundaries (time, randomness, network). Never mock internal collaborators; the browser tier exists so you don't have to.
 - No call-count/order assertions, no reaching into component internals.
-- Every test file resets its own state (`beforeEach(resetAppState)`) — order independence is non-negotiable.
+- Browser specs use the fixtures from `src/__tests__/fixtures.ts`; each fixture
+  owns reset, mount, and cleanup so order independence cannot be forgotten.
+- UI journeys go through screen/page objects whose locators use roles and
+  accessible names. Persistence assertions stay in the spec.
 
 ## Properties, and when one earns its place
 

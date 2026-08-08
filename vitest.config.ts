@@ -45,6 +45,15 @@ const sharedTestConfig = {
   bail: process.env.CI ? 0 : 1,
   // Stricter locally for fast feedback, generous in CI (shared runners are slower).
   testTimeout: process.env.CI ? 15_000 : 8000,
+  // Retry browser infrastructure failures in CI, never assertion failures.
+  retry: process.env.CI
+    ? {
+        count: 2,
+        delay: 250,
+        condition:
+          /Failed to fetch dynamically imported module|has been closed|Execution context was destroyed|net::ERR/i,
+      }
+    : 0,
   slowTestThreshold: 1000,
   includeTaskLocation: true,
   chaiConfig: { truncateThreshold: 999 },
@@ -70,6 +79,17 @@ export default defineConfig({
   optimizeDeps: optimizeDependencies,
   test: {
     coverage: coverageConfig,
+
+    // Cross-cutting runner policy belongs in a tag, not in copied per-test
+    // options. strictTags is on by default; vitest.d.ts adds compile-time help.
+    tags: [
+      {
+        name: 'flaky',
+        description: 'Deliberately races browser events and may retry on loaded CI runners.',
+        retry: process.env.CI ? { count: 3, delay: 250 } : 0,
+        priority: 1,
+      },
+    ],
 
     // Tiered projects — see docs/testing-strategy.md for which tier a test
     // belongs in and why.

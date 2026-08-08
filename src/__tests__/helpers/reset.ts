@@ -5,9 +5,9 @@ import { resetDatabase } from '@/db'
 
 /**
  * Full app-state reset for browser-tier tests: database, persisted
- * preferences, and theme class. Use as `beforeEach(resetAppState)`.
+ * preferences, and theme class. App fixtures call this before mounting.
  *
- * Atom-held state (notes list, toasts, quick-add sheet) needs no reset here:
+ * Atom-held state (sessions, presets, toasts) needs no reset here:
  * renderApp provides a fresh atom registry per mount, so it never outlives a
  * test. What does leak between tests lives outside the registry —
  * IndexedDB, and the module-scoped VueUse refs behind useLocale and
