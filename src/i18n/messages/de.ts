@@ -163,6 +163,45 @@ const de: MessageSchema = {
     updateAvailable: 'Eine neue Version ist verfügbar',
     reload: 'Neu laden',
     dismiss: 'Update-Hinweis ausblenden',
+    install: {
+      banner: {
+        title: 'Workout Timer installieren',
+        body: 'Füge ihn zum Startbildschirm hinzu — offline und als Vollbild-Timer.',
+        action: 'Installieren',
+        later: 'Später',
+      },
+      dialog: {
+        title: 'Workout Timer installieren',
+        description:
+          'Installiert öffnet er sich wie jede andere App — im Vollbild, offline, und deine Workouts bleiben auf diesem Gerät.',
+        action: 'Installieren',
+        prompt: 'Dein Browser kann ihn direkt installieren.',
+        ios: {
+          intro: 'In Safari:',
+          share: 'Tippe auf „Teilen“ in der Symbolleiste',
+          add: 'Wähle „Zum Home-Bildschirm“',
+          confirm: 'Tippe auf „Hinzufügen“',
+          note: 'Öffne diese Seite in Safari, um sie unter iOS zu installieren.',
+        },
+        android: {
+          intro: 'Im Browser-Menü:',
+          menu: 'Öffne das Menü (⋮)',
+          install: 'Wähle „App installieren“ oder „Zum Startbildschirm“',
+          confirm: 'Bestätige die Installation',
+        },
+        other: {
+          intro: 'In deinem Browser:',
+          menu: 'Suche „Installieren“ in der Adressleiste oder im Browser-Menü',
+          confirm: 'Bestätige die Installation',
+        },
+      },
+      settings: {
+        title: 'Installieren',
+        description: 'Füge den Workout Timer für Offline-Zugriff zum Startbildschirm hinzu.',
+        action: 'Anleitung anzeigen',
+        installed: 'Der Workout Timer ist installiert.',
+      },
+    },
   },
 }
 

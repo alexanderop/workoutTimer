@@ -161,5 +161,44 @@ export default {
     updateAvailable: 'A new version is available',
     reload: 'Reload',
     dismiss: 'Dismiss update notice',
+    install: {
+      banner: {
+        title: 'Install Workout Timer',
+        body: 'Add it to your home screen for offline access and a full-screen timer.',
+        action: 'Install',
+        later: 'Not now',
+      },
+      dialog: {
+        title: 'Install Workout Timer',
+        description:
+          'Installed, it opens like any other app — full screen, offline, and your workouts stay on this device.',
+        action: 'Install',
+        prompt: 'Your browser can install it directly.',
+        ios: {
+          intro: 'In Safari:',
+          share: 'Tap the Share button in the toolbar',
+          add: 'Choose "Add to Home Screen"',
+          confirm: 'Tap "Add"',
+          note: 'Open this page in Safari to install it on iOS.',
+        },
+        android: {
+          intro: 'In your browser menu:',
+          menu: 'Open the menu (⋮)',
+          install: 'Choose "Install app" or "Add to Home screen"',
+          confirm: 'Confirm to install',
+        },
+        other: {
+          intro: 'From your browser:',
+          menu: 'Look for "Install" in the address bar or the browser menu',
+          confirm: 'Confirm to install',
+        },
+      },
+      settings: {
+        title: 'Install',
+        description: 'Add Workout Timer to your home screen for offline access.',
+        action: 'How to install',
+        installed: 'Workout Timer is installed.',
+      },
+    },
   },
 }

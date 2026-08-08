@@ -2,6 +2,7 @@ import { expect, vi } from 'vitest'
 import type { Locator } from 'vitest/browser'
 import { page } from 'vitest/browser'
 import { renderApp } from '../helpers/renderApp'
+import { InstallPrompt } from './installPrompt'
 
 /**
  * Base for browser-tier screen objects. Screen objects own accessible
@@ -10,6 +11,9 @@ import { renderApp } from '../helpers/renderApp'
  * mount through `openAt` directly instead of a subclass per route.
  */
 export class AppScreen {
+  /** App-wide install banner and dialog. */
+  readonly install = new InstallPrompt()
+
   protected constructor(
     /** The mounted subtree used by axe and screenshot assertions. */
     readonly container: HTMLElement,

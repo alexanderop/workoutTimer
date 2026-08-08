@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
-import { Download, Upload } from '@lucide/vue'
+import { Download, Smartphone, Upload } from '@lucide/vue'
 import { Effect } from 'effect'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageLayout from '@/components/PageLayout.vue'
+import PwaInstallDialog from '@/components/PwaInstallDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { useInstallPrompt } from '@/composables/useInstallPrompt'
 import { useLocale } from '@/composables/useLocale'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { useTheme } from '@/composables/useTheme'
@@ -28,7 +30,9 @@ import { useToastStore } from '@/stores/toast'
 const { t } = useI18n()
 const { isDark } = useTheme()
 const { locale, setLocale, supportedLocales } = useLocale()
+const { canInstall, isInstalled } = useInstallPrompt()
 const toast = useToastStore()
+const installDialogOpen = ref(false)
 const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
 const runRestoreMutation = useAtomSet(() => restoreMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('settings')
@@ -203,6 +207,26 @@ async function handleImportFile(event: Event): Promise<void> {
         </div>
       </section>
 
+      <section v-if="canInstall || isInstalled" class="flex flex-col gap-3">
+        <h2 class="text-section-title font-semibold">{{ t('pwa.install.settings.title') }}</h2>
+        <div class="flex flex-col gap-4 rounded-xl border p-4">
+          <p v-if="isInstalled" class="text-sm text-muted-foreground">
+            {{ t('pwa.install.settings.installed') }}
+          </p>
+          <template v-else>
+            <p class="text-sm text-muted-foreground">
+              {{ t('pwa.install.settings.description') }}
+            </p>
+            <div>
+              <Button variant="outline" @click="installDialogOpen = true">
+                <Smartphone />
+                {{ t('pwa.install.settings.action') }}
+              </Button>
+            </div>
+          </template>
+        </div>
+      </section>
+
       <section class="flex flex-col gap-3">
         <h2 class="text-section-title font-semibold">{{ t('settings.data.title') }}</h2>
         <div class="flex flex-col gap-4 rounded-xl border p-4">
@@ -226,5 +250,7 @@ async function handleImportFile(event: Event): Promise<void> {
         </div>
       </section>
     </div>
+
+    <PwaInstallDialog v-model:open="installDialogOpen" />
   </PageLayout>
 </template>

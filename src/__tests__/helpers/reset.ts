@@ -1,4 +1,5 @@
 import { nextTick } from 'vue'
+import { resetInstallPromptState } from '@/composables/useInstallPrompt'
 import { resetLocaleState } from '@/composables/useLocale'
 import { resetThemeState } from '@/composables/useTheme'
 import { resetDatabase } from '@/db'
@@ -21,6 +22,7 @@ export async function resetAppState(): Promise<void> {
   localStorage.clear()
   resetLocaleState()
   resetThemeState()
+  resetInstallPromptState()
   // useColorMode applies the `.dark` class from a `flush: 'post'` watcher.
   await nextTick()
 }

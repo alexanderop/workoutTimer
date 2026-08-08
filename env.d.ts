@@ -15,3 +15,22 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/**
+ * Browser install APIs that are not part of the standard DOM typings.
+ * Chromium exposes `beforeinstallprompt`; iOS Safari exposes
+ * `navigator.standalone` when launched from the home screen.
+ */
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: ReadonlyArray<string>
+  readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+  prompt(): Promise<void>
+}
+
+interface WindowEventMap {
+  beforeinstallprompt: BeforeInstallPromptEvent
+}
+
+interface Navigator {
+  readonly standalone?: boolean
+}

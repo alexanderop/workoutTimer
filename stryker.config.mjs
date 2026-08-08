@@ -38,7 +38,7 @@ export default {
   //     not boot.
   //   - src/db/generateId.ts, src/lib/observability.ts — a crypto.randomUUID
   //     wrapper and a DEV-only gate. Equivalent mutants by construction.
-  mutate: ['src/features/*/domain.ts', 'src/lib/backupFile.ts'],
+  mutate: ['src/features/*/domain.ts', 'src/lib/backupFile.ts', 'src/lib/installPlatform.ts'],
 
   // Reuse the previous run's verdicts for unchanged code+tests. The report
   // lives in reports/, which is gitignored — CI gets a cold run.
