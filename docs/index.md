@@ -1,0 +1,157 @@
+---
+okf_version: "0.2"
+---
+
+# vue-pwa-starter knowledge
+
+## What this is
+
+A local-first Vue 3 PWA starter template. Data lives in the browser (Dexie/IndexedDB) — no backend, no accounts. Mobile-first: the app shell, safe-area handling, and keyboard-aware sheets are the product. The `notes` feature is a worked example meant to be copied and then deleted.
+
+When in doubt about a design call: does it keep interactions instant and the data on-device?
+
+## How to read this
+
+This file is the entry point. It holds the rules; the concept files it links hold the reasoning behind them, as an [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) v0.2 bundle — one concept per markdown file, YAML frontmatter (`type`, `title`, `description`, `tags`, `status`), relative links between them. Follow a link when your task touches it; do not read the tree top to bottom.
+
+There is no `CLAUDE.md` and no `AGENTS.md`. A `SessionStart` hook (`.claude/hooks/docs.mjs`) injects this file into every agent session verbatim, so agents and humans read the same file and the conventions exist in one copy. An agent that changes a rule changes it here.
+
+| Concept | Read it when |
+| --- | --- |
+| [Local-first](local-first.md) | Deciding whether something belongs on-device, or why the converter/migration pair exists |
+| [Adding a feature](adding-a-feature.md) | Building a new feature — the build order and the test home for each step |
+| [Testing strategy](testing-strategy.md) | Choosing which tier a test belongs in, or whether to write a property |
+| [Driving the app with agent-browser](agent-browser.md) | Verifying a feature yourself in a real browser — before claiming it works |
+| [Mutation testing](mutation-testing.md) | Reading a surviving mutant, or changing what `pnpm test:mutation` grades |
+| [UI components](ui-components.md) | Any work in `src/components/ui/` — adding a primitive, or wondering why a component takes `class` |
+| [Effect](effect/index.md) | Any Effect work — branch chooser into the per-topic concepts |
+
+Adding a doc means adding a concept file with frontmatter and linking it from this table, so the bundle stays conformant and navigable.
+
+## Commands
+
+```bash
+pnpm check          # ← verify your work: lint + format + types + knip + unit + arch,
+                    #   in parallel (~8 s), continuing past the first failure so one
+                    #   run reports every problem. No browser needed. Run this before
+                    #   claiming a change is done.
+pnpm dev            # Dev server
+pnpm test:unit      # Node unit tier — pure logic, ~100 ms
+pnpm test           # Browser tier (Vitest browser mode)
+pnpm test:a11y      # axe-core sweeps
+pnpm test:visual    # Screenshot comparisons (test:visual:update to rebaseline)
+pnpm test:arch      # ArchUnitTS boundary rules
+pnpm test:mutation  # Stryker over the unit tier (~10 s) — grades the assertions,
+                    #   not the coverage. mutation-testing.md before editing the
+                    #   scope in stryker.config.mjs.
+pnpm test:e2e       # playwright-bdd against the production build
+pnpm lint           # oxlint + eslint + markdownlint (fix mode; lint:check to verify)
+pnpm format         # prettier (format:check to verify — CI runs the check)
+pnpm type-check     # vue-tsc --build
+pnpm knip           # Dead exports
+pnpm build          # Production build (+ pnpm size-limit for the budget)
+```
+
+`pnpm check` covers every gate that runs without a browser; the lint and
+formatting parts of it are fixable with `pnpm lint` and `pnpm format`. The
+browser tiers (`test`, `test:a11y`, `test:visual`, `test:e2e`) cost minutes and
+stay separate — run the ones your change touches, and let CI run the rest.
+
+## Effect
+
+`effect` is pinned to exactly `4.0.0-beta.105`. Start at
+**[effect/index.md](effect/index.md)** — the conventions and the branch chooser
+into per-topic concepts (schema, services and layers, config, scheduling,
+caching, streams, HTTP clients, testing). Read
+[effect/conventions.md](effect/conventions.md) for any Effect work, then only
+the branches your task touches.
+
+When the concepts do not answer the question, read the Effect source itself. It
+is the `effect` reference — checked out to match the pin, and announced to every
+session by the hook described under **References**, so nothing here has to point
+at it.
+
+Online docs and v3 training data describe a different API; do not use them.
+Bumping the pin means moving the reference clone's pinned branch too, and
+re-checking the `docs/effect/` concepts against it.
+
+Where the concepts and this file disagree about *this* codebase, this file
+wins — the concepts describe Effect, the **Critical conventions** below
+describe our use of it.
+
+## References
+
+Source trees this project reads but does not vendor. `.claude/references.json`
+is the registry; a `SessionStart` hook (`.claude/hooks/references.mjs`) resolves
+it, clones anything missing into `~/Projects/opensource/<alias>` in the
+background, and injects each entry into the session as `<available_references>`
+so an agent knows the tree exists without being pointed at it. It is the sibling
+of the hook that injected this file — same wire format, same two harnesses.
+
+One registry, one script, two harnesses: `.claude/settings.json` registers both
+hooks with Claude Code and `.codex/hooks.json` registers the same scripts with
+Codex, which reimplements Claude Code's hook format down to the
+`hookSpecificOutput.additionalContext` payload. Two differences are load-bearing
+and the reason the Codex command reads the way it does: Codex sets no
+`$CLAUDE_PROJECT_DIR` (hence `git rev-parse --show-toplevel`), and its session
+`cwd` is wherever you started it, so each script climbs to what it needs rather
+than assuming the repository root. Codex also refuses to run a project hook it
+has not been shown — the first session lists it as untrusted and asks; until you
+accept, this file and the references are silently unadvertised. Editing a hook
+resets that.
+
+Both hooks are registered for `clear` and `compact` as well as `startup` and
+`resume`: injected context is part of the conversation, so without those the
+rules would vanish the first time a session compacted.
+
+```jsonc
+{
+  "effect": {
+    "repository": "Effect-TS/effect",   // owner/repo, host/path, or a git URL
+    "branch": "pinned/4.0.0-beta.105",  // clone-time ref; omit for the default
+    "description": "…"                  // no description ⇒ cloned but unadvertised
+  },
+  "docs": "../product-docs"             // shorthand: ./ ~/ or / ⇒ path, else repository
+}
+```
+
+Add machine-local references in `.claude/references.local.json` (gitignored,
+same shape, wins on alias collision) rather than editing the committed file.
+
+Refresh is `git fetch` only, so a `pinned/<version>` checkout is never moved
+under you — set `"pull": true` per entry to fast-forward, `"refresh": false` to
+leave a tree alone. Bumping a pin is still the manual `git checkout -b` in
+`~/Projects/opensource/effect`; the hook will not do it.
+
+`.claude/settings.json` grants `~/Projects/opensource` through
+`permissions.additionalDirectories`, but **project-level grants only apply once
+you have accepted the workspace trust dialog** — until then Claude Code prints a
+warning and the reference paths are advertised but unreadable. Codex needs no
+counterpart: reads are unrestricted in every one of its sandbox modes. What it
+does need is the project marked trusted, since it ignores `.codex/` entirely in
+an untrusted directory.
+
+## Critical conventions
+
+- **State**: atoms via `@effect/atom-vue` (pinned in lockstep with `effect`) — NOT Pinia, NOT VueUse `createGlobalState`. Shared state lives in a registry-held `Atom`; components subscribe with `useAtomValue`/`useAtom`/`useAtomSet`. Plain UI state is `Atom.make(...)` behind a composable (`src/stores/quickAdd.ts`, `src/stores/toast.ts` — note the writable `computed` wherever a component two-way binds). The registry is provided in `main.ts`; tests provide a fresh one per render instead of `$reset()`.
+- **DB**: all access via `src/db/index.ts` repositories. Schema changes need a version bump + `upgrade()` + converter update — see `src/db/schema.ts` for the worked v1→v2 example and [local-first.md](local-first.md) for why both.
+- **One schema per row, in `src/db/converters.ts`**: a `Schema.Struct` plus a same-name `interface` is the source of truth; Dexie's table typing, the read-path decode, and backup validation all derive from it. Never hand-write a TypeScript type beside a schema for the same data — they drift silently. IndexedDB is untrusted input: repositories decode every row on read and validate every draft on write, both failing with tagged errors.
+- **DB is Effect-based**: repositories are `Context.Service` classes with `Layer`s (`src/db/repositories/notes.ts` is the worked example); failures are tagged errors (`Schema.TaggedError`, `src/db/errors.ts`) visible in each program's type; validation uses `effect/Schema` (not zod). **Effect does not stop at the Vue boundary — it meets Vue at atoms**: reads that drive the UI are atoms built with `dbRuntime.atom(program)` and wired with `Atom.withReactivity([NOTES_KEY])` (`src/features/notes/atoms.ts` is the worked example) — their `AsyncResult` value carries loading, failure, and data typed into the template, and subscribing is the load. Writes are programs the component composes and hands to the `dbMutation` fn atom via `useAtomSet(() => dbMutation, { mode: 'promise' })`; like `runDb`, it accepts only `Effect<unknown, never, DbServices>`, so every failure must be handled inside Effect with `Effect.catchTag`/`Effect.catchTags` first — an unhandled `DatabaseError` is a type error, not a runtime surprise — and a landed write invalidates the reactivity key, so read atoms re-read from disk (no manual re-read). `runDb` remains the imperative edge for programs that read and leave (backup export, test assertions). No try/catch and no `instanceof` in `.vue` files; `src/views/SettingsView.vue` is the worked example (three failure types, one exhaustive `catchTags`). Pure Effect programs are tested with `it.effect` from `@effect/vitest` in the unit tier (worked example: `src/__tests__/unit/db/backup.spec.ts`); browser-tier tests say what they mean about failure with `Effect.orDie` (a failure would break the test) or `Effect.flip` (the failure *is* the assertion). Inside a program, log with `Effect.logError` + `Effect.annotateLogs`, not `console.error` in an `Effect.sync` — that keeps the entry on the fiber and the span `Effect.fn` opened.
+- **Where Effect starts and stops**: everything reachable from `@/db` — persistence, backup payloads, and the domain rules over them (`src/lib/backupFile.ts` is on this side, since a component composes it into one `catchTags` with the db programs). Browser-platform plumbing with no domain content stays plain async TypeScript: `src/lib/persistentStorage.ts` and `src/lib/swUpdateCheck.ts` use try/catch on purpose. If a failure needs a name the UI can match on, it belongs in Effect; if the only response is `console.debug`, it does not.
+- **One layer stack, two runtimes**: `src/db/layer.ts` defines `dbLayer`, and both the atom runtime (`src/db/atoms.ts`) and the ManagedRuntime behind `runDb` (`src/db/runtime.ts`) are built from it. They are separate contexts, so a repository layer merged into one is invisible to the other — add new layers in `layer.ts` and nowhere else. `src/lib/observability.ts` rides along there: OTLP tracer + logger from `effect/unstable/observability` (no `@opentelemetry/*` dependency), gated on `import.meta.env.DEV && VITE_OTLP_URL` so it is dead code in production. The spans it exports are the `Effect.fn('NotesRepo.list')` names already in the repositories — instrument by naming the `Effect.fn`, not by adding an exporter call.
+- **UI is shadcn-vue-style primitives over reka-ui — the pattern is copied, not installed**: `src/components/ui/<name>/` holds one directory per primitive, one file per part, plus an `index.ts` barrel that is the only way in (`src/components/ui/dialog/` is the worked example — `Dialog` provides, `DialogContent`/`Header`/`Footer`/`Title`/`Description`/`Close` compose). `reka-ui` and `class-variance-authority` are the private substrate of that directory: importing either anywhere else is a lint error, as is reaching past a barrel, and a primitive may not import `@/db`, `@/stores/*`, or a feature. Every part follows the same five moves — accept the reka part's props **plus** `class`, `reactiveOmit(props, 'class')`, `useForwardProps`/`useForwardPropsEmits` for the rest, a `data-slot` naming the part, and `cn(defaults, props.class)` so the call site's classes win via `tailwind-merge`. **The tree is the variant**: a flag that changes *what* renders (`mode`, `showHeader`) is a missing child component, not a prop — `variant`/`size`/`class` change *how* and are fine, and belong in a `cva()` table in the barrel. A flat convenience wrapper (`<ConfirmDialog>`) is built *on top of* the primitives, never as flags on them. Enforced twice, like the db boundary: `no-restricted-imports` for the imports, `src/__tests__/architecture/uiPrimitives.test.ts` for file shape (barrel export, `data-slot`, `class` merged through `cn()`, at most three self-declared props beyond `class`). Full reasoning and the deliberate deviations from upstream: [ui-components.md](ui-components.md).
+- **Features never import other features**; shared layers never import features. Enforced twice: ArchUnitTS in `src/__tests__/architecture/` reads the TypeScript module graph, and `no-restricted-imports` in `eslint.config.ts` covers `.vue` files, which ArchUnitTS does not parse.
+- **Two-way binding**: `const open = defineModel<boolean>('open')` — except where a reka part already owns the model (`Switch` forwards `modelValue` to `SwitchRoot`), since two owners of one value drift.
+- **i18n**: every user-facing string in `src/i18n/messages/en.ts` and `de.ts`; the schema type makes missing keys a compile error.
+- **Tests are not colocated**: they live in `src/__tests__/`, mirroring the source tree. Which tier a test belongs in: [testing-strategy.md](testing-strategy.md).
+- Keep logic in `.ts` modules, not `<script setup>` — that is what makes it unit-testable and visible to the arch tests.
+
+## Git workflow
+
+Conventional Commits with scope (`feat(notes): …`). The husky pre-commit gate (~15 s) runs lint-staged, type-check, test:unit, and knip on every commit — do not bypass it with `--no-verify`. Browser/a11y/visual/e2e tiers are CI's job (`.github/workflows/ci.yml`); run the ones your change touches before pushing.
+
+## Conventions in this bundle
+
+- Every non-index file carries `type`, `title`, `description`, `tags`, and `status`. `type` is one of `Playbook`, `Architecture Decision`, `Convention`, or `Reference`.
+- Content vendored from elsewhere carries a `sources` entry naming where it came from — that is the provenance record, so there is no separate lockfile.
+- Links are relative, so they resolve both on GitHub and for a consumer walking the directory.

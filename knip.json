@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["index.html"],
+  "project": ["src/**/*.ts", "src/**/*.vue"],
+  "ignore": ["src/components/ui/**"],
+  "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
+  "vitest": {
+    "entry": ["src/__tests__/**/*.spec.ts", "src/__tests__/**/*.test.ts"]
+  }
+}

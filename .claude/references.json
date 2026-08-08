@@ -1,0 +1,19 @@
+{
+  "effect": {
+    "repository": "Effect-TS/effect",
+    "branch": "pinned/4.0.0-beta.105",
+    "description": "Effect source of truth, pinned to the 4.0.0-beta.105 this project depends on. Read it for any Effect v4 question the docs/effect/ concepts do not answer: API availability, actual runtime behavior, LLMS.md, packages/effect/SCHEMA.md, the runnable examples under ai-docs/src/**, and the package tests. Online docs and v3 training data describe a different API and are not usable here."
+  },
+  "reka-ui": {
+    "repository": "unovue/reka-ui",
+    "description": "Reka UI source — the headless behaviour every primitive in src/components/ui/ wraps. packages/core/src/<Name>/ is the authority on what a part accepts, emits, and writes to the DOM (data-state, ARIA wiring, portal and focus handling): read the .vue file's exported *Props / *Emits types rather than recalling an API. docs/content/ holds the per-component usage pages."
+  },
+  "shadcn-vue": {
+    "repository": "unovue/shadcn-vue",
+    "description": "The component style this project copies but does not depend on. apps/v4/registry/new-york-v4/ui/<name>/ is the canonical file shape for a primitive — props plus class, reactiveOmit, useForwardProps, data-slot, cn(defaults, props.class) — and apps/v4/registry/bases/reka/ shows the same parts against a different base. Copy the structure, not the classes: this app has its own tokens. See docs/ui-components.md for the deviations that are deliberate."
+  },
+  "stryker-js": {
+    "repository": "stryker-mutator/stryker-js",
+    "description": "Stryker source, for questions docs/mutation-testing.md does not answer. packages/vitest-runner/src/ is how mutants reach Vitest (one long-lived createVitest instance, mutant selected via ctx.provide, related mode per mutant); packages/instrumenter/src/ is which mutators fire on which syntax, including the .vue and ignorer-plugin paths; e2e/test/vitest-* are working fixtures for projects, property-based tests, and Vue+TS setups. packages/api/schema/stryker-core.json is the authoritative option list with defaults."
+  }
+}
