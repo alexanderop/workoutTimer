@@ -24,12 +24,14 @@ All storage access goes through `src/db/index.ts`. Views, features, and composab
 
 ### Schema changes are a migration plus a tolerant read path — always both
 
-The store is at **v1**: `src/db/schema.ts` declares one version and no `upgrade()`, and no row on disk has ever had a different shape. So today the "converter" is the decode itself — `WorkoutSession` *is* the schema's decoded type, and `decodeWorkoutSession` is the only thing standing between a stored row and the app. There is deliberately no separate `StoredWorkoutSession` type and no `toWorkoutSession()` function: while the stored shape and the domain shape are the same shape, a second name for it is a copy waiting to drift, and the identity function bridging them is noise.
+The "converter" is the decode itself — `WorkoutSession` *is* the schema's decoded type, and `decodeWorkoutSession` is the only thing standing between a stored row and the app. There is deliberately no separate `StoredWorkoutSession` type and no `toWorkoutSession()` function: while the stored shape and the domain shape are the same shape, a second name for it is a copy waiting to drift, and the identity function bridging them is noise.
 
-The moment a **v2** lands, both halves become necessary again:
+Every schema version bump carries both halves:
 
 - **The Dexie `upgrade()`** rewrites rows already in the database when the app updates.
 - **A relaxed stored schema plus a converter** decodes and normalizes *any* historical row into a complete domain object at read time. Old fields go `Schema.optionalKey`, the domain type stays complete, and the gap between them is exactly what the converter fills.
+
+The worked example is **v2**: `soundVolume` joined the settings row, so `src/db/schema.ts` gained a `version(2).upgrade()` that fills it on existing rows, and the field in `TimerSettingsSchema` carries `Schema.withDecodingDefaultKey` — optional on the encoded side, required on the domain side, defaulted at decode time. That one declaration is the relaxed stored schema and the converter in the same place.
 
 Why both? Because the migration only sees rows that were in the database at upgrade time. Old JSON backups imported later, or rows arriving from a future sync peer, bypass it entirely. Keeping the old-shape fields optional in the stored schema is what makes the compiler *force* every read through the converter rather than trusting the table's type. The rule:
 
@@ -39,7 +41,7 @@ Why both? Because the migration only sees rows that were in the database at upgr
 
 The same schema does triple duty: Dexie's table typing, that read-path decode, and backup validation in `src/db/backup.ts`. One definition means a field added to a session cannot reach disk while quietly disappearing from every export.
 
-The paths that exist are tested: the decode rules in the unit tier (`src/__tests__/unit/db/converters.spec.ts`), repository CRUD and the rejected-row path in `src/__tests__/db/workouts.spec.ts`, and the backup round-trip in `src/__tests__/db/backup.spec.ts`. A v2 adds one more — a migration spec covering the `upgrade()` — in the same commit as the bump.
+The paths that exist are tested: the decode rules in the unit tier (`src/__tests__/unit/db/converters.spec.ts`), repository CRUD and the rejected-row path in `src/__tests__/db/workouts.spec.ts`, the backup round-trip in `src/__tests__/db/backup.spec.ts`, and each `upgrade()` in `src/__tests__/db/migrations.spec.ts` — a version bump lands its migration spec in the same commit.
 
 ### Persistent storage is requested at boot
 

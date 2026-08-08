@@ -136,6 +136,7 @@ export default {
     timer: {
       title: 'Timer experience',
       sound: 'Sounds',
+      soundVolume: 'Sound volume',
       haptics: 'Haptics',
       spokenCountdown: 'Spoken countdown',
       startCountdown: 'Start countdown',

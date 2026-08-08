@@ -27,13 +27,13 @@ export function emitTimerCue(
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(spokenText))
   }
 
-  if (!settings.soundEnabled || audioContext === undefined) return
+  if (!settings.soundEnabled || settings.soundVolume <= 0 || audioContext === undefined) return
   const oscillator = audioContext.createOscillator()
   const gain = audioContext.createGain()
   oscillator.type = 'sine'
   oscillator.frequency.value = kind === 'complete' ? 880 : kind === 'phase' ? 660 : 520
   gain.gain.setValueAtTime(0.0001, audioContext.currentTime)
-  gain.gain.exponentialRampToValueAtTime(0.15, audioContext.currentTime + 0.01)
+  gain.gain.exponentialRampToValueAtTime(settings.soundVolume, audioContext.currentTime + 0.01)
   gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.14)
   oscillator.connect(gain)
   gain.connect(audioContext.destination)

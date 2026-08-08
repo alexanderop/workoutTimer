@@ -14,6 +14,19 @@ class WorkoutTimerDatabase extends Dexie {
       sessions: 'id, status, createdAt, presetId',
       timerSettings: 'id',
     })
+
+    // v2 adds `soundVolume` to the settings row. The upgrade only reaches
+    // rows present at upgrade time — old backups imported later bypass it —
+    // so the schema's decoding default in converters.ts carries the other
+    // half (see docs/local-first.md).
+    this.version(2).upgrade((tx) =>
+      tx
+        .table('timerSettings')
+        .toCollection()
+        .modify((row: { soundVolume?: number }) => {
+          row.soundVolume ??= 1
+        }),
+    )
   }
 }
 

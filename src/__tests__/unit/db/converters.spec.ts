@@ -1,6 +1,16 @@
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { decodeNewSession, decodePresetDraft } from '@/db/converters'
+import { decodeNewSession, decodePresetDraft, decodeTimerSettings } from '@/db/converters'
+
+const v1SettingsRow = {
+  id: 'timer',
+  soundEnabled: true,
+  hapticsEnabled: true,
+  spokenCountdownEnabled: false,
+  startCountdownMs: 3_000,
+  keepAwake: true,
+  updatedAt: 1,
+}
 
 describe('workout schemas', () => {
   it('rejects an AMRAP without a positive duration', async () => {
@@ -24,5 +34,16 @@ describe('workout schemas', () => {
       }),
     )
     expect(draft).toMatchObject({ name: 'Fast eight', workoutNotes: 'burpees' })
+  })
+
+  it('defaults soundVolume to full for settings rows written before db v2', async () => {
+    const settings = await Effect.runPromise(decodeTimerSettings(v1SettingsRow))
+    expect(settings.soundVolume).toBe(1)
+  })
+
+  it('rejects a soundVolume outside 0..1', async () => {
+    await expect(
+      Effect.runPromise(decodeTimerSettings({ ...v1SettingsRow, soundVolume: 2 })),
+    ).rejects.toBeDefined()
   })
 })

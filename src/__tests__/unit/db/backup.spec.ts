@@ -32,5 +32,8 @@ describe('backup validation', () => {
     )
     expect(backup.sessions).toEqual([])
     expect(backup.presets).toEqual([])
+    // Backups exported before db v2 have no soundVolume — the decoding
+    // default keeps them importable.
+    expect(backup.timerSettings.soundVolume).toBe(1)
   })
 })

@@ -1,4 +1,4 @@
-import { Result, Schema } from 'effect'
+import { Effect, Result, Schema } from 'effect'
 
 /**
  * What a workout *is*, defined once as a Schema.
@@ -26,6 +26,17 @@ const Duration = Schema.Int.check(Schema.isBetween({ minimum: 1_000, maximum: 86
 const RestDuration = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 86_400_000 }))
 const Count = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 999 }))
 const StartCountdown = Schema.Literals([0, 3_000, 5_000, 10_000])
+
+/**
+ * Cue gain, 0 (silent) to 1 (full scale). Rows written before db v2 lack the
+ * key, and so do backups exported from those versions — the decoding default
+ * is the tolerant read path that keeps both readable, while the domain type
+ * stays complete. Defaults to full volume: the fixed gain it replaced was too
+ * quiet on phone speakers.
+ */
+const SoundVolume = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1 })).pipe(
+  Schema.withDecodingDefaultKey(Effect.succeed(1)),
+)
 
 const AmrapConfigSchema = Schema.Struct({
   mode: Schema.Literal('amrap'),
@@ -113,6 +124,7 @@ export type FinishReason = 'endpoint' | 'manual' | 'timeCap' | 'cancelled'
 export const TimerSettingsSchema = Schema.Struct({
   id: Schema.Literal('timer'),
   soundEnabled: Schema.Boolean,
+  soundVolume: SoundVolume,
   hapticsEnabled: Schema.Boolean,
   spokenCountdownEnabled: Schema.Boolean,
   startCountdownMs: StartCountdown,
@@ -164,6 +176,7 @@ export function makeDefaultTimerSettings(now: number): TimerSettings {
   return {
     id: 'timer',
     soundEnabled: true,
+    soundVolume: 1,
     hapticsEnabled: true,
     spokenCountdownEnabled: false,
     startCountdownMs: 3_000,

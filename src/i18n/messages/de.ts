@@ -138,6 +138,7 @@ const de: MessageSchema = {
     timer: {
       title: 'Timer-Erlebnis',
       sound: 'Töne',
+      soundVolume: 'Lautstärke',
       haptics: 'Haptik',
       spokenCountdown: 'Gesprochener Countdown',
       startCountdown: 'Start-Countdown',
