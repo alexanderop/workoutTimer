@@ -94,7 +94,7 @@ async function save(): Promise<void> {
         </div>
         <div class="rounded-2xl bg-white/8 p-4">
           <dt class="text-sm text-white/60">{{ t('timer.result.rounds') }}</dt>
-          <dd class="mt-1 text-2xl font-bold">{{ session.rounds.length }}</dd>
+          <dd class="mt-1 text-2xl font-bold">{{ result.completedRounds }}</dd>
         </div>
       </dl>
 

@@ -63,6 +63,15 @@ export type DerivedTimer = {
   readonly primaryMs: number
   readonly phase: TimerPhase
   readonly round: number
+  /**
+   * Rounds actually finished, which is what result screens report: tapped
+   * splits for AMRAP and For Time, elapsed-derived structural rounds for EMOM
+   * and Tabata. Distinct from `round` (the round the athlete is *in*), which
+   * jumps to the configured count for any stored-final session — the tapped
+   * splits array stays empty in structural modes, and a cancelled session must
+   * not claim the full round count.
+   */
+  readonly completedRounds: number
   readonly totalRounds?: number
   readonly progress: number
   readonly isComplete: boolean
@@ -91,6 +100,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       primaryMs: remaining,
       phase: 'countdown',
       round: 0,
+      completedRounds: 0,
       progress: clamp(1 - remaining / Math.max(1, session.countdownDurationMs), 0, 1),
       isComplete: false,
     }
@@ -108,6 +118,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         primaryMs: remaining,
         phase: complete ? 'finished' : 'work',
         round: session.rounds.length,
+        completedRounds: session.rounds.length,
         progress: clamp(elapsed / session.config.durationMs, 0, 1),
         isComplete: complete,
       }
@@ -127,6 +138,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         primaryMs: cappedElapsed,
         phase: complete ? 'finished' : 'work',
         round: session.rounds.length,
+        completedRounds: session.rounds.length,
         totalRounds: session.config.targetRounds,
         progress: cap === undefined ? 0 : clamp(elapsed / cap, 0, 1),
         isComplete: complete,
@@ -145,6 +157,10 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         primaryMs: complete ? 0 : session.config.intervalMs - withinRound,
         phase: complete ? 'finished' : 'work',
         round,
+        completedRounds: Math.min(
+          session.config.rounds,
+          Math.floor(elapsed / session.config.intervalMs),
+        ),
         totalRounds: session.config.rounds,
         progress: complete ? 1 : clamp(withinRound / session.config.intervalMs, 0, 1),
         isComplete: complete,
@@ -154,19 +170,26 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       const total = totalDurationMs(session.config) ?? 0
       const cappedElapsed = Math.min(elapsed, total)
       const complete = completedInStorage || elapsed >= total
+      const cycle = session.config.workMs + session.config.restMs
+      // A round is finished once its work phase ends; adding the rest that
+      // follows each work phase moves that boundary onto a cycle boundary.
+      const completedRounds = Math.min(
+        session.config.rounds,
+        Math.floor((elapsed + session.config.restMs) / cycle),
+      )
       if (complete) {
         return {
           elapsedMs: cappedElapsed,
           primaryMs: 0,
           phase: 'finished',
           round: session.config.rounds,
+          completedRounds,
           totalRounds: session.config.rounds,
           progress: 1,
           isComplete: true,
         }
       }
 
-      const cycle = session.config.workMs + session.config.restMs
       const roundIndex = Math.floor(elapsed / cycle)
       const withinCycle = elapsed - roundIndex * cycle
       const resting = withinCycle >= session.config.workMs
@@ -178,6 +201,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         primaryMs: Math.max(0, phaseDuration - phaseElapsed),
         phase: resting ? 'rest' : 'work',
         round: Math.min(session.config.rounds, roundIndex + 1),
+        completedRounds,
         totalRounds: session.config.rounds,
         progress: clamp(phaseElapsed / Math.max(1, phaseDuration), 0, 1),
         isComplete: false,
