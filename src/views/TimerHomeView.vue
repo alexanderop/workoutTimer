@@ -10,7 +10,7 @@ import ModeCard from '@/features/timer/components/ModeCard.vue'
 import { formatDuration, sortPresets } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { presetsAtom, sessionsAtom } from '@/stores/timerData'
-import type { TimerConfig, TimerMode } from '@/types/workout'
+import type { TimerConfig, TimerMode } from '@/db'
 
 const { t } = useI18n()
 const router = useRouter()

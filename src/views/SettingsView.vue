@@ -11,18 +11,26 @@ import { Switch } from '@/components/ui/switch'
 import { useLocale } from '@/composables/useLocale'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { useTheme } from '@/composables/useTheme'
-import { dbMutation, exportData, importData, runDb, updateTimerSettings } from '@/db'
+import {
+  exportData,
+  importData,
+  restoreMutation,
+  runDb,
+  settingsMutation,
+  type TimerSettings,
+  updateTimerSettings,
+} from '@/db'
 import type { SupportedLocale } from '@/i18n'
 import { downloadBackup, readBackupFile } from '@/lib/backupFile'
 import { timerSettingsAtom } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { TimerSettings } from '@/types/workout'
 
 const { t } = useI18n()
 const { isDark } = useTheme()
 const { locale, setLocale, supportedLocales } = useLocale()
 const toast = useToastStore()
-const runMutation = useAtomSet(() => dbMutation, { mode: 'promise' })
+const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
+const runRestoreMutation = useAtomSet(() => restoreMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('settings')
 const settingsResult = useAtomValue(() => timerSettingsAtom)
 const fallbackSettings: TimerSettings = {
@@ -45,7 +53,7 @@ function handleLocaleChange(event: Event): void {
 }
 
 function saveSetting(patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>): Promise<unknown> {
-  return runMutation(
+  return runSettingsMutation(
     updateTimerSettings(patch).pipe(
       Effect.catchTag(
         'Db.DatabaseError',
@@ -80,7 +88,7 @@ async function handleImportFile(event: Event): Promise<void> {
   if (!file) return
 
   const failed = reportFailure('import backup', t('settings.data.importError'))
-  await runMutation(
+  await runRestoreMutation(
     readBackupFile(file).pipe(
       Effect.flatMap(importData),
       Effect.tap(() => Effect.sync(() => toast.showToast(t('settings.data.importSuccess')))),
@@ -199,6 +207,7 @@ async function handleImportFile(event: Event): Promise<void> {
         <h2 class="text-section-title font-semibold">{{ t('settings.data.title') }}</h2>
         <div class="flex flex-col gap-4 rounded-xl border p-4">
           <p class="text-sm text-muted-foreground">{{ t('settings.data.description') }}</p>
+          <p class="text-sm text-muted-foreground">{{ t('settings.data.importWarning') }}</p>
           <div class="flex flex-wrap gap-2">
             <Button variant="outline" @click="handleExport"
               ><Download />{{ t('settings.data.export') }}</Button

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useReportFailure } from '@/composables/useReportFailure'
-import { dbMutation, updateSessionNotes } from '@/db'
+import { sessionMutation, updateSessionNotes } from '@/db'
 import { deriveTimer, formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { sessionsAtom } from '@/stores/timerData'
@@ -17,7 +17,7 @@ import { sessionsAtom } from '@/stores/timerData'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const runMutation = useAtomSet(() => dbMutation, { mode: 'promise' })
+const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('timer-result')
 const sessionsResult = useAtomValue(() => sessionsAtom)
 const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))

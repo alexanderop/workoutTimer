@@ -2,7 +2,7 @@
 import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Pause, Play, Plus, Volume2, VolumeX, X } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTimestamp } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -10,25 +10,28 @@ import { Button } from '@/components/ui/button'
 import { useReportFailure } from '@/composables/useReportFailure'
 import {
   addSessionRound,
-  dbMutation,
   finishSession,
   markSessionRunning,
   pauseSession,
   resumeSession,
+  sessionMutation,
+  settingsMutation,
+  type FinishReason,
+  type TimerSettings,
   updateTimerSettings,
 } from '@/db'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
 import { deriveTimer, formatDuration, SECOND_MS } from '@/features/timer/domain'
-import { emitTimerCue } from '@/features/timer/useTimerFeedback'
+import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import { useWakeLock } from '@/features/timer/useWakeLock'
 import { RouteNames } from '@/router'
 import { sessionsAtom, timerSettingsAtom } from '@/stores/timerData'
-import type { TimerSettings } from '@/types/workout'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const runMutation = useAtomSet(() => dbMutation, { mode: 'promise' })
+const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
+const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('timer-run')
 const sessionsResult = useAtomValue(() => sessionsAtom)
 const settingsResult = useAtomValue(() => timerSettingsAtom)
@@ -63,6 +66,25 @@ const keepAwake = computed(
 
 useWakeLock(keepAwake)
 
+/**
+ * An AudioContext may only be created from a user gesture, and this screen is
+ * reachable without passing through the setup screen that used to be the only
+ * place we asked for one — "Resume timer" on the home screen, or a reload
+ * straight onto this URL mid-workout. Without this the header would render the
+ * sound-on icon over a timer that never makes a sound. The first gesture
+ * anywhere on the page is enough, and one is all we need.
+ */
+onMounted(() => {
+  const options = { once: true, passive: true } as const
+  document.addEventListener('pointerdown', unlockTimerAudio, options)
+  document.addEventListener('keydown', unlockTimerAudio, options)
+
+  onBeforeUnmount(() => {
+    document.removeEventListener('pointerdown', unlockTimerAudio)
+    document.removeEventListener('keydown', unlockTimerAudio)
+  })
+})
+
 const transitionPending = ref(false)
 const finishArmed = ref(false)
 const cancelArmed = ref(false)
@@ -76,10 +98,7 @@ onBeforeUnmount(() => {
 
 const failed = reportFailure('update timer', t('timer.run.saveFailed'))
 
-function persistCompletion(
-  id: string,
-  reason: 'endpoint' | 'manual' | 'timeCap' | 'cancelled',
-): Promise<boolean> {
+function persistCompletion(id: string, reason: FinishReason): Promise<boolean> {
   return runMutation(
     finishSession(id, reason).pipe(
       Effect.as(true),
@@ -172,7 +191,15 @@ async function addRound(): Promise<void> {
   if (!current || !state) return
   await runMutation(
     addSessionRound(current.id, Math.round(state.elapsedMs)).pipe(
-      Effect.tap(() => Effect.sync(() => emitTimerCue(settings.value, 'round'))),
+      // Only cue a split that was actually written. The repository declines a
+      // round for a session that has already finished, and debounces a
+      // double-tap into one — buzzing either way would confirm a split the
+      // user does not have.
+      Effect.tap((recorded) =>
+        Effect.sync(() => {
+          if (recorded) emitTimerCue(settings.value, 'round')
+        }),
+      ),
       Effect.catchTags({
         'Db.DatabaseError': failed,
         'Db.WorkoutInvalidError': failed,
@@ -218,7 +245,10 @@ async function cancel(): Promise<void> {
 }
 
 function toggleSound(): Promise<unknown> {
-  return runMutation(
+  // Turning sound *on* is a gesture, and possibly the first one on this page —
+  // take it as the cue to open the AudioContext so the next beep is audible.
+  unlockTimerAudio()
+  return runSettingsMutation(
     updateTimerSettings({ soundEnabled: !settings.value.soundEnabled }).pipe(
       Effect.catchTag('Db.DatabaseError', failed),
     ),

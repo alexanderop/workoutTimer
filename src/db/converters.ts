@@ -1,12 +1,25 @@
 import { Result, Schema } from 'effect'
-import type {
-  PresetDraft,
-  TimerConfig,
-  TimerPreset,
-  TimerSettings,
-  WorkoutSession,
-} from '@/types/workout'
 
+/**
+ * What a workout *is*, defined once as a Schema.
+ *
+ * This module owns every shape the app persists; `schema.ts` owns the Dexie
+ * tables and imports the types from here. Dexie's table typing, the read-path
+ * decode in the repository, and backup validation all derive from these
+ * declarations, so they cannot drift apart the way a hand-written type and a
+ * hand-written schema silently do. The domain names the rest of the app uses
+ * (`TimerConfig`, `WorkoutSession`, …) are the schemas' own decoded types —
+ * there is no second, hand-maintained copy of them anywhere.
+ */
+
+/**
+ * Epoch milliseconds — a non-negative safe integer, which is exactly what
+ * `Date.now()` and `Clock.currentTimeMillis` return. `Schema.Number` would
+ * accept `NaN` and `±Infinity`, and a row with `startedAt: NaN` decodes
+ * cleanly and then poisons every comparison downstream. IndexedDB is
+ * untrusted input, so this is a rule the schema enforces rather than an
+ * assumption its readers make.
+ */
 const Timestamp = Schema.Natural
 const Milliseconds = Schema.Natural
 const Duration = Schema.Int.check(Schema.isBetween({ minimum: 1_000, maximum: 86_400_000 }))
@@ -38,19 +51,31 @@ const TabataConfigSchema = Schema.Struct({
   rounds: Count,
 })
 
-const TimerConfigSchema = Schema.Union([
+/**
+ * Exported because `isTimerConfig` in the timer domain restates these bounds by
+ * hand — it has to, since it grades a form's in-progress value rather than a
+ * decoded row. Two statements of one rule drift, so the unit tier holds them
+ * against each other as a property; this export is what it holds them against.
+ */
+export const TimerConfigSchema = Schema.Union([
   AmrapConfigSchema,
   ForTimeConfigSchema,
   EmomConfigSchema,
   TabataConfigSchema,
 ])
 
+/** A union, so this is a `type` — the `interface … extends` idiom below only fits structs. */
+export type TimerConfig = typeof TimerConfigSchema.Type
+
+/** Derived from the configs rather than restated, so a new mode cannot be forgotten here. */
+export type TimerMode = TimerConfig['mode']
+
 const RoundSplitSchema = Schema.Struct({
   capturedAtElapsedMs: Milliseconds,
   reps: Schema.optionalKey(Count),
 })
 
-export const StoredTimerPresetSchema = Schema.Struct({
+export const TimerPresetSchema = Schema.Struct({
   id: Schema.NonEmptyString,
   name: Schema.NonEmptyString,
   config: TimerConfigSchema,
@@ -60,9 +85,9 @@ export const StoredTimerPresetSchema = Schema.Struct({
   lastUsedAt: Schema.optionalKey(Timestamp),
 })
 
-export type StoredTimerPreset = typeof StoredTimerPresetSchema.Type
+export interface TimerPreset extends Schema.Schema.Type<typeof TimerPresetSchema> {}
 
-export const StoredWorkoutSessionSchema = Schema.Struct({
+export const WorkoutSessionSchema = Schema.Struct({
   id: Schema.NonEmptyString,
   presetId: Schema.optionalKey(Schema.NonEmptyString),
   config: TimerConfigSchema,
@@ -80,9 +105,12 @@ export const StoredWorkoutSessionSchema = Schema.Struct({
   updatedAt: Timestamp,
 })
 
-export type StoredWorkoutSession = typeof StoredWorkoutSessionSchema.Type
+export interface WorkoutSession extends Schema.Schema.Type<typeof WorkoutSessionSchema> {}
 
-export const StoredTimerSettingsSchema = Schema.Struct({
+export type SessionStatus = WorkoutSession['status']
+export type FinishReason = 'endpoint' | 'manual' | 'timeCap' | 'cancelled'
+
+export const TimerSettingsSchema = Schema.Struct({
   id: Schema.Literal('timer'),
   soundEnabled: Schema.Boolean,
   hapticsEnabled: Schema.Boolean,
@@ -92,13 +120,20 @@ export const StoredTimerSettingsSchema = Schema.Struct({
   updatedAt: Timestamp,
 })
 
-export type StoredTimerSettings = typeof StoredTimerSettingsSchema.Type
+export interface TimerSettings extends Schema.Schema.Type<typeof TimerSettingsSchema> {}
 
+/**
+ * Drafts are what a component hands *in*, before validation — so their types
+ * come from the schemas' Encoded side. `Schema.Trim`'s decoded type is the
+ * trimmed string; its encoded type is the raw one the textarea actually holds.
+ */
 const PresetDraftSchema = Schema.Struct({
   name: Schema.Trim.check(Schema.isNonEmpty()),
   config: TimerConfigSchema,
   workoutNotes: Schema.Trim,
 })
+
+export type PresetDraft = typeof PresetDraftSchema.Encoded
 
 const NewSessionSchema = Schema.Struct({
   config: TimerConfigSchema,
@@ -107,27 +142,19 @@ const NewSessionSchema = Schema.Struct({
   countdownDurationMs: StartCountdown,
 })
 
-export const decodeStoredTimerPreset = Schema.decodeUnknownEffect(StoredTimerPresetSchema)
-export const decodeStoredWorkoutSession = Schema.decodeUnknownEffect(StoredWorkoutSessionSchema)
-export const decodeStoredTimerSettings = Schema.decodeUnknownEffect(StoredTimerSettingsSchema)
+export type NewSession = typeof NewSessionSchema.Encoded
+
+/**
+ * Validates one untrusted row. IndexedDB is not a trusted store: rows survive
+ * app versions, get restored with a profile, and are editable from devtools,
+ * so what comes back is `unknown` no matter what the table's TypeScript type
+ * claims.
+ */
+export const decodeTimerPreset = Schema.decodeUnknownEffect(TimerPresetSchema)
+export const decodeWorkoutSession = Schema.decodeUnknownEffect(WorkoutSessionSchema)
+export const decodeTimerSettings = Schema.decodeUnknownEffect(TimerSettingsSchema)
 export const decodePresetDraft = Schema.decodeUnknownEffect(PresetDraftSchema)
 export const decodeNewSession = Schema.decodeUnknownEffect(NewSessionSchema)
-
-export function toTimerPreset(stored: StoredTimerPreset): TimerPreset {
-  return { ...stored, config: stored.config as TimerConfig }
-}
-
-export function toWorkoutSession(stored: StoredWorkoutSession): WorkoutSession {
-  return {
-    ...stored,
-    config: stored.config as TimerConfig,
-    rounds: stored.rounds.map((round) => ({ ...round })),
-  }
-}
-
-export function toTimerSettings(stored: StoredTimerSettings): TimerSettings {
-  return { ...stored }
-}
 
 const parsePresetDraft = Schema.decodeUnknownResult(PresetDraftSchema)
 export const isPresetDraft = (draft: PresetDraft): boolean =>

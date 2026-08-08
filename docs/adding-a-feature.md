@@ -1,35 +1,35 @@
 ---
 type: Playbook
 title: Adding a feature
-description: Build order for a new feature, mapped onto the notes worked example, with the test home for every step.
+description: Build order for a new feature, mapped onto the timer worked example, with the test home for every step.
 tags: [features, walkthrough, testing]
 status: stable
 ---
 
 # Adding a feature
 
-The notes feature (`src/features/notes`) is the worked example — this walkthrough maps its pieces so you can copy the pattern. Build in this order; every step has a test home.
+The timer feature (`src/features/timer`) is the worked example — this walkthrough maps its pieces so you can copy the pattern. Build in this order; every step has a test home.
 
 ## 1. Storage (if the feature persists data)
 
-- Define the row in `src/db/converters.ts` as a `Schema.Struct` plus a same-name `interface`, with a `Stored*` variant whose old-shape fields are `Schema.optionalKey`. The schema is the source of truth: Dexie's table typing, the read-path decode, and backup validation all derive from it, so they cannot drift.
-- Add the table to `src/db/schema.ts`, typed from that schema. New table on a fresh install → just add it to the **current** version's `stores()`. Changing an existing table → bump the version, write an `upgrade()`, and relax the changed fields in the `Stored*` schema (see the v1→v2 example).
-- Add a converter in `src/db/converters.ts` — reads must produce complete domain objects from any historical shape.
+- Define the row in `src/db/converters.ts` as a `Schema.Struct` plus a same-name `interface X extends Schema.Schema.Type<typeof X> {}`. That derived type *is* the domain type — re-export it from `src/db/index.ts` and never hand-write a second copy beside the schema. The schema is the source of truth: Dexie's table typing, the read-path decode, and backup validation all derive from it, so they cannot drift.
+- Add the table to `src/db/schema.ts`, typed from that schema. New table on a fresh install → just add it to the **current** version's `stores()`. Changing an existing table → bump the version, write an `upgrade()`, **and** introduce a relaxed `Stored*` schema whose old-shape fields are `Schema.optionalKey`, plus the converter that fills the gap ([local-first.md](local-first.md) for why the migration alone is not enough). Until such a bump exists, stored shape and domain shape are the same and no `Stored*` variant is warranted.
 - Add a repository in `src/db/repositories/` and re-export it from `src/db/index.ts`. Nothing outside `src/db` may import deeper than the index — ESLint fails on the import and the arch tests fail your PR. Reads decode every row; writes validate their input. Both fail with tagged errors, not exceptions.
-- Add the table to `src/db/backup.ts` in the same commit, reusing the same `Stored*` schema.
-- **Tests**: schema decode + converter → unit tier; repository CRUD, rejected rows, and the backup round-trip → `src/__tests__/db/`.
+- Add the table to `src/db/backup.ts` in the same commit, reusing the same row schema, and clear it alongside the others in `replaceAllData` — a restore replaces the database, it does not merge into it.
+- **Tests**: schema decode rules → unit tier; repository CRUD, rejected rows, and the backup round-trip → `src/__tests__/db/`.
 
 ## 2. Domain logic
 
-Pure functions in `src/features/<name>/domain.ts` (sorting, deriving, validating). Keeping them out of components is what makes them unit-tier testable — `src/features/notes/domain.ts` and its spec in `src/__tests__/unit/notes/` are the template.
+Pure functions in `src/features/<name>/domain.ts` (sorting, deriving, validating). Keeping them out of components is what makes them unit-tier testable — `src/features/timer/domain.ts` and its spec in `src/__tests__/unit/timer/` are the template. `deriveTimer` shows the payoff: the whole timer is a pure function of the stored session and `now`, so a backgrounded tab or a reload costs nothing and the tricky part is testable without a browser.
 
 ## 3. State
 
-Atoms via `@effect/atom-vue` — `src/features/notes/atoms.ts` is the template. Conventions:
+Atoms via `@effect/atom-vue` — `src/stores/timerData.ts` is the template. Conventions:
 
-- **Reads are atoms.** Build them with `dbRuntime.atom(program)` and wire them with `Atom.withReactivity([NOTES_KEY])` (add a key per table). The atom's value is an `AsyncResult` — loading, failure, and data in one value — and components subscribe with `useAtomValue(() => yourAtom)`. Subscribing *is* the load; there is no `onMounted` fetch and no `isLoaded` flag.
-- **Writes go through `dbMutation`** (from `@/db`), which only accepts `Effect<unknown, never, DbServices>` — the component composes the repository program with `Effect.catchTag`/`Effect.catchTags` first, then hands it to the setter from `useAtomSet(() => dbMutation, { mode: 'promise' })`. When the write lands, the reactivity key is invalidated and every read atom re-reads — state always mirrors disk with no store method remembering to re-read.
-- Plain UI state (a sheet's open flag, toasts) is a writable `Atom.make(...)` behind a small composable — `src/stores/quickAdd.ts` and `src/stores/toast.ts` are the pattern, including the writable `computed` for anything a component two-way binds.
+- **Reads are atoms.** Build them with `dbRuntime.atom(program)` and wire them with `Atom.withReactivity([SESSIONS_KEY])` (add a key per table). The atom's value is an `AsyncResult` — loading, failure, and data in one value — and components subscribe with `useAtomValue(() => yourAtom)`. Subscribing *is* the load; there is no `onMounted` fetch and no `isLoaded` flag.
+- **Writes go through a mutation atom** picked to match the tables they touch — `sessionMutation`, `presetMutation`, `settingsMutation`, `workoutStartMutation`, `restoreMutation`, all from `@/db`. Each only accepts `Effect<unknown, never, DbServices>`, so the component composes the repository program with `Effect.catchTag`/`Effect.catchTags` first, then hands it to the setter from `useAtomSet(() => sessionMutation, { mode: 'promise' })`. When the write lands, that atom's keys are invalidated and the read atoms built on them re-read — state always mirrors disk with no store method remembering to re-read.
+- **A new table means a new key and a new mutation atom**, not a wider existing one. Invalidating a key you did not write re-reads data nobody changed, and every re-read hands components freshly decoded objects — so any watcher keyed on that identity fires. That is how the setup form used to lose what the user had typed whenever an unrelated write landed.
+- Plain UI state (a sheet's open flag, toasts) is a writable `Atom.make(...)` behind a small composable — `src/stores/toast.ts` is the pattern, including the writable `computed` for anything a component two-way binds.
 - No `$reset()` needed: atom state lives in the registry, and browser tests get a fresh registry per render (see `src/__tests__/helpers/renderApp.ts`).
 - Why not Pinia? Nothing here needs devtools time-travel or plugins — and the registry-scoped atoms give the piece Pinia never had: reads that Effect programs can invalidate, with failures typed all the way into the template.
 
@@ -39,16 +39,16 @@ Atoms via `@effect/atom-vue` — `src/features/notes/atoms.ts` is the template. 
 - Route-level page in `src/views/`, registered in `src/router/index.ts`.
 - New tab? Add one entry to `src/router/navigation.ts` — the shell handles the rest. Full-screen route? `meta: { hideNav: true }`.
 - Every user-facing string goes through i18n (`src/i18n/messages/en.ts` **and** `de.ts` — the `MessageSchema` type makes a missing key a compile error).
-- Give destructive/ambiguous icon buttons an `aria-label` that includes the item name (see `NoteCard.vue`) — the a11y tier will catch bare icon buttons.
+- Give destructive/ambiguous icon buttons an `aria-label` that includes the item name (see `PresetsView.vue`) — the a11y tier will catch bare icon buttons. A destructive action with no undo gets arm-then-confirm: the first tap arms and relabels, the second commits, and a timeout disarms.
 
 ## 5. Tests, tier by tier
 
-For a feature the size of notes, the full set is roughly:
+For a feature the size of the timer, the full set is roughly:
 
 | Tier | What to cover |
 | --- | --- |
-| unit | domain functions, converters |
-| default | the main user flow through the real UI (`notesFlow.spec.ts` pattern: interact, assert UI, assert persistence) |
+| unit | domain functions, schema decode rules |
+| default | the main user flow through the real UI (`timerFlow.spec.ts` pattern: interact, assert UI, assert persistence) |
 | a11y | one axe sweep of the new screen; one of any new dialog |
 | visual | a screenshot if the screen is part of the shell's core look (`pnpm test:visual:update`) |
 | arch | nothing to write — the generic rules pick up new features automatically |

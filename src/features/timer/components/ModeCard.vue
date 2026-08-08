@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Activity, Gauge, Repeat2, TimerReset } from '@lucide/vue'
 import type { Component } from 'vue'
-import type { TimerMode } from '@/types/workout'
+import type { TimerMode } from '@/db'
 
 const { mode } = defineProps<{
   mode: TimerMode

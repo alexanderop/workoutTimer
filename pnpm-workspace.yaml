@@ -15,12 +15,12 @@ catalogs:
     vue-tsc: ^3.3.7
     workbox-window: ^7.4.1
   frontend:
+    # Pinned exactly, in lockstep with `effect` below — ~/Projects/opensource/effect
+    # is checked out at that version (branch pinned/4.0.0-beta.105) as the
+    # agent-readable source of truth, and both @effect/* packages must move with it.
+    '@effect/atom-vue': 4.0.0-beta.105
     '@vueuse/core': ^14.3.0
     dexie: ^4.4.4
-    # Pinned exactly — ~/Projects/opensource/effect is checked out at this version
-    # (branch pinned/4.0.0-beta.105) as the agent-readable source of truth.
-    # @effect/atom-vue is versioned in lockstep with effect and must move with it.
-    '@effect/atom-vue': 4.0.0-beta.105
     effect: 4.0.0-beta.105
     vue: 3.5.38
     vue-i18n: ^11.4.6
@@ -40,6 +40,10 @@ catalogs:
     prettier: 3.8.4
     size-limit: ^12.1.0
   testing:
+    # Same lockstep pin as the @effect/* packages above: it declares `effect` as
+    # a peer and ships the same version number. It is what gives the unit tier
+    # `it.prop`; the fast-check behind it comes from `effect/testing`.
+    '@effect/vitest': 4.0.0-beta.105
     '@playwright/test': ^1.61.1
     # Stryker's vitest-runner is developed against the same vitest it finds in
     # the sandbox — 9.6.x dev-tests against 4.1.10. Move it with the vitest pin.

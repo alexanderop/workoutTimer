@@ -18,7 +18,7 @@ describe('workout timer flow', () => {
     ;({ cleanup } = await renderApp())
 
     await page.getByRole('button', { name: /AMRAP/ }).click()
-    await page.getByLabelText('Duration in minutes').fill('1')
+    await page.getByRole('button', { name: '1 min', exact: true }).click()
     await page.getByRole('button', { name: 'Start', exact: true }).click()
 
     await expect.element(page.getByText('Work', { exact: true })).toBeVisible()
@@ -48,6 +48,43 @@ describe('workout timer flow', () => {
 
     expect(await runDb(listPresets.pipe(Effect.orDie))).toMatchObject([
       { name: 'Fast eight', config: { mode: 'tabata', rounds: 8 } },
+    ])
+  })
+
+  /**
+   * Saving a preset writes to the presets table, which reloads every atom
+   * keyed on it. The setup form seeds itself from that same data, so a naive
+   * "re-seed whenever presets change" left the user staring at the mode
+   * default and a Start button that would run a workout they never configured.
+   */
+  it('keeps the configured values after saving them as a preset', async () => {
+    ;({ cleanup } = await renderApp('/timer/amrap'))
+
+    await page.getByRole('button', { name: '20 min', exact: true }).click()
+    await page.getByLabelText('Preset name').fill('Twenty minute grind')
+    await page.getByRole('button', { name: 'Save as preset' }).click()
+    await expect.element(page.getByText('Preset saved')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await expect.element(page.getByText('Work', { exact: true })).toBeVisible()
+
+    expect(await runDb(listSessions.pipe(Effect.orDie))).toMatchObject([
+      { config: { mode: 'amrap', durationMs: 1_200_000 } },
+    ])
+  })
+
+  it('offers 15-second shortcuts and accepts a custom raw time', async () => {
+    ;({ cleanup } = await renderApp('/timer/amrap'))
+
+    await expect.element(page.getByRole('button', { name: '15 sec', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Custom time', exact: true }).click()
+    await page.getByLabelText('Minutes').fill('2')
+    await page.getByLabelText('Seconds').fill('7')
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+
+    await expect.element(page.getByText('Work', { exact: true })).toBeVisible()
+    expect(await runDb(listSessions.pipe(Effect.orDie))).toMatchObject([
+      { config: { mode: 'amrap', durationMs: 127_000 } },
     ])
   })
 

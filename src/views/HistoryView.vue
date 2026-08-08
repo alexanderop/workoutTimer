@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { deriveTimer, formatDuration, sortSessions } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { sessionsAtom } from '@/stores/timerData'
-import type { SessionStatus, WorkoutSession } from '@/types/workout'
+import type { SessionStatus, WorkoutSession } from '@/db'
 
 type Filter = 'all' | 'completed' | 'cancelled'
 

@@ -58,6 +58,30 @@ describe('workouts repository', () => {
     expect(stored?.rounds).toEqual([{ capturedAtElapsedMs: 5_000 }])
   })
 
+  /**
+   * The caller plays a confirmation cue off this boolean, so "did nothing" and
+   * "recorded a split" must be distinguishable. They used to both be `void`,
+   * and the timer buzzed for rounds it had silently declined to store.
+   */
+  it('reports whether a round was actually recorded', async () => {
+    const created = await runDb(
+      createSession({
+        config: { mode: 'forTime' },
+        workoutNotes: '',
+        countdownDurationMs: 0,
+      }).pipe(Effect.orDie),
+    )
+
+    expect(await runDb(addSessionRound(created.id, 5_000).pipe(Effect.orDie))).toBe(true)
+    // Within the debounce window of the split above — one round, not two.
+    expect(await runDb(addSessionRound(created.id, 5_100).pipe(Effect.orDie))).toBe(false)
+    // A session that is not running cannot take a split at all.
+    expect(await runDb(addSessionRound('no-such-session', 9_000).pipe(Effect.orDie))).toBe(false)
+
+    const [stored] = await runDb(listSessions.pipe(Effect.orDie))
+    expect(stored?.rounds).toEqual([{ capturedAtElapsedMs: 5_000 }])
+  })
+
   it('stores presets and timer settings', async () => {
     const preset = await runDb(
       createPreset({

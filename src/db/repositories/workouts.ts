@@ -1,21 +1,19 @@
 import { Clock, Context, Effect, Layer } from 'effect'
 import type {
+  FinishReason,
   NewSession,
   PresetDraft,
   TimerPreset,
   TimerSettings,
   WorkoutSession,
-} from '@/types/workout'
+} from '../converters'
 import {
   decodeNewSession,
   decodePresetDraft,
-  decodeStoredTimerPreset,
-  decodeStoredTimerSettings,
-  decodeStoredWorkoutSession,
+  decodeTimerPreset,
+  decodeTimerSettings,
+  decodeWorkoutSession,
   makeDefaultTimerSettings,
-  toTimerPreset,
-  toTimerSettings,
-  toWorkoutSession,
 } from '../converters'
 import { DatabaseError, WorkoutInvalidError } from '../errors'
 import { GenerateId } from '../generateId'
@@ -29,6 +27,9 @@ const tryDb = <A>(operation: string, run: () => Promise<A>): Effect.Effect<A, Da
 
 const invalid = (message: string) => new WorkoutInvalidError({ message })
 
+/** Two taps this close together are one round — a finger bouncing, not a split. */
+const ROUND_DEBOUNCE_MS = 250
+
 const validateSessionDraft = (draft: NewSession) =>
   decodeNewSession(draft).pipe(Effect.mapError((error) => invalid(error.message)))
 
@@ -36,21 +37,18 @@ const validatePresetDraft = (draft: PresetDraft) =>
   decodePresetDraft(draft).pipe(Effect.mapError((error) => invalid(error.message)))
 
 const decodeSessionRow = (stored: unknown): Effect.Effect<WorkoutSession, DatabaseError> =>
-  decodeStoredWorkoutSession(stored).pipe(
+  decodeWorkoutSession(stored).pipe(
     Effect.mapError((cause) => new DatabaseError({ operation: 'decode session row', cause })),
-    Effect.map(toWorkoutSession),
   )
 
 const decodePresetRow = (stored: unknown): Effect.Effect<TimerPreset, DatabaseError> =>
-  decodeStoredTimerPreset(stored).pipe(
+  decodeTimerPreset(stored).pipe(
     Effect.mapError((cause) => new DatabaseError({ operation: 'decode preset row', cause })),
-    Effect.map(toTimerPreset),
   )
 
 const decodeSettingsRow = (stored: unknown): Effect.Effect<TimerSettings, DatabaseError> =>
-  decodeStoredTimerSettings(stored).pipe(
+  decodeTimerSettings(stored).pipe(
     Effect.mapError((cause) => new DatabaseError({ operation: 'decode settings row', cause })),
-    Effect.map(toTimerSettings),
   )
 
 export class WorkoutsRepo extends Context.Service<
@@ -64,14 +62,12 @@ export class WorkoutsRepo extends Context.Service<
     markRunning: (id: string) => Effect.Effect<void, DatabaseError>
     pauseSession: (id: string) => Effect.Effect<void, DatabaseError>
     resumeSession: (id: string) => Effect.Effect<void, DatabaseError>
+    /** Resolves `true` only when a split was actually appended — see the implementation. */
     addRound: (
       id: string,
       elapsedMs: number,
-    ) => Effect.Effect<void, DatabaseError | WorkoutInvalidError>
-    finishSession: (
-      id: string,
-      reason: 'endpoint' | 'manual' | 'timeCap' | 'cancelled',
-    ) => Effect.Effect<void, DatabaseError>
+    ) => Effect.Effect<boolean, DatabaseError | WorkoutInvalidError>
+    finishSession: (id: string, reason: FinishReason) => Effect.Effect<void, DatabaseError>
     updateSessionNotes: (id: string, notes: string) => Effect.Effect<void, DatabaseError>
     deleteSession: (id: string) => Effect.Effect<void, DatabaseError>
     listPresets: () => Effect.Effect<Array<TimerPreset>, DatabaseError>
@@ -88,7 +84,7 @@ export class WorkoutsRepo extends Context.Service<
     updateSettings: (
       patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>,
     ) => Effect.Effect<TimerSettings, DatabaseError>
-    putBackup: (
+    replaceAllData: (
       sessions: Array<WorkoutSession>,
       presets: Array<TimerPreset>,
       settings: TimerSettings,
@@ -192,28 +188,40 @@ export class WorkoutsRepo extends Context.Service<
           )
         }),
 
+        /**
+         * Appending a split is conditional — the session may have finished
+         * between the tap and this write, and a double-tap inside
+         * `ROUND_DEBOUNCE_MS` is one round, not two. Both cases are a
+         * legitimate no-op rather than a failure, so the outcome is reported
+         * in the success channel: the caller needs it to decide whether to
+         * play the round cue, and a cue for a split that was never recorded
+         * tells the user something untrue.
+         */
         addRound: Effect.fn('WorkoutsRepo.addRound')(function* (id: string, elapsedMs: number) {
           if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0) {
             return yield* Effect.fail(invalid('round elapsed time must be a natural number'))
           }
           const now = yield* Clock.currentTimeMillis
-          yield* tryDb('add round', () =>
+          return yield* tryDb('add round', () =>
             db.transaction('rw', db.sessions, async () => {
               const current = await db.sessions.get(id)
-              if (!current || !['running', 'paused'].includes(current.status)) return
+              if (!current || !['running', 'paused'].includes(current.status)) return false
               const last = current.rounds.at(-1)
-              if (last && Math.abs(last.capturedAtElapsedMs - elapsedMs) < 250) return
+              if (last && Math.abs(last.capturedAtElapsedMs - elapsedMs) < ROUND_DEBOUNCE_MS) {
+                return false
+              }
               await db.sessions.update(id, {
                 rounds: [...current.rounds, { capturedAtElapsedMs: elapsedMs }],
                 updatedAt: now,
               })
+              return true
             }),
           )
         }),
 
         finishSession: Effect.fn('WorkoutsRepo.finishSession')(function* (
           id: string,
-          reason: 'endpoint' | 'manual' | 'timeCap' | 'cancelled',
+          reason: FinishReason,
         ) {
           const now = yield* Clock.currentTimeMillis
           yield* tryDb('finish session', () =>
@@ -312,7 +320,7 @@ export class WorkoutsRepo extends Context.Service<
               ? makeDefaultTimerSettings(now)
               : yield* decodeSettingsRow(currentRow)
           const next: TimerSettings = { ...current, ...patch, id: 'timer', updatedAt: now }
-          const validated = yield* decodeStoredTimerSettings(next).pipe(
+          const validated = yield* decodeTimerSettings(next).pipe(
             Effect.mapError(
               (cause) => new DatabaseError({ operation: 'validate timer settings', cause }),
             ),
@@ -321,15 +329,28 @@ export class WorkoutsRepo extends Context.Service<
           return next
         }),
 
-        putBackup: Effect.fn('WorkoutsRepo.putBackup')(function* (
+        /**
+         * Restores a backup by *replacing* what is on disk, not merging into
+         * it. Merging looks harmless and is not: rows the user deleted before
+         * exporting would survive the restore, so "import this backup" would
+         * leave a database that never existed at any point in time — and a
+         * backup containing an active session could land beside the existing
+         * one, breaking the single-active-session invariant `createSession`
+         * enforces transactionally. One transaction, so a failure halfway
+         * leaves the old data intact rather than an empty app.
+         */
+        replaceAllData: Effect.fn('WorkoutsRepo.replaceAllData')(function* (
           sessions: Array<WorkoutSession>,
           presets: Array<TimerPreset>,
           settings: TimerSettings,
         ) {
-          yield* tryDb('import workout backup', () =>
+          yield* tryDb('restore workout backup', () =>
             db.transaction('rw', db.sessions, db.presets, db.timerSettings, async () => {
-              await db.sessions.bulkPut(sessions)
-              await db.presets.bulkPut(presets)
+              await db.sessions.clear()
+              await db.presets.clear()
+              await db.timerSettings.clear()
+              await db.sessions.bulkAdd(sessions)
+              await db.presets.bulkAdd(presets)
               await db.timerSettings.put(settings)
             }),
           )
@@ -347,10 +368,8 @@ export const pauseSession = (id: string) => WorkoutsRepo.use((repo) => repo.paus
 export const resumeSession = (id: string) => WorkoutsRepo.use((repo) => repo.resumeSession(id))
 export const addSessionRound = (id: string, elapsedMs: number) =>
   WorkoutsRepo.use((repo) => repo.addRound(id, elapsedMs))
-export const finishSession = (
-  id: string,
-  reason: 'endpoint' | 'manual' | 'timeCap' | 'cancelled',
-) => WorkoutsRepo.use((repo) => repo.finishSession(id, reason))
+export const finishSession = (id: string, reason: FinishReason) =>
+  WorkoutsRepo.use((repo) => repo.finishSession(id, reason))
 export const updateSessionNotes = (id: string, notes: string) =>
   WorkoutsRepo.use((repo) => repo.updateSessionNotes(id, notes))
 export const deleteSession = (id: string) => WorkoutsRepo.use((repo) => repo.deleteSession(id))

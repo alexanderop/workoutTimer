@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from '@effect/vitest'
+import { Result, Schema } from 'effect'
+import { FastCheck } from 'effect/testing'
 import {
   DEFAULT_CONFIGS,
   deriveTimer,
@@ -10,7 +12,8 @@ import {
   sortSessions,
   totalDurationMs,
 } from '@/features/timer/domain'
-import type { TimerConfig, TimerPreset, WorkoutSession } from '@/types/workout'
+import { TimerConfigSchema, TimerPresetSchema, WorkoutSessionSchema } from '@/db/converters'
+import type { TimerConfig, TimerPreset, WorkoutSession } from '@/db'
 
 function session(config: TimerConfig, patch: Partial<WorkoutSession> = {}): WorkoutSession {
   return {
@@ -58,6 +61,9 @@ describe('timer domain', () => {
     expect(isTimerConfig({ mode: 'tabata', workMs: 1_000, restMs: 0.5, rounds: 1 })).toBe(false)
     expect(isTimerConfig({ mode: 'tabata', workMs: 1_000, restMs: 86_400_000, rounds: 1 })).toBe(
       true,
+    )
+    expect(isTimerConfig({ mode: 'tabata', workMs: 1_000, restMs: 86_400_001, rounds: 1 })).toBe(
+      false,
     )
   })
 
@@ -151,6 +157,12 @@ describe('timer domain', () => {
       ),
     ).toBe(11_000)
     expect(elapsedSessionMs(session({ mode: 'forTime' }), 6_000)).toBe(5_000)
+    // A row that is still running but carries a finishedAt — reachable, since
+    // the schema makes the key optional and IndexedDB is untrusted input. The
+    // clock keeps running; only a finished status freezes it.
+    expect(elapsedSessionMs(session({ mode: 'forTime' }, { finishedAt: 3_000 }), 50_000)).toBe(
+      49_000,
+    )
   })
 
   it('derives uncapped, capped, and stored-complete For Time states', () => {
@@ -190,6 +202,16 @@ describe('timer domain', () => {
     expect(
       deriveTimer(session({ mode: 'forTime' }, { status: 'completed', finishedAt: 8_000 }), 20_000),
     ).toMatchObject({ phase: 'finished', elapsedMs: 7_000, isComplete: true })
+    // Cancelled is as final as completed — the result screen reads this flag.
+    expect(
+      deriveTimer(session({ mode: 'forTime' }, { status: 'cancelled', finishedAt: 8_000 }), 20_000),
+    ).toMatchObject({ phase: 'finished', elapsedMs: 7_000, isComplete: true })
+    // Exactly at the cap, not merely past it.
+    expect(deriveTimer(session({ mode: 'forTime', timeCapMs: 10_000 }), 11_000)).toMatchObject({
+      elapsedMs: 10_000,
+      phase: 'finished',
+      isComplete: true,
+    })
   })
 
   it('moves EMOM to the next round at the exact boundary', () => {
@@ -291,4 +313,153 @@ describe('timer domain', () => {
     expect(presets.map(({ id }) => id)).toEqual(['old', 'used'])
     expect(sessions.map(({ id }) => id)).toEqual(['old', 'new'])
   })
+})
+
+/**
+ * The same three functions again, said as properties: true of every input
+ * rather than of the hand-picked ones above. Both kinds stay — the examples
+ * pin the boundaries that must not move and read better when they fail, the
+ * properties pin the definition.
+ *
+ * The generators come from the schemas in `converters.ts`, not from
+ * hand-written arbitraries, so a bound that moves there moves here too. That
+ * makes each of these a test of the schema as well.
+ */
+describe('timer domain, as properties', () => {
+  // Bounded: the shapes matter, the array length does not, and a hundred runs
+  // over hundred-element arrays would cost more than this tier is allowed.
+  // `it.prop` types a Schema as a valid arbitrary but rejects one at runtime in
+  // 4.0.0-beta.105, so the conversion is explicit.
+  const anySessions = Schema.toArbitrary(
+    Schema.Array(WorkoutSessionSchema).check(Schema.isMaxLength(6)),
+  )
+  const anyPresets = Schema.toArbitrary(
+    Schema.Array(TimerPresetSchema).check(Schema.isMaxLength(6)),
+  )
+
+  const presetKey = (preset: TimerPreset): number => preset.lastUsedAt ?? preset.updatedAt
+
+  /** Sorting is a reordering: same rows out as in, and the caller's array untouched. */
+  function expectReordering<A>(sorted: ReadonlyArray<A>, input: ReadonlyArray<A>): void {
+    expect(sorted).toHaveLength(input.length)
+    expect(input.every((row) => sorted.includes(row))).toBe(true)
+    expect(sorted).not.toBe(input)
+  }
+
+  it.prop('sortSessions reorders sessions newest first', [anySessions], ([sessions]) => {
+    const untouched = [...sessions]
+    const sorted = sortSessions(sessions)
+
+    expectReordering(sorted, sessions)
+    expect([...sessions]).toEqual(untouched)
+
+    const createdAt = sorted.map((session) => session.createdAt)
+    expect(createdAt).toEqual([...createdAt].sort((a, b) => b - a))
+  })
+
+  it.prop('sortPresets reorders presets most-recently-used first', [anyPresets], ([presets]) => {
+    const untouched = [...presets]
+    const sorted = sortPresets(presets)
+
+    expectReordering(sorted, presets)
+    expect([...presets]).toEqual(untouched)
+
+    const keys = sorted.map(presetKey)
+    expect(keys).toEqual([...keys].sort((a, b) => b - a))
+  })
+
+  /**
+   * Agreement. `isTimerConfig` grades a setup form's in-progress value, so it
+   * restates the schema's bounds in plain TypeScript instead of decoding — and
+   * two statements of one rule drift. When they do, the form offers a Start
+   * button for a workout the repository will refuse to store.
+   *
+   * Values cluster on the boundaries, because that is the only place the two
+   * can disagree; a uniform integer would spend its hundred runs in the middle.
+   */
+  const nearMissNumber = FastCheck.constantFrom(
+    -1,
+    0,
+    0.5,
+    1,
+    999,
+    999.5,
+    1_000,
+    1_000.5,
+    1_001,
+    998,
+    1_002,
+    86_399_999,
+    86_400_000,
+    86_400_001,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 2,
+  )
+
+  const validConfig = Schema.toArbitrary(TimerConfigSchema)
+
+  /**
+   * The discriminating input: a config the schema would accept, with exactly
+   * one field knocked off its bound. Drawing every field independently — the
+   * obvious generator — is close to useless here, because some *other* field is
+   * almost always invalid too, both sides reject for that reason, and a broken
+   * bound never gets asked about. Perturbing one field at a time is what makes
+   * the property notice.
+   */
+  const oneFieldOff = validConfig.chain((config) => {
+    const fields = Object.keys(config).filter((field) => field !== 'mode')
+    if (fields.length === 0) return FastCheck.constant(config)
+
+    return FastCheck.tuple(FastCheck.constantFrom(...fields), nearMissNumber).map(
+      ([field, value]) => ({ ...config, [field]: value }) as TimerConfig,
+    )
+  })
+
+  /**
+   * Optional keys are omitted, never set to `undefined`, which is the honest
+   * generator: `Schema.optionalKey` accepts an absent key and rejects a
+   * present-but-undefined one, while `isTimerConfig` cannot tell the two apart.
+   * Generating the second would report a divergence that `TimerConfig` already
+   * makes unrepresentable.
+   */
+  const nearMissConfig = FastCheck.oneof(
+    FastCheck.record({ mode: FastCheck.constant('amrap' as const), durationMs: nearMissNumber }),
+    FastCheck.record(
+      {
+        mode: FastCheck.constant('forTime' as const),
+        timeCapMs: nearMissNumber,
+        targetRounds: nearMissNumber,
+      },
+      { requiredKeys: ['mode'] },
+    ),
+    FastCheck.record({
+      mode: FastCheck.constant('emom' as const),
+      intervalMs: nearMissNumber,
+      rounds: nearMissNumber,
+    }),
+    FastCheck.record({
+      mode: FastCheck.constant('tabata' as const),
+      workMs: nearMissNumber,
+      restMs: nearMissNumber,
+      rounds: nearMissNumber,
+    }),
+  )
+
+  // Every direction in one generator: what the store holds, what misses it by
+  // one field, and what misses it entirely. Either side rejecting alone is a
+  // divergence.
+  const anyConfig = FastCheck.oneof(validConfig, oneFieldOff, nearMissConfig)
+  const decodeConfig = Schema.decodeUnknownResult(TimerConfigSchema)
+
+  it.prop(
+    'isTimerConfig accepts exactly the configs the schema stores',
+    [anyConfig],
+    ([config]) => {
+      expect(isTimerConfig(config)).toBe(Result.isSuccess(decodeConfig(config)))
+    },
+    // A single bound is one cell of mode × field × value; a hundred runs leave
+    // too many of them unvisited to be a gate.
+    { fastCheck: { numRuns: 1_000 } },
+  )
 })

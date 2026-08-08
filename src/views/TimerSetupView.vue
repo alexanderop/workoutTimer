@@ -6,23 +6,40 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useReportFailure } from '@/composables/useReportFailure'
-import { createPreset, createSession, dbMutation, isPresetDraft, updatePreset } from '@/db'
-import { DEFAULT_CONFIGS, isTimerConfig, MINUTE_MS, SECOND_MS } from '@/features/timer/domain'
+import {
+  createPreset,
+  createSession,
+  isPresetDraft,
+  presetMutation,
+  updatePreset,
+  workoutStartMutation,
+} from '@/db'
+import TimePicker from '@/features/timer/components/TimePicker.vue'
+import ValuePicker from '@/features/timer/components/ValuePicker.vue'
+import { DEFAULT_CONFIGS, isTimerConfig, SECOND_MS } from '@/features/timer/domain'
+import {
+  countValues,
+  includeSelectedValue,
+  timerDurationValues,
+  type PickerOption,
+} from '@/features/timer/pickerOptions'
 import { unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import { RouteNames } from '@/router'
 import { presetsAtom, sessionsAtom, timerSettingsAtom } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { PresetDraft, TimerConfig, TimerMode } from '@/types/workout'
+import type { PresetDraft, TimerConfig, TimerMode } from '@/db'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const toast = useToastStore()
 const reportFailure = useReportFailure('timer-setup')
-const runMutation = useAtomSet(() => dbMutation, { mode: 'promise' })
+const runStartMutation = useAtomSet(() => workoutStartMutation, { mode: 'promise' })
+const runPresetMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
 
 const routeMode = computed<TimerMode>(() => {
   const value = String(route.params.mode)
@@ -42,8 +59,13 @@ const hasActiveSession = computed(() =>
   sessions.value.some((session) => ['countdown', 'running', 'paused'].includes(session.status)),
 )
 
-const durationMinutes = ref(10)
-const timeCapMinutes = ref<number | undefined>()
+const MAX_DURATION_SECONDS = 24 * 60 * 60
+const DURATION_VALUES = timerDurationValues(MAX_DURATION_SECONDS, 15)
+const INTERVAL_VALUES = timerDurationValues(60 * 60)
+const ROUND_VALUES = countValues(20)
+
+const durationSeconds = ref(10 * 60)
+const timeCapSeconds = ref<number | undefined>()
 const targetRounds = ref<number | undefined>()
 const intervalSeconds = ref(60)
 const rounds = ref(10)
@@ -57,11 +79,11 @@ const isSavingPreset = ref(false)
 function applyConfig(config: TimerConfig): void {
   switch (config.mode) {
     case 'amrap':
-      durationMinutes.value = config.durationMs / MINUTE_MS
+      durationSeconds.value = config.durationMs / SECOND_MS
       break
     case 'forTime':
-      timeCapMinutes.value =
-        config.timeCapMs === undefined ? undefined : config.timeCapMs / MINUTE_MS
+      timeCapSeconds.value =
+        config.timeCapMs === undefined ? undefined : config.timeCapMs / SECOND_MS
       targetRounds.value = config.targetRounds
       break
     case 'emom':
@@ -76,17 +98,43 @@ function applyConfig(config: TimerConfig): void {
   }
 }
 
+/**
+ * Seeds the form once per thing-being-edited, and never again.
+ *
+ * The subtlety is that `presets` is a *reloading* source: any write to the
+ * presets table hands this watcher a brand-new array, and re-seeding on that
+ * would throw away everything the user has typed since. That is not
+ * hypothetical — saving a preset is itself such a write, so configuring a
+ * 20-minute AMRAP and pressing "Save as preset" used to snap the form back to
+ * the mode default, leaving a Start button that would run a workout the user
+ * never asked for.
+ *
+ * So the trigger is the *identity* of what we are editing (`mode:presetId`),
+ * not the data behind it. Seeding is deferred while a named preset is still
+ * loading, because arriving rows must still be allowed to fill the form in.
+ */
+const presetsSettled = computed(() => !AsyncResult.isWaiting(presetsResult.value))
+let seededFor: string | undefined
+
 watch(
-  [routeMode, presets],
-  ([mode, availablePresets]) => {
-    const preset = availablePresets.find((item) => item.id === presetId.value)
+  [routeMode, presetId, presets, presetsSettled],
+  ([mode, id, availablePresets, settled]) => {
+    const key = `${mode}:${id ?? ''}`
+    if (seededFor === key) return
+
+    const preset = availablePresets.find((item) => item.id === id)
     if (preset && preset.config.mode === mode) {
       applyConfig(preset.config)
       workoutNotes.value = preset.workoutNotes
       presetName.value = preset.name
+      seededFor = key
       return
     }
+
     applyConfig(DEFAULT_CONFIGS[mode])
+    // A named preset that has not arrived yet may still turn up; a preset that
+    // is absent from settled data (or was never named) is the final answer.
+    if (id === undefined || settled) seededFor = key
   },
   { immediate: true },
 )
@@ -94,13 +142,13 @@ watch(
 const config = computed<TimerConfig>(() => {
   switch (routeMode.value) {
     case 'amrap':
-      return { mode: 'amrap', durationMs: Math.round(durationMinutes.value * MINUTE_MS) }
+      return { mode: 'amrap', durationMs: Math.round(durationSeconds.value * SECOND_MS) }
     case 'forTime':
       return {
         mode: 'forTime',
-        ...(timeCapMinutes.value === undefined || timeCapMinutes.value === 0
+        ...(timeCapSeconds.value === undefined || timeCapSeconds.value === 0
           ? {}
-          : { timeCapMs: Math.round(timeCapMinutes.value * MINUTE_MS) }),
+          : { timeCapMs: Math.round(timeCapSeconds.value * SECOND_MS) }),
         ...(targetRounds.value === undefined || targetRounds.value === 0
           ? {}
           : { targetRounds: Math.round(targetRounds.value) }),
@@ -120,6 +168,46 @@ const config = computed<TimerConfig>(() => {
       }
   }
 })
+
+function formatTime(seconds: number): string {
+  const hours = Math.floor(seconds / 3_600)
+  const minutes = Math.floor((seconds % 3_600) / 60)
+  const remainingSeconds = seconds % 60
+  const parts: Array<string> = []
+
+  if (hours > 0) parts.push(t('timer.setup.units.hoursShort', { count: hours }))
+  if (minutes > 0) parts.push(t('timer.setup.units.minutesShort', { count: minutes }))
+  if (remainingSeconds > 0 || parts.length === 0) {
+    parts.push(t('timer.setup.units.secondsShort', { count: remainingSeconds }))
+  }
+
+  return parts.join(' ')
+}
+
+function timeOptions(
+  values: ReadonlyArray<number>,
+  selected: number | undefined,
+): Array<PickerOption> {
+  return includeSelectedValue(values, selected).map((value) => ({
+    value,
+    label: formatTime(value),
+  }))
+}
+
+function roundOptions(selected: number | undefined): Array<PickerOption> {
+  return includeSelectedValue(ROUND_VALUES, selected).map((value) => ({
+    value,
+    label: String(value),
+  }))
+}
+
+const durationOptions = computed(() => timeOptions(DURATION_VALUES, durationSeconds.value))
+const timeCapOptions = computed(() => timeOptions(DURATION_VALUES, timeCapSeconds.value))
+const targetRoundOptions = computed(() => roundOptions(targetRounds.value))
+const intervalOptions = computed(() => timeOptions(INTERVAL_VALUES, intervalSeconds.value))
+const roundPickerOptions = computed(() => roundOptions(rounds.value))
+const workOptions = computed(() => timeOptions(INTERVAL_VALUES, workSeconds.value))
+const restOptions = computed(() => timeOptions([0, ...INTERVAL_VALUES], restSeconds.value))
 
 const canStart = computed(
   () => isTimerConfig(config.value) && !isStarting.value && !hasActiveSession.value,
@@ -151,7 +239,7 @@ async function start(): Promise<void> {
   isStarting.value = true
   unlockTimerAudio()
   const failed = reportFailure('start workout', t('timer.setup.startFailed'))
-  await runMutation(
+  await runStartMutation(
     createSession({
       config: config.value,
       ...(presetId.value === undefined ? {} : { presetId: presetId.value }),
@@ -183,7 +271,7 @@ async function savePreset(): Promise<void> {
   const program = presetId.value
     ? updatePreset(presetId.value, presetDraft.value)
     : createPreset(presetDraft.value)
-  await runMutation(
+  await runPresetMutation(
     program.pipe(
       Effect.tap(() => Effect.sync(() => toast.showToast(t('timer.setup.saveSuccess')))),
       Effect.catchTags({
@@ -208,109 +296,91 @@ async function savePreset(): Promise<void> {
   >
     <form class="mx-auto flex w-full max-w-lg flex-col gap-section p-4" @submit.prevent="start">
       <section class="rounded-2xl border bg-card p-4 shadow-xs">
-        <div v-if="routeMode === 'amrap'" class="flex flex-col gap-2">
-          <Label for="duration-minutes">{{ t('timer.setup.durationMinutes') }}</Label>
-          <input
-            id="duration-minutes"
-            v-model.number="durationMinutes"
-            class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-            type="number"
-            min="0.02"
-            max="1440"
-            step="0.5"
-            inputmode="decimal"
+        <div v-if="routeMode === 'amrap'">
+          <TimePicker
+            id="duration"
+            v-model="durationSeconds"
+            :label="t('timer.setup.duration')"
+            :options="durationOptions"
+            :custom-label="t('timer.setup.customTime')"
+            :minutes-label="t('timer.setup.minutes')"
+            :seconds-label="t('timer.setup.seconds')"
+            :min-seconds="1"
+            :max-seconds="MAX_DURATION_SECONDS"
           />
         </div>
         <div v-else-if="routeMode === 'forTime'" class="grid gap-4 sm:grid-cols-2">
-          <label class="flex flex-col gap-2 text-sm font-medium" for="time-cap-minutes">
-            {{ t('timer.setup.timeCapMinutes') }}
-            <input
-              id="time-cap-minutes"
-              v-model.number="timeCapMinutes"
-              class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-              type="number"
-              min="0"
-              max="1440"
-              step="0.5"
-              inputmode="decimal"
-            />
-          </label>
-          <label class="flex flex-col gap-2 text-sm font-medium" for="target-rounds">
-            {{ t('timer.setup.targetRounds') }}
-            <input
-              id="target-rounds"
-              v-model.number="targetRounds"
-              class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-              type="number"
-              min="0"
-              max="999"
-              inputmode="numeric"
-            />
-          </label>
+          <TimePicker
+            id="time-cap"
+            v-model="timeCapSeconds"
+            :label="t('timer.setup.timeCap')"
+            :options="timeCapOptions"
+            :empty-label="t('timer.setup.noTimeCap')"
+            :custom-label="t('timer.setup.customTime')"
+            :minutes-label="t('timer.setup.minutes')"
+            :seconds-label="t('timer.setup.seconds')"
+            :min-seconds="1"
+            :max-seconds="MAX_DURATION_SECONDS"
+          />
+          <ValuePicker
+            id="target-rounds"
+            v-model="targetRounds"
+            :label="t('timer.setup.targetRounds')"
+            :options="targetRoundOptions"
+            :empty-label="t('timer.setup.noTargetRounds')"
+            :custom-label="t('timer.setup.customRounds')"
+          />
         </div>
         <div v-else-if="routeMode === 'emom'" class="grid gap-4 sm:grid-cols-2">
-          <label class="flex flex-col gap-2 text-sm font-medium" for="interval-seconds">
-            {{ t('timer.setup.intervalSeconds') }}
-            <input
-              id="interval-seconds"
-              v-model.number="intervalSeconds"
-              class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-              type="number"
-              min="1"
-              max="3600"
-              inputmode="numeric"
-            />
-          </label>
-          <label class="flex flex-col gap-2 text-sm font-medium" for="emom-rounds">
-            {{ t('timer.setup.rounds') }}
-            <input
-              id="emom-rounds"
-              v-model.number="rounds"
-              class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-              type="number"
-              min="1"
-              max="999"
-              inputmode="numeric"
-            />
-          </label>
+          <TimePicker
+            id="interval"
+            v-model="intervalSeconds"
+            :label="t('timer.setup.interval')"
+            :options="intervalOptions"
+            :custom-label="t('timer.setup.customTime')"
+            :minutes-label="t('timer.setup.minutes')"
+            :seconds-label="t('timer.setup.seconds')"
+            :min-seconds="5"
+            :max-seconds="3600"
+          />
+          <ValuePicker
+            id="emom-rounds"
+            v-model="rounds"
+            :label="t('timer.setup.rounds')"
+            :options="roundPickerOptions"
+            :custom-label="t('timer.setup.customRounds')"
+          />
         </div>
         <div v-else class="grid gap-4 sm:grid-cols-3">
-          <label class="flex flex-col gap-2 text-sm font-medium" for="work-seconds">
-            {{ t('timer.setup.workSeconds') }}
-            <input
-              id="work-seconds"
-              v-model.number="workSeconds"
-              class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-              type="number"
-              min="1"
-              max="3600"
-              inputmode="numeric"
-            />
-          </label>
-          <label class="flex flex-col gap-2 text-sm font-medium" for="rest-seconds">
-            {{ t('timer.setup.restSeconds') }}
-            <input
-              id="rest-seconds"
-              v-model.number="restSeconds"
-              class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-              type="number"
-              min="0"
-              max="3600"
-              inputmode="numeric"
-            />
-          </label>
-          <label class="flex flex-col gap-2 text-sm font-medium" for="tabata-rounds">
-            {{ t('timer.setup.rounds') }}
-            <input
-              id="tabata-rounds"
-              v-model.number="rounds"
-              class="h-touch-target rounded-md border bg-transparent px-3 text-lg"
-              type="number"
-              min="1"
-              max="999"
-              inputmode="numeric"
-            />
-          </label>
+          <TimePicker
+            id="work"
+            v-model="workSeconds"
+            :label="t('timer.setup.work')"
+            :options="workOptions"
+            :custom-label="t('timer.setup.customTime')"
+            :minutes-label="t('timer.setup.minutes')"
+            :seconds-label="t('timer.setup.seconds')"
+            :min-seconds="1"
+            :max-seconds="3600"
+          />
+          <TimePicker
+            id="rest"
+            v-model="restSeconds"
+            :label="t('timer.setup.rest')"
+            :options="restOptions"
+            :custom-label="t('timer.setup.customTime')"
+            :minutes-label="t('timer.setup.minutes')"
+            :seconds-label="t('timer.setup.seconds')"
+            :min-seconds="0"
+            :max-seconds="3600"
+          />
+          <ValuePicker
+            id="tabata-rounds"
+            v-model="rounds"
+            :label="t('timer.setup.rounds')"
+            :options="roundPickerOptions"
+            :custom-label="t('timer.setup.customRounds')"
+          />
         </div>
       </section>
 
@@ -325,10 +395,9 @@ async function savePreset(): Promise<void> {
 
       <section class="flex flex-col gap-3 rounded-2xl border p-4">
         <Label for="preset-name">{{ t('timer.setup.presetName') }}</Label>
-        <input
+        <Input
           id="preset-name"
           v-model="presetName"
-          class="h-touch-target rounded-md border bg-transparent px-3"
           maxlength="80"
           :placeholder="t('timer.setup.presetNamePlaceholder')"
         />

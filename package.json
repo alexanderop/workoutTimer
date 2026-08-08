@@ -57,6 +57,7 @@
     "web-vitals": "catalog:frontend"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:testing",
     "@playwright/test": "catalog:testing",
     "@size-limit/file": "catalog:lint",
     "@stryker-mutator/api": "catalog:testing",

@@ -1,4 +1,4 @@
-import type { TimerSettings } from '@/types/workout'
+import type { TimerSettings } from '@/db'
 
 let audioContext: AudioContext | undefined
 

@@ -19,7 +19,7 @@ Given('the service worker controls the workout timer', async ({ page }) => {
 
 When('I start an AMRAP workout', async ({ page }) => {
   await page.getByRole('button', { name: /AMRAP/ }).click()
-  await page.getByLabel('Duration in minutes').fill('1')
+  await page.getByRole('button', { name: '1 min', exact: true }).click()
   await page.getByRole('button', { name: 'Start', exact: true }).click()
 })
 

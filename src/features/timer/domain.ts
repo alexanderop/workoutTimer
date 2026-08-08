@@ -1,4 +1,4 @@
-import type { TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/types/workout'
+import type { TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/db'
 
 export const SECOND_MS = 1_000
 export const MINUTE_MS = 60 * SECOND_MS
@@ -115,6 +115,11 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
     case 'forTime': {
       const cap = session.config.timeCapMs
       const cappedElapsed = cap === undefined ? elapsed : Math.min(elapsed, cap)
+      // Stryker disable next-line ConditionalExpression: dropping the guard is
+      // an equivalent mutant — `elapsed >= undefined` is false for every
+      // elapsed, so an uncapped For Time never hits a cap either way. The
+      // guard stays because it says so in the type, not because it changes the
+      // result.
       const hitCap = cap !== undefined && elapsed >= cap
       const complete = completedInStorage || hitCap
       return {

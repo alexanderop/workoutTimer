@@ -1,12 +1,5 @@
 import { DateTime, Effect, Schema } from 'effect'
-import {
-  StoredTimerPresetSchema,
-  StoredTimerSettingsSchema,
-  StoredWorkoutSessionSchema,
-  toTimerPreset,
-  toTimerSettings,
-  toWorkoutSession,
-} from './converters'
+import { TimerPresetSchema, TimerSettingsSchema, WorkoutSessionSchema } from './converters'
 import { BackupInvalidError, type DatabaseError } from './errors'
 import { WorkoutsRepo } from './repositories/workouts'
 
@@ -16,9 +9,9 @@ const BackupSchema = Schema.Struct({
   app: Schema.Literal('workout-timer'),
   version: Schema.Literal(BACKUP_VERSION),
   exportedAt: Schema.String,
-  sessions: Schema.Array(StoredWorkoutSessionSchema),
-  presets: Schema.Array(StoredTimerPresetSchema),
-  timerSettings: StoredTimerSettingsSchema,
+  sessions: Schema.Array(WorkoutSessionSchema),
+  presets: Schema.Array(TimerPresetSchema),
+  timerSettings: TimerSettingsSchema,
 })
 
 export type BackupPayload = typeof BackupSchema.Type
@@ -49,9 +42,8 @@ export const exportData: Effect.Effect<BackupPayload, DatabaseError, WorkoutsRep
 export const importData = Effect.fn('Backup.importData')(function* (payload: unknown) {
   const backup = yield* decodeBackup(payload)
   const repo = yield* WorkoutsRepo
-  const sessions = backup.sessions.map(toWorkoutSession)
-  const presets = backup.presets.map(toTimerPreset)
-  const settings = toTimerSettings(backup.timerSettings)
-  yield* repo.putBackup(sessions, presets, settings)
+  const sessions = [...backup.sessions]
+  const presets = [...backup.presets]
+  yield* repo.replaceAllData(sessions, presets, backup.timerSettings)
   return { sessions: sessions.length, presets: presets.length }
 })

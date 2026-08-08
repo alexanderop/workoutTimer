@@ -1,10 +1,10 @@
 import Dexie, { type Table } from 'dexie'
-import type { StoredTimerPreset, StoredTimerSettings, StoredWorkoutSession } from './converters'
+import type { TimerPreset, TimerSettings, WorkoutSession } from './converters'
 
 class WorkoutTimerDatabase extends Dexie {
-  presets!: Table<StoredTimerPreset, string>
-  sessions!: Table<StoredWorkoutSession, string>
-  timerSettings!: Table<StoredTimerSettings, string>
+  presets!: Table<TimerPreset, string>
+  sessions!: Table<WorkoutSession, string>
+  timerSettings!: Table<TimerSettings, string>
 
   constructor() {
     super('workout-timer')

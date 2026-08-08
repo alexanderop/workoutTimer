@@ -7,18 +7,18 @@ import { useRoute, useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import { useReportFailure } from '@/composables/useReportFailure'
-import { dbMutation, deleteSession } from '@/db'
+import { deleteSession, sessionMutation } from '@/db'
 import { deriveTimer, formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { sessionsAtom } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { TimerConfig } from '@/types/workout'
+import type { TimerConfig } from '@/db'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const toast = useToastStore()
-const runMutation = useAtomSet(() => dbMutation, { mode: 'promise' })
+const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('session-detail')
 const sessionsResult = useAtomValue(() => sessionsAtom)
 const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
