@@ -1,4 +1,5 @@
 import { expect, vi } from 'vitest'
+import type { Locator } from 'vitest/browser'
 import { page } from 'vitest/browser'
 import { renderApp } from '../helpers/renderApp'
 import { AppScreen } from './appScreen'
@@ -20,15 +21,17 @@ export class TimerScreen extends AppScreen {
     return new TimerScreen(app.container, app.cleanup)
   }
 
-  async modeChooser(): Promise<HTMLElement> {
+  async modeChooser(): Promise<Locator> {
     await this.expectHome()
-    const region = document.querySelector('[aria-labelledby="timer-modes-heading"]')
-    if (!(region instanceof HTMLElement)) throw new Error('timer mode chooser not found')
-    return region
+    return page.getByRole('region', { name: 'Workout Timer' })
   }
 
+  // Scoped to the chooser region: mode names are substrings of the buttons'
+  // accessible names, and outside the region a saved preset named "AMRAP 20"
+  // would make the lookup ambiguous.
   async chooseMode(name: 'AMRAP' | 'For Time' | 'EMOM' | 'Tabata'): Promise<void> {
-    await page.getByRole('button', { name: new RegExp(name, 'i') }).click()
+    const chooser = await this.modeChooser()
+    await chooser.getByRole('button', { name }).click()
   }
 
   readonly expectHome = vi.defineHelper(async (): Promise<void> => {

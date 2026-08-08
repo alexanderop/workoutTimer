@@ -41,8 +41,7 @@ describe('workout timer flow', () => {
    * "re-seed whenever presets change" left the user staring at the mode
    * default and a Start button that would run a workout they never configured.
    */
-  it('keeps the configured values after saving them as a preset', async ({ timer }) => {
-    await timer.chooseMode('AMRAP')
+  it('keeps the configured values after saving them as a preset', async ({ amrapSetup: timer }) => {
     await timer.setup.chooseTime('20 min')
     await timer.setup.savePreset('Twenty minute grind')
     await timer.expectToast('Preset saved')
@@ -54,8 +53,7 @@ describe('workout timer flow', () => {
     ])
   })
 
-  it('offers 15-second shortcuts and accepts a custom raw time', async ({ timer }) => {
-    await timer.chooseMode('AMRAP')
+  it('offers 15-second shortcuts and accepts a custom raw time', async ({ amrapSetup: timer }) => {
     await timer.setup.expectTimeShortcut('15 sec')
     await timer.setup.chooseCustomTime('2', '7')
     await timer.setup.start()
@@ -87,8 +85,13 @@ describe('workout timer flow', () => {
 
       timer.run.addRoundTwiceInOneTick()
 
-      await expect.poll(async () => (await storedSessions())[0]?.rounds.length).toBe(1)
+      // Polling the store for 1 would pass on a sample taken between two
+      // writes. Wait for the UI to reflect the persisted count first — both
+      // requests were dispatched in the same tick, so by then they have
+      // settled — and only then read the final state.
       await timer.run.expectRounds(1)
+      const [stored] = await storedSessions()
+      expect(stored?.rounds).toHaveLength(1)
     },
   )
 })

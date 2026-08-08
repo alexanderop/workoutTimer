@@ -14,7 +14,7 @@ describe('visual regression', () => {
 
   it('app shell, dark', async ({ timer, theme }) => {
     await timer.expectHome()
-    theme.dark()
+    await theme.dark()
     await expect(timer.root).toMatchScreenshot('app-shell-dark')
   })
 })

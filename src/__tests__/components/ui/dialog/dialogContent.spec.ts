@@ -20,14 +20,17 @@ const Harness = defineComponent({
 })
 
 const it = base.extend('tallSheet', async ({}, { onCleanup }) => {
-  const inset = Math.max(0, window.innerHeight - 200)
-  document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`)
-
   const mounted = render(Harness, { global: { plugins: [i18n] } })
   onCleanup(async () => {
     await mounted.unmount()
     document.documentElement.style.removeProperty('--keyboard-inset')
   })
+
+  // Shrink the viewport only after the cleanup is registered — a throw above
+  // must not leak a ~200px viewport into every later test in the file. The
+  // variable is read live by CSS, so setting it after mount changes nothing.
+  const inset = Math.max(0, window.innerHeight - 200)
+  document.documentElement.style.setProperty('--keyboard-inset', `${inset}px`)
 
   return {
     get body(): HTMLElement {
@@ -50,7 +53,9 @@ describe('DialogContent', () => {
 
     // Scrolling to the end brings the submit button into view — without a
     // scroll region it would be clipped by the sheet and unreachable.
+    // In-viewport only measures intersection, so also assert visibility.
     body.scrollTop = body.scrollHeight
     await expect.element(submit).toBeInViewport()
+    await expect.element(submit).toBeVisible()
   })
 })

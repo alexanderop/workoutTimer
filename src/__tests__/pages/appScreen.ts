@@ -1,20 +1,28 @@
 import { expect, vi } from 'vitest'
 import type { Locator } from 'vitest/browser'
 import { page } from 'vitest/browser'
+import { renderApp } from '../helpers/renderApp'
 
 /**
  * Base for browser-tier screen objects. Screen objects own accessible
  * locators and UI actions; assertions about IndexedDB stay in the specs.
+ * Routes without screen-specific locators (history, presets, settings)
+ * mount through `openAt` directly instead of a subclass per route.
  */
-export abstract class AppScreen {
+export class AppScreen {
   protected constructor(
     /** The mounted subtree used by axe and screenshot assertions. */
     readonly container: HTMLElement,
-    private readonly unmount: () => void,
+    private readonly unmount: () => Promise<void>,
   ) {}
 
-  close(): void {
-    this.unmount()
+  static async openAt(path: string): Promise<AppScreen> {
+    const app = await renderApp(path)
+    return new AppScreen(app.container, app.cleanup)
+  }
+
+  async close(): Promise<void> {
+    await this.unmount()
   }
 
   get root(): Locator {

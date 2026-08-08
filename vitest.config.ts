@@ -24,12 +24,22 @@ function browserConfig(name: string) {
     provider: playwright(),
     instances: [{ browser: 'chromium' as const, name }],
     headless: true,
+    // Failure diagnostics live in the retained trace. The default failure
+    // screenshots would land in __screenshots__/ next to the spec, where they
+    // are indistinguishable from committed baselines.
+    screenshotFailures: false,
     trace: {
       mode: 'retain-on-failure' as const,
       tracesDir: '.vitest/traces',
     },
   }
 }
+
+// Failure text that points at browser/loader infrastructure rather than the
+// app under test. Both retry policies below gate on it: assertion failures
+// never get a second chance (docs/vitest-practices.md).
+const infrastructureFailures =
+  /Failed to fetch dynamically imported module|has been closed|Execution context was destroyed|net::ERR/i
 
 // Shared plugins for all browser projects
 const plugins = [vue(), tailwindcss(), VitePWA({ devOptions: { enabled: true } })]
@@ -46,14 +56,7 @@ const sharedTestConfig = {
   // Stricter locally for fast feedback, generous in CI (shared runners are slower).
   testTimeout: process.env.CI ? 15_000 : 8000,
   // Retry browser infrastructure failures in CI, never assertion failures.
-  retry: process.env.CI
-    ? {
-        count: 2,
-        delay: 250,
-        condition:
-          /Failed to fetch dynamically imported module|has been closed|Execution context was destroyed|net::ERR/i,
-      }
-    : 0,
+  retry: process.env.CI ? { count: 2, delay: 250, condition: infrastructureFailures } : 0,
   slowTestThreshold: 1000,
   includeTaskLocation: true,
   chaiConfig: { truncateThreshold: 999 },
@@ -86,7 +89,10 @@ export default defineConfig({
       {
         name: 'flaky',
         description: 'Deliberately races browser events and may retry on loaded CI runners.',
-        retry: process.env.CI ? { count: 3, delay: 250 } : 0,
+        // Tag retry replaces the project retry object wholesale (no per-field
+        // merge), so the condition must be restated or the tag would retry
+        // assertion failures too.
+        retry: process.env.CI ? { count: 3, delay: 250, condition: infrastructureFailures } : 0,
         priority: 1,
       },
     ],

@@ -1,6 +1,5 @@
 import axe from 'axe-core'
 import { expect, vi } from 'vitest'
-import type { AppScreen } from '../pages/appScreen'
 
 /**
  * Page-level rules axe only evaluates when the context is the whole
@@ -51,8 +50,10 @@ export const assertNoViolations = vi.defineHelper(async (context: Element): Prom
  * app mounted, so call it after rendering a screen.
  */
 export const assertNoPageLevelViolations = vi.defineHelper(
-  async (mounted: AppScreen): Promise<void> => {
-    expect(mounted.container.isConnected).toBe(true)
+  async (mounted: Element): Promise<void> => {
+    // Guard against a vacuous pass: axe on a document with nothing mounted
+    // reports every page-level rule inapplicable.
+    expect(mounted.isConnected).toBe(true)
     const results = await axe.run(document, {
       resultTypes: ['violations'],
       runOnly: PAGE_LEVEL_RULES,

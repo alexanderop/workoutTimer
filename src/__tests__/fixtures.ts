@@ -1,15 +1,25 @@
 import { Effect } from 'effect'
 import { test } from 'vitest'
+import { nextTick } from 'vue'
+import { resetThemeState, useTheme } from '@/composables/useTheme'
 import { createSession, runDb, updateTimerSettings } from '@/db'
 import { resetAppState } from './helpers/reset'
-import { HistoryScreen } from './pages/historyScreen'
-import { PresetsScreen } from './pages/presetsScreen'
-import { SettingsScreen } from './pages/settingsScreen'
+import { AppScreen } from './pages/appScreen'
 import { TimerScreen } from './pages/timerScreen'
 
 async function prepareTimer(): Promise<void> {
   await resetAppState()
   await runDb(updateTimerSettings({ startCountdownMs: 0 }).pipe(Effect.orDie))
+}
+
+async function openScreen(
+  path: string,
+  onCleanup: (cleanup: () => void | Promise<void>) => void,
+): Promise<AppScreen> {
+  await resetAppState()
+  const screen = await AppScreen.openAt(path)
+  onCleanup(() => screen.close())
+  return screen
 }
 
 /**
@@ -20,6 +30,14 @@ export const it = test
   .extend('timer', async ({}, { onCleanup }) => {
     await prepareTimer()
     const timer = await TimerScreen.open()
+    onCleanup(() => timer.close())
+    return timer
+  })
+  // Cold entry into setup through the /timer/:mode deep link — the path a
+  // bookmark, reload, or PWA shortcut takes, with no home-chooser click state.
+  .extend('amrapSetup', async ({}, { onCleanup }) => {
+    await prepareTimer()
+    const timer = await TimerScreen.open('/timer/amrap')
     onCleanup(() => timer.close())
     return timer
   })
@@ -36,29 +54,23 @@ export const it = test
     onCleanup(() => timer.close())
     return { session, timer }
   })
-  .extend('history', async ({}, { onCleanup }) => {
-    await resetAppState()
-    const history = await HistoryScreen.open()
-    onCleanup(() => history.close())
-    return history
-  })
-  .extend('presets', async ({}, { onCleanup }) => {
-    await resetAppState()
-    const presets = await PresetsScreen.open()
-    onCleanup(() => presets.close())
-    return presets
-  })
-  .extend('settings', async ({}, { onCleanup }) => {
-    await resetAppState()
-    const settings = await SettingsScreen.open()
-    onCleanup(() => settings.close())
-    return settings
-  })
+  .extend('history', async ({}, { onCleanup }) => openScreen('/history', onCleanup))
+  .extend('presets', async ({}, { onCleanup }) => openScreen('/presets', onCleanup))
+  .extend('settings', async ({}, { onCleanup }) => openScreen('/settings', onCleanup))
   .extend('theme', async ({}, { onCleanup }) => {
-    onCleanup(() => document.documentElement.classList.remove('dark'))
+    const { isDark } = useTheme()
+    onCleanup(async () => {
+      resetThemeState()
+      await nextTick()
+    })
     return {
-      dark(): void {
-        document.documentElement.classList.add('dark')
+      // Through the real mechanism, not a hand-toggled class: whatever
+      // useTheme writes to the document is what the screenshot captures.
+      // useDark applies the `.dark` class from a `flush: 'post'` watcher,
+      // hence the tick.
+      async dark(): Promise<void> {
+        isDark.value = true
+        await nextTick()
       },
     }
   })

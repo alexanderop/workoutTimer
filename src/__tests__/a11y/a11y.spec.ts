@@ -8,10 +8,9 @@ describe('accessibility', () => {
     await assertNoViolations(timer.container)
   })
 
-  it('AMRAP setup has no violations', async ({ timer }) => {
-    await timer.chooseMode('AMRAP')
-    await timer.setup.expectTimeShortcut('15 sec')
-    await assertNoViolations(timer.container)
+  it('AMRAP setup has no violations', async ({ amrapSetup }) => {
+    await amrapSetup.setup.expectTimeShortcut('15 sec')
+    await assertNoViolations(amrapSetup.container)
   })
 
   it('history has no violations', async ({ history }) => {
@@ -27,10 +26,10 @@ describe('accessibility', () => {
   })
 
   it('timer home has a sound page structure', async ({ timer }) => {
-    await assertNoPageLevelViolations(timer)
+    await assertNoPageLevelViolations(timer.container)
   })
 
   it('settings has a sound page structure', async ({ settings }) => {
-    await assertNoPageLevelViolations(settings)
+    await assertNoPageLevelViolations(settings.container)
   })
 })

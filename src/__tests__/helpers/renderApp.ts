@@ -30,8 +30,8 @@ export async function renderApp(initialPath = '/') {
     screen,
     container: screen.container,
     router,
-    cleanup: (): void => {
-      void screen.unmount()
-    },
+    // unmount() removes the DOM synchronously but is typed Promise-returning;
+    // hand the promise to callers so fixture cleanup can await it.
+    cleanup: (): Promise<void> => screen.unmount(),
   }
 }
