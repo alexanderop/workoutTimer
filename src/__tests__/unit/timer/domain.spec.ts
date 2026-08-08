@@ -94,6 +94,7 @@ describe('timer domain', () => {
       primaryMs: 1_500,
       phase: 'countdown',
       round: 0,
+      completedRounds: 0,
       progress: 0.5,
       isComplete: false,
     })
@@ -124,6 +125,7 @@ describe('timer domain', () => {
       primaryMs: 45_000,
       phase: 'work',
       round: 1,
+      completedRounds: 1,
       progress: 0.25,
       isComplete: false,
     })
@@ -132,6 +134,7 @@ describe('timer domain', () => {
       primaryMs: 0,
       phase: 'finished',
       round: 0,
+      completedRounds: 0,
       progress: 1,
       isComplete: true,
     })
@@ -171,6 +174,7 @@ describe('timer domain', () => {
       primaryMs: 5_000,
       phase: 'work',
       round: 0,
+      completedRounds: 0,
       totalRounds: undefined,
       progress: 0,
       isComplete: false,
@@ -188,6 +192,7 @@ describe('timer domain', () => {
       primaryMs: 5_000,
       phase: 'work',
       round: 2,
+      completedRounds: 2,
       totalRounds: 5,
       progress: 0.5,
       isComplete: false,
@@ -221,6 +226,7 @@ describe('timer domain', () => {
       primaryMs: 30_000,
       phase: 'work',
       round: 1,
+      completedRounds: 0,
       totalRounds: 10,
       progress: 0.5,
       isComplete: false,
@@ -235,6 +241,7 @@ describe('timer domain', () => {
       primaryMs: 0,
       phase: 'finished',
       round: 10,
+      completedRounds: 10,
       totalRounds: 10,
       progress: 1,
       isComplete: true,
@@ -270,10 +277,40 @@ describe('timer domain', () => {
       primaryMs: 0,
       phase: 'finished',
       round: 2,
+      completedRounds: 2,
       totalRounds: 2,
       progress: 1,
       isComplete: true,
     })
+  })
+
+  it('counts structural rounds from elapsed time, not tapped splits', () => {
+    // The bug this pins: a stored-final Tabata has an empty splits array, so
+    // result screens reading `session.rounds.length` showed 0. 4 × 4:00 work
+    // with 3:00 rests between is 25:00 — and 4 completed rounds.
+    const longTabata: TimerConfig = { mode: 'tabata', workMs: 240_000, restMs: 180_000, rounds: 4 }
+    expect(
+      deriveTimer(session(longTabata, { status: 'completed', finishedAt: 1_501_000 }), 2_000_000),
+    ).toMatchObject({ elapsedMs: 1_500_000, completedRounds: 4 })
+    // Cancelled during the second work phase: only the first round is done —
+    // a stored-final status must not inflate the count to the configured 4.
+    expect(
+      deriveTimer(session(longTabata, { status: 'cancelled', finishedAt: 481_000 }), 2_000_000),
+    ).toMatchObject({ completedRounds: 1 })
+
+    // A round is finished exactly when its work phase ends; the rest after it
+    // adds nothing, and a clock far past the endpoint never counts beyond the
+    // configured rounds.
+    const tabata = session({ mode: 'tabata', workMs: 20_000, restMs: 10_000, rounds: 2 })
+    expect(deriveTimer(tabata, 20_999).completedRounds).toBe(0)
+    expect(deriveTimer(tabata, 21_000).completedRounds).toBe(1)
+    expect(deriveTimer(tabata, 30_999).completedRounds).toBe(1)
+    expect(deriveTimer(tabata, 200_000).completedRounds).toBe(2)
+
+    const emom = session({ mode: 'emom', intervalMs: 60_000, rounds: 10 })
+    expect(deriveTimer(emom, 60_999).completedRounds).toBe(0)
+    expect(deriveTimer(emom, 61_000).completedRounds).toBe(1)
+    expect(deriveTimer(emom, 2_000_000).completedRounds).toBe(10)
   })
 
   it('formats phone-friendly clocks', () => {

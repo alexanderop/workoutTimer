@@ -108,7 +108,7 @@ async function remove(): Promise<void> {
         </div>
         <div class="rounded-2xl border bg-card p-4">
           <p class="text-sm text-muted-foreground">{{ t('timer.result.rounds') }}</p>
-          <p class="mt-1 text-2xl font-bold">{{ session.rounds.length }}</p>
+          <p class="mt-1 text-2xl font-bold">{{ result.completedRounds }}</p>
         </div>
       </section>
 

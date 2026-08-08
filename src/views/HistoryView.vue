@@ -51,7 +51,7 @@ function modeName(session: WorkoutSession): string {
 function resultLabel(session: WorkoutSession): string {
   const result = deriveTimer(session, session.finishedAt ?? Date.now())
   const rounds =
-    session.rounds.length > 0 ? ` · ${session.rounds.length} ${t('timer.result.rounds')}` : ''
+    result.completedRounds > 0 ? ` · ${result.completedRounds} ${t('timer.result.rounds')}` : ''
   return `${formatDuration(result.elapsedMs)}${rounds}`
 }
 
