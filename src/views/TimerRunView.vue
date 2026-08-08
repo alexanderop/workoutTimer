@@ -297,7 +297,7 @@ function toggleSound(): Promise<unknown> {
         {{ t('timer.run.round', { current: derived.round, total: derived.totalRounds }) }}
       </p>
       <p v-else class="text-lg font-semibold text-white/75">
-        {{ t('timer.run.roundsCaptured', { count: session.rounds.length }) }}
+        {{ t('timer.run.roundsCaptured', { count: derived.completedRounds }) }}
       </p>
 
       <TimerRing :progress="derived.progress">

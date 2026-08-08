@@ -65,11 +65,10 @@ export type DerivedTimer = {
   readonly round: number
   /**
    * Rounds actually finished, which is what result screens report: tapped
-   * splits for AMRAP and For Time, elapsed-derived structural rounds for EMOM
-   * and Tabata. Distinct from `round` (the round the athlete is *in*), which
-   * jumps to the configured count for any stored-final session — the tapped
-   * splits array stays empty in structural modes, and a cancelled session must
-   * not claim the full round count.
+   * splits for AMRAP and For Time, work phases finished for EMOM and Tabata.
+   * Distinct from `round` (the round the athlete is *in*), which in the
+   * structural modes jumps to the configured count for any stored-final
+   * session — even a cancelled one.
    */
   readonly completedRounds: number
   readonly totalRounds?: number
@@ -79,6 +78,20 @@ export type DerivedTimer = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+/**
+ * Structural rounds finished after `elapsed`: a round counts once its work
+ * phase ends, and adding the rest that follows each work phase moves that
+ * boundary onto a cycle boundary. EMOM is the `restMs = 0` case.
+ */
+function structuralRoundsDone(
+  elapsed: number,
+  workMs: number,
+  restMs: number,
+  rounds: number,
+): number {
+  return Math.min(rounds, Math.floor((elapsed + restMs) / (workMs + restMs)))
 }
 
 export function elapsedSessionMs(session: WorkoutSession, now: number): number {
@@ -148,19 +161,19 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       const total = session.config.intervalMs * session.config.rounds
       const cappedElapsed = Math.min(elapsed, total)
       const complete = completedInStorage || elapsed >= total
-      const round = complete
-        ? session.config.rounds
-        : Math.min(session.config.rounds, Math.floor(elapsed / session.config.intervalMs) + 1)
+      const completedRounds = structuralRoundsDone(
+        elapsed,
+        session.config.intervalMs,
+        0,
+        session.config.rounds,
+      )
       const withinRound = elapsed % session.config.intervalMs
       return {
         elapsedMs: cappedElapsed,
         primaryMs: complete ? 0 : session.config.intervalMs - withinRound,
         phase: complete ? 'finished' : 'work',
-        round,
-        completedRounds: Math.min(
-          session.config.rounds,
-          Math.floor(elapsed / session.config.intervalMs),
-        ),
+        round: complete ? session.config.rounds : completedRounds + 1,
+        completedRounds,
         totalRounds: session.config.rounds,
         progress: complete ? 1 : clamp(withinRound / session.config.intervalMs, 0, 1),
         isComplete: complete,
@@ -170,12 +183,11 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       const total = totalDurationMs(session.config) ?? 0
       const cappedElapsed = Math.min(elapsed, total)
       const complete = completedInStorage || elapsed >= total
-      const cycle = session.config.workMs + session.config.restMs
-      // A round is finished once its work phase ends; adding the rest that
-      // follows each work phase moves that boundary onto a cycle boundary.
-      const completedRounds = Math.min(
+      const completedRounds = structuralRoundsDone(
+        elapsed,
+        session.config.workMs,
+        session.config.restMs,
         session.config.rounds,
-        Math.floor((elapsed + session.config.restMs) / cycle),
       )
       if (complete) {
         return {
@@ -190,6 +202,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         }
       }
 
+      const cycle = session.config.workMs + session.config.restMs
       const roundIndex = Math.floor(elapsed / cycle)
       const withinCycle = elapsed - roundIndex * cycle
       const resting = withinCycle >= session.config.workMs
