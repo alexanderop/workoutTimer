@@ -24,9 +24,9 @@ export default defineConfig({
         config: true,
       },
       manifest: {
-        name: 'Vue PWA Starter',
-        short_name: 'Starter',
-        description: 'Local-first Vue PWA starter with a complete testing strategy',
+        name: 'Workout Timer',
+        short_name: 'Timer',
+        description: 'Local-first AMRAP, For Time, EMOM, and Tabata workout timer',
         // Hex mirror of --primary in src/style.css (manifests can't use CSS
         // variables) — update this if the primary token's hue ever changes.
         theme_color: '#7c3aed',
@@ -41,7 +41,7 @@ export default defineConfig({
             // headers returns an *opaque* response, which Chrome pads to
             // ~7 MB of quota each — on the same quota IndexedDB draws from.
             // A handful of them can push the origin over and get the user's
-            // notes evicted. Keep the origin check when adding destinations.
+            // workouts evicted. Keep the origin check when adding destinations.
             urlPattern: ({ request, sameOrigin }) =>
               sameOrigin &&
               (request.destination === 'style' ||

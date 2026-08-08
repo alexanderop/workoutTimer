@@ -14,7 +14,7 @@ import { Effect, Schema } from 'effect'
 import { downloadBlob } from './download'
 
 /** Stem of every exported backup file; the export date is appended. */
-const BACKUP_FILENAME_STEM = 'vue-pwa-starter-backup'
+const BACKUP_FILENAME_STEM = 'workout-timer-backup'
 
 /**
  * The `YYYY-MM-DD` an ISO timestamp opens with, and nothing else.

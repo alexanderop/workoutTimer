@@ -1,13 +1,8 @@
 import type { Component } from 'vue'
-import { NotebookPen, Settings } from '@lucide/vue'
+import { History, Settings, Timer } from '@lucide/vue'
 import type { RouteName } from './index'
 import { RouteNames } from './index'
 
-/**
- * Bottom navigation, declared as data. Add a tab by adding an entry here —
- * the shell splits the items around the optional center action on its own.
- * `labelKey` is resolved through i18n in App.vue.
- */
 export type NavItemConfig = {
   routeName: RouteName
   icon: Component
@@ -15,6 +10,7 @@ export type NavItemConfig = {
 }
 
 export const NAV_ITEMS: ReadonlyArray<NavItemConfig> = [
-  { routeName: RouteNames.notes, icon: NotebookPen, labelKey: 'nav.notes' },
+  { routeName: RouteNames.timer, icon: Timer, labelKey: 'nav.timer' },
+  { routeName: RouteNames.history, icon: History, labelKey: 'nav.history' },
   { routeName: RouteNames.settings, icon: Settings, labelKey: 'nav.settings' },
 ]

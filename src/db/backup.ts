@@ -1,72 +1,57 @@
 import { DateTime, Effect, Schema } from 'effect'
-import { StoredDbNote, toNote } from './converters'
+import {
+  StoredTimerPresetSchema,
+  StoredTimerSettingsSchema,
+  StoredWorkoutSessionSchema,
+  toTimerPreset,
+  toTimerSettings,
+  toWorkoutSession,
+} from './converters'
 import { BackupInvalidError, type DatabaseError } from './errors'
-import { NotesRepo } from './repositories/notes'
+import { WorkoutsRepo } from './repositories/workouts'
 
-const BACKUP_VERSION = 2 as const
+const BACKUP_VERSION = 1 as const
 
-// `StoredDbNote` is the same schema the repository decodes rows with, so a
-// backup accepts exactly the shapes this app has ever written — current (v2)
-// and legacy (v1), normalized by the converter on import. Sharing it is what
-// keeps "The Long Now" honest: a field added to a note cannot reach disk
-// while quietly dropping out of every export.
 const BackupSchema = Schema.Struct({
-  app: Schema.Literal('vue-pwa-starter'),
-  version: Schema.Literals([1, BACKUP_VERSION]),
+  app: Schema.Literal('workout-timer'),
+  version: Schema.Literal(BACKUP_VERSION),
   exportedAt: Schema.String,
-  notes: Schema.Array(StoredDbNote),
+  sessions: Schema.Array(StoredWorkoutSessionSchema),
+  presets: Schema.Array(StoredTimerPresetSchema),
+  timerSettings: StoredTimerSettingsSchema,
 })
 
-export type BackupPayload = (typeof BackupSchema)['Type']
+export type BackupPayload = typeof BackupSchema.Type
 
-const decodePayload = Schema.decodeUnknownEffect(BackupSchema)
-
-/**
- * Pure validation: unknown JSON in, typed payload or BackupInvalidError out.
- * No IndexedDB involved, which is what makes the import rules testable in
- * the Node unit tier.
- */
 export const decodeBackup = (payload: unknown): Effect.Effect<BackupPayload, BackupInvalidError> =>
-  decodePayload(payload).pipe(
+  Schema.decodeUnknownEffect(BackupSchema)(payload).pipe(
     Effect.mapError((error) => new BackupInvalidError({ message: error.message })),
   )
 
-/**
- * Reads every note and builds the payload *through* `BackupSchema` rather
- * than casting an object literal into its shape. The notes were already
- * validated on the way out of the repository, so this is trusted
- * construction — `make` is the right form, and it fails loudly if the payload
- * and the schema ever disagree (bumping `BACKUP_VERSION` past what
- * `Schema.Literals` accepts, say). A cast would have shipped that mismatch.
- */
-export const exportData: Effect.Effect<BackupPayload, DatabaseError, NotesRepo> = Effect.gen(
+export const exportData: Effect.Effect<BackupPayload, DatabaseError, WorkoutsRepo> = Effect.gen(
   function* () {
-    const repo = yield* NotesRepo
-    const notes = yield* repo.list()
+    const repo = yield* WorkoutsRepo
+    const sessions = yield* repo.listSessions()
+    const presets = yield* repo.listPresets()
+    const timerSettings = yield* repo.getSettings()
     const now = yield* DateTime.now
     return BackupSchema.make({
-      app: 'vue-pwa-starter',
+      app: 'workout-timer',
       version: BACKUP_VERSION,
       exportedAt: DateTime.formatIso(now),
-      notes,
+      sessions,
+      presets,
+      timerSettings,
     })
   },
-).pipe(
-  // Stryker disable next-line StringLiteral: the span name is observability, not behavior — no unit test should assert it
-  Effect.withSpan('Backup.exportData'),
-)
+).pipe(Effect.withSpan('Backup.exportData'))
 
-/**
- * Validates and imports a backup payload; existing rows with matching ids
- * are overwritten. Fails with BackupInvalidError for anything that is not a
- * backup file and DatabaseError if the write itself fails — both visible in
- * the type. Returns the number of imported notes.
- */
-// Stryker disable next-line StringLiteral: the span name is observability, not behavior — no unit test should assert it
 export const importData = Effect.fn('Backup.importData')(function* (payload: unknown) {
   const backup = yield* decodeBackup(payload)
-  const repo = yield* NotesRepo
-  const notes = backup.notes.map(toNote)
-  yield* repo.putMany(notes)
-  return notes.length
+  const repo = yield* WorkoutsRepo
+  const sessions = backup.sessions.map(toWorkoutSession)
+  const presets = backup.presets.map(toTimerPreset)
+  const settings = toTimerSettings(backup.timerSettings)
+  yield* repo.putBackup(sessions, presets, settings)
+  return { sessions: sessions.length, presets: presets.length }
 })

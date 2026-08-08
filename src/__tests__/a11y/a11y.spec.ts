@@ -10,41 +10,25 @@ describe('accessibility', () => {
   beforeEach(resetAppState)
   afterEach(() => cleanup?.())
 
-  it('notes home has no violations', async () => {
-    const app = await renderApp()
-    cleanup = app.cleanup
-
-    await assertNoViolations(app.container)
-  })
-
-  it('settings has no violations', async () => {
-    const app = await renderApp('/settings')
-    cleanup = app.cleanup
-
-    await assertNoViolations(app.container)
-  })
-
-  it('quick-add sheet has no violations while open', async () => {
-    const app = await renderApp()
-    cleanup = app.cleanup
-
-    await page.getByRole('button', { name: 'Add a note' }).click()
-    // The sheet is lazy-loaded, so wait for it before handing it to axe.
-    await expect.element(page.getByRole('dialog')).toBeVisible()
-
-    await assertNoViolations(page.getByRole('dialog').element())
-  })
-
-  // Container-scoped sweeps skip every rule axe classifies as page-level —
-  // landmark structure, heading-one, region. These run against the document
-  // so they actually execute; see the helper for what is and isn't included.
   it.each([
-    ['notes home', '/'],
+    ['timer home', '/'],
+    ['AMRAP setup', '/timer/amrap'],
+    ['history', '/history'],
+    ['presets', '/presets'],
+    ['settings', '/settings'],
+  ])('%s has no violations', async (_name, path) => {
+    const app = await renderApp(path)
+    cleanup = app.cleanup
+    await expect.element(page.getByTestId('app')).toBeVisible()
+    await assertNoViolations(app.container)
+  })
+
+  it.each([
+    ['timer home', '/'],
     ['settings', '/settings'],
   ])('%s has a sound page structure', async (_name, path) => {
     const app = await renderApp(path)
     cleanup = app.cleanup
-
     await assertNoPageLevelViolations()
   })
 })

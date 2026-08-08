@@ -10,6 +10,6 @@ import { Context } from 'effect'
  * nothing has to provide it and `Effect<A, E, never>` stays `never`. Tests
  * override it with `Effect.provideService(GenerateId, () => 'fixed-id')`.
  */
-export const GenerateId = Context.Reference<() => string>('vue-pwa-starter/db/GenerateId', {
+export const GenerateId = Context.Reference<() => string>('workout-timer/db/GenerateId', {
   defaultValue: () => () => crypto.randomUUID(),
 })

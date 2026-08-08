@@ -35,7 +35,7 @@ const sfc = (importLine: string) =>
 describe('feature isolation', () => {
   it('rejects a feature importing another feature', async () => {
     const rules = await lint(
-      'src/features/notes/atoms.ts',
+      'src/features/timer/domain.ts',
       `import { thing } from '@/features/other/thing'\nexport const x = thing\n`,
     )
     expect(rules).toContain(RULE)
@@ -43,7 +43,7 @@ describe('feature isolation', () => {
 
   it('rejects it from a .vue file too — the case ArchUnitTS cannot see', async () => {
     const rules = await lint(
-      'src/features/notes/components/NoteCard.vue',
+      'src/features/timer/components/ModeCard.vue',
       sfc(`import { thing } from '@/features/other/thing'\nvoid thing`),
     )
     expect(rules).toContain(RULE)
@@ -51,8 +51,8 @@ describe('feature isolation', () => {
 
   it('allows a feature to import itself', async () => {
     const rules = await lint(
-      'src/features/notes/components/NoteCard.vue',
-      sfc(`import { sortNotes } from '@/features/notes/domain'\nvoid sortNotes`),
+      'src/features/timer/components/ModeCard.vue',
+      sfc(`import { formatDuration } from '@/features/timer/domain'\nvoid formatDuration`),
     )
     expect(rules).not.toContain(RULE)
   })
@@ -60,19 +60,19 @@ describe('feature isolation', () => {
 
 describe('shared layers', () => {
   it.each([
-    ['src/components/AppShell.vue', sfc(`import { x } from '@/features/notes/atoms'\nvoid x`)],
-    ['src/composables/useThing.ts', `export { x } from '@/features/notes/atoms'\n`],
-    ['src/stores/thing.ts', `export { x } from '@/features/notes/atoms'\n`],
-    ['src/lib/thing.ts', `export { x } from '@/features/notes/atoms'\n`],
-    ['src/db/thing.ts', `export { x } from '@/features/notes/atoms'\n`],
+    ['src/components/AppShell.vue', sfc(`import { x } from '@/features/timer/domain'\nvoid x`)],
+    ['src/composables/useThing.ts', `export { x } from '@/features/timer/domain'\n`],
+    ['src/stores/thing.ts', `export { x } from '@/features/timer/domain'\n`],
+    ['src/lib/thing.ts', `export { x } from '@/features/timer/domain'\n`],
+    ['src/db/thing.ts', `export { x } from '@/features/timer/domain'\n`],
   ])('rejects %s depending on a feature', async (filePath, code) => {
     expect(await lint(filePath, code)).toContain(RULE)
   })
 
   it('allows a view to compose a feature', async () => {
     const rules = await lint(
-      'src/views/NotesView.vue',
-      sfc(`import { x } from '@/features/notes/atoms'\nvoid x`),
+      'src/views/TimerHomeView.vue',
+      sfc(`import { x } from '@/features/timer/domain'\nvoid x`),
     )
     expect(rules).not.toContain(RULE)
   })
@@ -80,13 +80,13 @@ describe('shared layers', () => {
 
 describe('db encapsulation', () => {
   it.each([
-    'src/features/notes/atoms.ts',
+    'src/features/timer/domain.ts',
     'src/components/AppShell.vue',
     'src/composables/useThing.ts',
     'src/stores/thing.ts',
     'src/views/SettingsView.vue',
   ])('rejects %s reaching past @/db', async (filePath) => {
-    const importLine = `import { listNotes } from '@/db/repositories/notes'\nvoid listNotes`
+    const importLine = `import { listSessions } from '@/db/repositories/workouts'\nvoid listSessions`
     const code = filePath.endsWith('.vue') ? sfc(importLine) : `${importLine}\n`
     expect(await lint(filePath, code)).toContain(RULE)
   })
@@ -100,7 +100,10 @@ describe('db encapsulation', () => {
   })
 
   it('allows the public surface', async () => {
-    const rules = await lint('src/features/notes/atoms.ts', `export { listNotes } from '@/db'\n`)
+    const rules = await lint(
+      'src/features/timer/domain.ts',
+      `export { listSessions } from '@/db'\n`,
+    )
     expect(rules).not.toContain(RULE)
   })
 
@@ -122,7 +125,7 @@ describe('ui encapsulation', () => {
   it.each([
     'src/views/SettingsView.vue',
     'src/components/AppShell.vue',
-    'src/features/notes/components/NoteCard.vue',
+    'src/features/timer/components/ModeCard.vue',
   ])('rejects %s importing reka-ui directly', async (filePath) => {
     const rules = await lint(filePath, sfc(`import { DialogRoot } from 'reka-ui'\nvoid DialogRoot`))
     expect(rules).toContain(RULE)
@@ -130,7 +133,7 @@ describe('ui encapsulation', () => {
 
   it('rejects cva outside the primitives', async () => {
     const rules = await lint(
-      'src/features/notes/components/NoteCard.vue',
+      'src/features/timer/components/ModeCard.vue',
       sfc(`import { cva } from 'class-variance-authority'\nvoid cva`),
     )
     expect(rules).toContain(RULE)
@@ -163,7 +166,7 @@ describe('ui encapsulation', () => {
   it('keeps a primitive out of the data layer', async () => {
     const rules = await lint(
       'src/components/ui/dialog/DialogContent.vue',
-      sfc(`import { listNotes } from '@/db'\nvoid listNotes`),
+      sfc(`import { listSessions } from '@/db'\nvoid listSessions`),
     )
     expect(rules).toContain(RULE)
   })

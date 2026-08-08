@@ -2,7 +2,13 @@ import type { RouteRecordRaw, Router, RouterHistory } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
 
 export const RouteNames = {
-  notes: 'notes',
+  timer: 'timer',
+  timerSetup: 'timer-setup',
+  timerRun: 'timer-run',
+  timerResult: 'timer-result',
+  history: 'history',
+  sessionDetail: 'session-detail',
+  presets: 'presets',
   settings: 'settings',
 } as const
 
@@ -10,19 +16,43 @@ export type RouteName = (typeof RouteNames)[keyof typeof RouteNames]
 
 declare module 'vue-router' {
   interface RouteMeta {
-    /**
-     * Full-screen routes (media players, immersive editors, onboarding) can
-     * opt out of the bottom navigation. AppShell reads this flag.
-     */
     hideNav?: boolean
   }
 }
 
 const routes: Array<RouteRecordRaw> = [
+  { path: '/', name: RouteNames.timer, component: () => import('@/views/TimerHomeView.vue') },
   {
-    path: '/',
-    name: RouteNames.notes,
-    component: () => import('@/views/NotesView.vue'),
+    path: '/timer/:mode',
+    name: RouteNames.timerSetup,
+    component: () => import('@/views/TimerSetupView.vue'),
+  },
+  {
+    path: '/session/:id',
+    name: RouteNames.timerRun,
+    component: () => import('@/views/TimerRunView.vue'),
+    meta: { hideNav: true },
+  },
+  {
+    path: '/session/:id/result',
+    name: RouteNames.timerResult,
+    component: () => import('@/views/TimerResultView.vue'),
+    meta: { hideNav: true },
+  },
+  {
+    path: '/history',
+    name: RouteNames.history,
+    component: () => import('@/views/HistoryView.vue'),
+  },
+  {
+    path: '/history/:id',
+    name: RouteNames.sessionDetail,
+    component: () => import('@/views/SessionDetailView.vue'),
+  },
+  {
+    path: '/presets',
+    name: RouteNames.presets,
+    component: () => import('@/views/PresetsView.vue'),
   },
   {
     path: '/settings',
@@ -31,10 +61,6 @@ const routes: Array<RouteRecordRaw> = [
   },
 ]
 
-/**
- * Router factory instead of a singleton: the app creates one with web
- * history in main.ts, tests create isolated instances with memory history.
- */
 export function createAppRouter(
   history: RouterHistory = createWebHistory(import.meta.env.BASE_URL),
 ): Router {

@@ -13,8 +13,8 @@ import { useToastStore } from '@/stores/toast'
  * every reported failure carries the same `boundary` / `operation` /
  * `failure` keys.
  *
- * Usage: `const reportFailure = useReportFailure('notes')`, then hand
- * `reportFailure('delete note', t('notes.toast.deleteFailed'))` to
+ * Usage: `const reportFailure = useReportFailure('timer')`, then hand
+ * `reportFailure('save session', t('timer.run.saveFailed'))` to
  * `Effect.catchTag`/`Effect.catchTags`.
  */
 export function useReportFailure(

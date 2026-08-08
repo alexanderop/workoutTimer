@@ -1,5 +1,5 @@
 {
-  "name": "vue-pwa-starter",
+  "name": "workout-timer",
   "type": "module",
   "version": "0.1.0",
   "private": true,
@@ -57,7 +57,6 @@
     "web-vitals": "catalog:frontend"
   },
   "devDependencies": {
-    "@effect/vitest": "catalog:testing",
     "@playwright/test": "catalog:testing",
     "@size-limit/file": "catalog:lint",
     "@stryker-mutator/api": "catalog:testing",
@@ -104,7 +103,7 @@
     {
       "name": "production JavaScript",
       "path": "dist/assets/*.js",
-      "limit": "170 kB"
+      "limit": "180 kB"
     }
   ],
   "lint-staged": {

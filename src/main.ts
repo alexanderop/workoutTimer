@@ -9,8 +9,8 @@ import './style.css'
 
 const app = createApp(App)
 
-// One atom registry per app instance: every atom's state — the notes list,
-// toasts, the quick-add sheet — lives here, not in module scope. Providing
+// One atom registry per app instance: every atom's state — sessions, presets,
+// settings, and toasts — lives here, not in module scope. Providing
 // it explicitly (rather than leaning on the library's global default) is
 // what lets tests hand each render its own registry and start clean.
 app.provide(registryKey, AtomRegistry.make())

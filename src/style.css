@@ -36,6 +36,11 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
 
+  --color-mode-amrap: var(--mode-amrap);
+  --color-mode-for-time: var(--mode-for-time);
+  --color-mode-emom: var(--mode-emom);
+  --color-mode-tabata: var(--mode-tabata);
+
   /* Spacing tokens - --spacing-* generates gap-*, space-y-*, p-*, etc. utilities */
   --spacing-section: 1.5rem; /* vertical rhythm between page sections (space-y-section) */
 
@@ -71,6 +76,10 @@
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.75 0.18 55);
   --warning-foreground: oklch(0.25 0 0);
+  --mode-amrap: oklch(0.72 0.18 55);
+  --mode-for-time: oklch(0.62 0.2 270);
+  --mode-emom: oklch(0.62 0.25 305);
+  --mode-tabata: oklch(0.68 0.16 170);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -99,6 +108,26 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+}
+
+[data-mode='amrap'] {
+  --mode-color: var(--mode-amrap);
+  --mode-foreground: oklch(0.16 0.02 55);
+}
+
+[data-mode='forTime'] {
+  --mode-color: var(--mode-for-time);
+  --mode-foreground: white;
+}
+
+[data-mode='emom'] {
+  --mode-color: var(--mode-emom);
+  --mode-foreground: white;
+}
+
+[data-mode='tabata'] {
+  --mode-color: var(--mode-tabata);
+  --mode-foreground: oklch(0.14 0.03 170);
 }
 
 @layer base {

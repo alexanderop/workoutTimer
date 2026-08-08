@@ -3,9 +3,7 @@ import { BackupFileError, backupFilename } from '@/lib/backupFile'
 
 describe('backupFilename', () => {
   it('stamps the file with the export date', () => {
-    expect(backupFilename('2026-08-07T12:34:56.789Z')).toBe(
-      'vue-pwa-starter-backup-2026-08-07.json',
-    )
+    expect(backupFilename('2026-08-07T12:34:56.789Z')).toBe('workout-timer-backup-2026-08-07.json')
   })
 
   it('keeps only the date, never the time', () => {
@@ -13,19 +11,19 @@ describe('backupFilename', () => {
   })
 
   it('drops a timestamp that is not an ISO date rather than putting it in the name', () => {
-    expect(backupFilename('yesterday')).toBe('vue-pwa-starter-backup.json')
-    expect(backupFilename('')).toBe('vue-pwa-starter-backup.json')
+    expect(backupFilename('yesterday')).toBe('workout-timer-backup.json')
+    expect(backupFilename('')).toBe('workout-timer-backup.json')
   })
 
   it('never lets a hand-edited payload write a path into the filename', () => {
-    expect(backupFilename('../../../etc/passwd')).toBe('vue-pwa-starter-backup.json')
+    expect(backupFilename('../../../etc/passwd')).toBe('workout-timer-backup.json')
   })
 
   it('requires the date at the very start, not just somewhere in the string', () => {
     // Unanchored, the pattern finds the date inside the junk and names the
     // file after it — which is trusting exactly the input this guard exists to
     // distrust.
-    expect(backupFilename('junk 2026-08-07')).toBe('vue-pwa-starter-backup.json')
+    expect(backupFilename('junk 2026-08-07')).toBe('workout-timer-backup.json')
   })
 })
 

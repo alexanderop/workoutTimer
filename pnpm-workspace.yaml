@@ -40,8 +40,6 @@ catalogs:
     prettier: 3.8.4
     size-limit: ^12.1.0
   testing:
-    # Pinned exactly, in lockstep with the `effect` pin in catalog frontend.
-    '@effect/vitest': 4.0.0-beta.105
     '@playwright/test': ^1.61.1
     # Stryker's vitest-runner is developed against the same vitest it finds in
     # the sandbox — 9.6.x dev-tests against 4.1.10. Move it with the vitest pin.

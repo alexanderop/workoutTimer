@@ -21,7 +21,9 @@ describe('visual regression', () => {
     const app = await renderApp()
     cleanup = app.cleanup
 
-    await expect.element(page.getByText('No notes yet')).toBeVisible()
+    await expect
+      .element(page.getByRole('heading', { name: 'Workout Timer', level: 1 }))
+      .toBeVisible()
     await expect(page.getByTestId('app')).toMatchScreenshot('app-shell-light')
   })
 
@@ -29,7 +31,9 @@ describe('visual regression', () => {
     const app = await renderApp()
     cleanup = app.cleanup
 
-    await expect.element(page.getByText('No notes yet')).toBeVisible()
+    await expect
+      .element(page.getByRole('heading', { name: 'Workout Timer', level: 1 }))
+      .toBeVisible()
     document.documentElement.classList.add('dark')
     await expect(page.getByTestId('app')).toMatchScreenshot('app-shell-dark')
   })

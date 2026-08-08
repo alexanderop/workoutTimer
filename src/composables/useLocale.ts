@@ -3,7 +3,7 @@ import { watch } from 'vue'
 import type { SupportedLocale } from '@/i18n'
 import { i18n, SUPPORTED_LOCALES } from '@/i18n'
 
-export const LOCALE_STORAGE_KEY = 'vue-pwa-starter.locale'
+export const LOCALE_STORAGE_KEY = 'workout-timer.locale'
 const DEFAULT_LOCALE: SupportedLocale = 'en'
 
 function isSupportedLocale(value: string): value is SupportedLocale {
