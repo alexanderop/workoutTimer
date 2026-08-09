@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Copy, Pencil, Play, Trash2 } from '@lucide/vue'
 import { Effect } from 'effect'
 import { computed, onBeforeUnmount, ref } from 'vue'
@@ -11,7 +11,7 @@ import { useReportFailure } from '@/composables/useReportFailure'
 import { createPreset, deletePreset, presetMutation } from '@/db'
 import { formatDuration, sortPresets } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
-import { presetsAtom } from '@/stores/timerData'
+import { usePresets } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
 import type { TimerConfig, TimerPreset } from '@/db'
 
@@ -20,9 +20,8 @@ const router = useRouter()
 const toast = useToastStore()
 const reportFailure = useReportFailure('presets')
 const runMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
-const presetsResult = useAtomValue(() => presetsAtom)
-const presets = computed(() => sortPresets(AsyncResult.getOrElse(presetsResult.value, () => [])))
-const loadFailed = computed(() => AsyncResult.isFailure(presetsResult.value))
+const { data: storedPresets, failed: loadFailed } = usePresets()
+const presets = computed(() => sortPresets(storedPresets.value))
 const failed = reportFailure('change preset', t('presets.actionFailed'))
 
 function configSummary(config: TimerConfig): string {

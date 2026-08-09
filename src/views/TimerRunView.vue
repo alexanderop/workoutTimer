@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Pause, Play, Plus, Volume2, VolumeX, X } from '@lucide/vue'
 import { Effect } from 'effect'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -17,7 +17,6 @@ import {
   sessionMutation,
   settingsMutation,
   type FinishReason,
-  type TimerSettings,
   updateTimerSettings,
 } from '@/db'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
@@ -25,7 +24,7 @@ import { deriveTimer, formatDuration, SECOND_MS } from '@/features/timer/domain'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import { useWakeLock } from '@/features/timer/useWakeLock'
 import { RouteNames } from '@/router'
-import { sessionsAtom, timerSettingsAtom } from '@/stores/timerData'
+import { useSession, useTimerSettings } from '@/stores/timerData'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -33,23 +32,10 @@ const router = useRouter()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('timer-run')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const settingsResult = useAtomValue(() => timerSettingsAtom)
+const session = useSession(() => String(route.params.id))
+const { data: settings } = useTimerSettings()
 const now = useTimestamp({ interval: 100 })
 
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
-const fallbackSettings: TimerSettings = {
-  id: 'timer',
-  soundEnabled: true,
-  soundVolume: 1,
-  hapticsEnabled: true,
-  spokenCountdownEnabled: false,
-  startCountdownMs: 3_000,
-  keepAwake: true,
-  updatedAt: 0,
-}
-const settings = computed(() => AsyncResult.getOrElse(settingsResult.value, () => fallbackSettings))
 const derived = computed(() => (session.value ? deriveTimer(session.value, now.value) : undefined))
 const mode = computed(() => session.value?.config.mode ?? 'amrap')
 const displayTime = computed(() =>

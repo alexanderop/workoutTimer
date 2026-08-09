@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Download, Smartphone, Upload } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageLayout from '@/components/PageLayout.vue'
 import PwaInstallDialog from '@/components/PwaInstallDialog.vue'
@@ -25,7 +25,7 @@ import {
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import type { SupportedLocale } from '@/i18n'
 import { downloadBackup, readBackupFile } from '@/lib/backupFile'
-import { timerSettingsAtom } from '@/stores/timerData'
+import { useTimerSettings } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
 
 const { t } = useI18n()
@@ -37,18 +37,7 @@ const installDialogOpen = ref(false)
 const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
 const runRestoreMutation = useAtomSet(() => restoreMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('settings')
-const settingsResult = useAtomValue(() => timerSettingsAtom)
-const fallbackSettings: TimerSettings = {
-  id: 'timer',
-  soundEnabled: true,
-  soundVolume: 1,
-  hapticsEnabled: true,
-  spokenCountdownEnabled: false,
-  startCountdownMs: 3_000,
-  keepAwake: true,
-  updatedAt: 0,
-}
-const settings = computed(() => AsyncResult.getOrElse(settingsResult.value, () => fallbackSettings))
+const { data: settings } = useTimerSettings()
 
 function localeName(code: SupportedLocale): string {
   return t('settings.language.nativeName', {}, { locale: code })

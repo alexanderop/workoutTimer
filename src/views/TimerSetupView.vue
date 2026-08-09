@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Effect } from 'effect'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,7 +29,7 @@ import {
 } from '@/features/timer/pickerOptions'
 import { unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import { RouteNames } from '@/router'
-import { presetsAtom, sessionsAtom, timerSettingsAtom } from '@/stores/timerData'
+import { usePresets, useSessions, useTimerSettings } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
 import type { PresetDraft, TimerConfig, TimerMode } from '@/db'
 
@@ -49,12 +49,9 @@ const presetId = computed(() =>
   typeof route.query.preset === 'string' ? route.query.preset : undefined,
 )
 
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const presetsResult = useAtomValue(() => presetsAtom)
-const settingsResult = useAtomValue(() => timerSettingsAtom)
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const presets = computed(() => AsyncResult.getOrElse(presetsResult.value, () => []))
-const settings = computed(() => AsyncResult.getOrElse(settingsResult.value, () => undefined))
+const { data: sessions } = useSessions()
+const { data: presets, settled: presetsSettled } = usePresets()
+const { data: settings } = useTimerSettings()
 const hasActiveSession = computed(() =>
   sessions.value.some((session) => ['countdown', 'running', 'paused'].includes(session.status)),
 )
@@ -113,7 +110,6 @@ function applyConfig(config: TimerConfig): void {
  * not the data behind it. Seeding is deferred while a named preset is still
  * loading, because arriving rows must still be allowed to fill the form in.
  */
-const presetsSettled = computed(() => !AsyncResult.isWaiting(presetsResult.value))
 let seededFor: string | undefined
 
 watch(
@@ -244,7 +240,7 @@ async function start(): Promise<void> {
       config: config.value,
       ...(presetId.value === undefined ? {} : { presetId: presetId.value }),
       workoutNotes: workoutNotes.value,
-      countdownDurationMs: settings.value?.startCountdownMs ?? 3_000,
+      countdownDurationMs: settings.value.startCountdownMs,
     }).pipe(
       Effect.tap((session) =>
         Effect.sync(() => {

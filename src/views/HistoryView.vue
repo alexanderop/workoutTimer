@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomValue } from '@effect/atom-vue'
 import { ChevronRight } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -8,23 +7,22 @@ import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import { deriveTimer, formatDuration, sortSessions } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
+import { useSessions } from '@/stores/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
 
 type Filter = 'all' | 'completed' | 'cancelled'
 
 const { t, locale } = useI18n()
 const router = useRouter()
-const sessionsResult = useAtomValue(() => sessionsAtom)
+const { data: storedSessions, failed: loadFailed } = useSessions()
 const filter = ref<Filter>('all')
 const sessions = computed(() =>
-  sortSessions(AsyncResult.getOrElse(sessionsResult.value, () => [])).filter(
+  sortSessions(storedSessions.value).filter(
     (session) =>
       ['completed', 'cancelled'].includes(session.status) &&
       (filter.value === 'all' || session.status === filter.value),
   ),
 )
-const loadFailed = computed(() => AsyncResult.isFailure(sessionsResult.value))
 const filters: ReadonlyArray<Filter> = ['all', 'completed', 'cancelled']
 
 function filterLabel(value: Filter): string {

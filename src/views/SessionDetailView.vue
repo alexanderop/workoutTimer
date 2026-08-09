@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Effect } from 'effect'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -10,7 +10,7 @@ import { useReportFailure } from '@/composables/useReportFailure'
 import { deleteSession, sessionMutation } from '@/db'
 import { deriveTimer, formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
+import { useSession } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
 import type { TimerConfig } from '@/db'
 
@@ -20,9 +20,7 @@ const router = useRouter()
 const toast = useToastStore()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('session-detail')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
+const session = useSession(() => String(route.params.id))
 const result = computed(() => {
   const current = session.value
   return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
