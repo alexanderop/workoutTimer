@@ -143,9 +143,10 @@
 
   body {
     @apply bg-background text-foreground;
-    /* Outer guard only. body never scrolls — the shell is an h-dvh column and
-       its inner containers own scrolling, so each of those carries
-       `overscroll-contain` of its own (enforced by a browser-tier spec). */
+    /* Outer guard only. body never scrolls — the shell is a viewport-height
+       column (h-full of the chain above) and its inner containers own
+       scrolling, so each of those carries `overscroll-contain` of its own
+       (enforced by a browser-tier spec). */
     overscroll-behavior-y: none;
     -webkit-tap-highlight-color: transparent;
     /* App chrome is not a document: rows, tab labels and stat readouts are

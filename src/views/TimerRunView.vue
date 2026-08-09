@@ -260,7 +260,7 @@ function toggleSound(): Promise<unknown> {
 <template>
   <div
     :data-mode="mode"
-    class="flex h-full min-h-dvh flex-col bg-neutral-950 text-white safe-area-bottom"
+    class="flex min-h-full flex-col bg-neutral-950 text-white safe-area-bottom"
   >
     <header class="flex items-center justify-between gap-3 p-4">
       <Button

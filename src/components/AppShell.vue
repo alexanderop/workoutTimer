@@ -52,13 +52,22 @@ function navigate(routeName: string): void {
        top of <main> and slide under the status bar, which is the bug. One
        declaration here is correct with or without a sticky header, correct
        for both view styles, and cannot be double-paid. `bg-background`
-       paints under padding, so the status-bar strip is filled. -->
-  <div class="flex h-dvh flex-col bg-background safe-area-top safe-area-x">
+       paints under padding, so the status-bar strip is filled.
+
+       `h-full`, not `h-dvh`: the height:100% chain (html/body/#app in
+       src/style.css) resolves to the viewport the document actually got.
+       `dvh` is the browser's *claim* about that viewport, and Android Chrome
+       in an installed PWA can include the status-bar and gesture-bar bands in
+       the claim while the window excludes them — the column then runs taller
+       than the screen by roughly the tab bar's height, and the tab bar lands
+       below the visible bottom with no way to scroll it into view, because
+       <main> deliberately contains its overscroll. -->
+  <div class="flex h-full flex-col bg-background safe-area-top safe-area-x">
     <!-- `overscroll-contain`, not `none`: chaining out of the scroller is the
          "this is a website" tell, but rubber-banding belongs to the element
          that legitimately scrolls. The `overscroll-behavior-y: none` on body
          (src/style.css) is the outer guard and does not cover this — body
-         never scrolls, because the shell is an h-dvh column. -->
+         never scrolls, because the shell is a viewport-height column. -->
     <main
       class="flex-1 overflow-y-auto overscroll-contain"
       :class="hideNavigation && 'safe-area-bottom'"
@@ -66,11 +75,13 @@ function navigate(routeName: string): void {
       <slot />
     </main>
 
-    <!-- No `sticky bottom-0`: this is a non-flexing sibling in a non-scrolling
-         h-dvh column, so there is no scrollport for it to stick against. The
-         class read as load-bearing and was inert. With `meta.hideNav` the nav
-         does not render at all, which is why <main> pays the bottom inset in
-         that case. -->
+    <!-- No `sticky bottom-0`: the shell column is exactly the scrollport's
+         height (`h-full` of the height:100% chain), so there is nothing to
+         stick against. That claim is only safe *because* the root is h-full —
+         under the old `h-dvh` root the column could outgrow the viewport on
+         real phones, and sticky was what hauled the nav back into view. With
+         `meta.hideNav` the nav does not render at all, which is why <main>
+         pays the bottom inset in that case. -->
     <nav
       v-if="!hideNavigation"
       :aria-label="t('nav.ariaLabel')"
