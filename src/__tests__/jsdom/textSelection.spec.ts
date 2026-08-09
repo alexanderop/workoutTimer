@@ -101,27 +101,5 @@ describe('the assertion that does not survive it', () => {
   })
 })
 
-describe('why the stylesheet cannot help', () => {
-  it('is parsed in full and then applied to nothing', () => {
-    const sheet = document.styleSheets[0]!
-    let rules = 0
-    let layers = 0
-
-    const walk = (list: CSSRuleList) => {
-      for (const rule of list) {
-        rules += 1
-        if (rule.constructor.name.includes('Layer')) layers += 1
-        const nested = (rule as CSSGroupingRule).cssRules
-        if (nested) walk(nested)
-      }
-    }
-    walk(sheet.cssRules)
-
-    // Tailwind v4 emits its utilities and the project's base rules inside
-    // `@layer`. jsdom parses the layers — they are right there in the CSSOM —
-    // but its cascade does not implement `@layer`, so no rule inside one is
-    // ever applied. The CSS is present, understood, and ignored.
-    expect(rules).toBeGreaterThan(100)
-    expect(layers).toBeGreaterThan(0)
-  })
-})
+// Why the stylesheet cannot help — `@layer`, media features, nesting and
+// `var()`, each isolated — lives in `cascade.spec.ts`.
