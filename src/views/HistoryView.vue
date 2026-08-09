@@ -11,6 +11,7 @@ import {
   isFinishedSession,
   sortSessions,
 } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
 import { useSessions } from '@/stores/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
@@ -19,6 +20,7 @@ type Filter = 'all' | 'completed' | 'cancelled'
 
 const { t, locale } = useI18n()
 const router = useRouter()
+const { modeName } = useTimerLabels()
 const { data: storedSessions, failed: loadFailed } = useSessions()
 const filter = ref<Filter>('all')
 const sessions = computed(() =>
@@ -36,19 +38,6 @@ function filterLabel(value: Filter): string {
     : value === 'completed'
       ? t('history.completed')
       : t('history.cancelled')
-}
-
-function modeName(session: WorkoutSession): string {
-  switch (session.config.mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
 }
 
 function resultLabel(session: WorkoutSession): string {
@@ -108,7 +97,7 @@ function formatDate(timestamp: number): string {
             <span class="min-w-0 flex-1">
               <span class="flex items-baseline justify-between gap-3">
                 <span class="font-bold" :class="statusClass(session.status)">{{
-                  modeName(session)
+                  modeName(session.config.mode)
                 }}</span>
                 <span class="text-xs text-muted-foreground">{{
                   formatDate(session.createdAt)

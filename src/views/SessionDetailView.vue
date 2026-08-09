@@ -9,10 +9,10 @@ import { Button } from '@/components/ui/button'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { deleteSession, sessionMutation } from '@/db'
 import { finalResult, formatDuration } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
 import { useSession } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { TimerConfig } from '@/db'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -20,6 +20,7 @@ const router = useRouter()
 const toast = useToastStore()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('session-detail')
+const { configSummary, modeName } = useTimerLabels()
 const session = useSession(() => String(route.params.id))
 const result = computed(() => {
   const current = session.value
@@ -31,35 +32,10 @@ onBeforeUnmount(() => {
   if (deleteTimeout) clearTimeout(deleteTimeout)
 })
 
-function modeName(): string {
-  switch (session.value?.config.mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-    default:
-      return t('history.detail')
-  }
-}
-
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs
-        ? formatDuration(config.timeCapMs)
-        : t('timer.modes.forTime.description')
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
+/** No workout yet — loading, or a URL for one that is not there. */
+const title = computed(() =>
+  session.value ? modeName(session.value.config.mode) : t('history.detail'),
+)
 
 async function remove(): Promise<void> {
   const current = session.value
@@ -93,7 +69,7 @@ async function remove(): Promise<void> {
 </script>
 
 <template>
-  <PageLayout :title="modeName()" back-to="/history">
+  <PageLayout :title="title" back-to="/history">
     <div
       v-if="session && result"
       :data-mode="session.config.mode"

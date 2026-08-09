@@ -34,6 +34,7 @@ import {
   type PickerOption,
 } from '@/features/timer/pickerOptions'
 import { unlockTimerAudio } from '@/features/timer/useTimerFeedback'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
 import { usePresets, useSessions, useTimerSettings } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
@@ -44,6 +45,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToastStore()
 const reportFailure = useReportFailure('timer-setup')
+const { humanizeSeconds, modeName } = useTimerLabels()
 const runStartMutation = useAtomSet(() => workoutStartMutation, { mode: 'promise' })
 const runPresetMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
 
@@ -168,28 +170,13 @@ const config = computed<TimerConfig>(() => {
   }
 })
 
-function formatTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3_600)
-  const minutes = Math.floor((seconds % 3_600) / 60)
-  const remainingSeconds = seconds % 60
-  const parts: Array<string> = []
-
-  if (hours > 0) parts.push(t('timer.setup.units.hoursShort', { count: hours }))
-  if (minutes > 0) parts.push(t('timer.setup.units.minutesShort', { count: minutes }))
-  if (remainingSeconds > 0 || parts.length === 0) {
-    parts.push(t('timer.setup.units.secondsShort', { count: remainingSeconds }))
-  }
-
-  return parts.join(' ')
-}
-
 function timeOptions(
   values: ReadonlyArray<number>,
   selected: number | undefined,
 ): Array<PickerOption> {
   return includeSelectedValue(values, selected).map((value) => ({
     value,
-    label: formatTime(value),
+    label: humanizeSeconds(value),
   }))
 }
 
@@ -219,19 +206,6 @@ const presetDraft = computed<PresetDraft>(() => ({
 const canSavePreset = computed(
   () => isTimerConfig(config.value) && isPresetDraft(presetDraft.value) && !isSavingPreset.value,
 )
-
-function modeName(): string {
-  switch (routeMode.value) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
 
 async function start(): Promise<void> {
   if (!canStart.value) return
@@ -289,7 +263,7 @@ async function savePreset(): Promise<void> {
 
 <template>
   <PageLayout
-    :title="t('timer.setup.title', { mode: modeName() })"
+    :title="t('timer.setup.title', { mode: modeName(routeMode) })"
     back-to="/"
     :data-mode="routeMode"
   >

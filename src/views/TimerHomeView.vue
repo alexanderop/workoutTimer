@@ -6,13 +6,15 @@ import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import ModeCard from '@/features/timer/components/ModeCard.vue'
-import { formatDuration, isActiveSession, sortPresets, TIMER_MODES } from '@/features/timer/domain'
+import { isActiveSession, sortPresets, TIMER_MODES } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
 import { usePresets, useSessions } from '@/stores/timerData'
-import type { TimerConfig, TimerMode } from '@/db'
+import type { TimerMode } from '@/db'
 
 const { t } = useI18n()
 const router = useRouter()
+const { configSummary, modeDescription, modeName } = useTimerLabels()
 const { data: sessions, failed: sessionsFailed } = useSessions()
 const { data: presets, failed: presetsFailed } = usePresets()
 const loadFailed = computed(() => sessionsFailed.value || presetsFailed.value)
@@ -20,47 +22,6 @@ const activeSession = computed(() =>
   sessions.value.find((session) => isActiveSession(session.status)),
 )
 const recentPresets = computed(() => sortPresets(presets.value).slice(0, 4))
-
-function modeName(mode: TimerMode): string {
-  switch (mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
-
-function modeDescription(mode: TimerMode): string {
-  switch (mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.description')
-    case 'forTime':
-      return t('timer.modes.forTime.description')
-    case 'emom':
-      return t('timer.modes.emom.description')
-    case 'tabata':
-      return t('timer.modes.tabata.description')
-  }
-}
-
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs === undefined
-        ? modeDescription('forTime')
-        : formatDuration(config.timeCapMs)
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
 
 function openMode(mode: TimerMode): void {
   void router.push({ name: RouteNames.timerSetup, params: { mode } })

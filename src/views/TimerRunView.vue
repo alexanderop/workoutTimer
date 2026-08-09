@@ -29,6 +29,7 @@ import {
   SECOND_MS,
 } from '@/features/timer/domain'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { useWakeLock } from '@/features/timer/useWakeLock'
 import { RouteNames } from '@/router'
 import { useSession, useTimerSettings } from '@/stores/timerData'
@@ -39,6 +40,7 @@ const router = useRouter()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('timer-run')
+const { modeName } = useTimerLabels()
 const session = useSession(() => String(route.params.id))
 const { data: settings } = useTimerSettings()
 const now = useTimestamp({ interval: 100 })
@@ -159,19 +161,6 @@ function phaseLabel(): string {
   }
 }
 
-function modeName(): string {
-  switch (mode.value) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
-
 async function togglePause(): Promise<void> {
   const current = session.value
   if (!current) return
@@ -265,7 +254,7 @@ function toggleSound(): Promise<unknown> {
       >
         <X />
       </Button>
-      <h1 class="font-bold tracking-widest">{{ modeName() }}</h1>
+      <h1 class="font-bold tracking-widest">{{ modeName(mode) }}</h1>
       <Button
         variant="ghost"
         size="icon"

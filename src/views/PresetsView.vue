@@ -9,35 +9,22 @@ import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { createPreset, deletePreset, presetMutation } from '@/db'
-import { formatDuration, sortPresets } from '@/features/timer/domain'
+import { sortPresets } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
 import { usePresets } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { TimerConfig, TimerPreset } from '@/db'
+import type { TimerPreset } from '@/db'
 
 const { t } = useI18n()
 const router = useRouter()
 const toast = useToastStore()
 const reportFailure = useReportFailure('presets')
+const { configSummary } = useTimerLabels()
 const runMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
 const { data: storedPresets, failed: loadFailed } = usePresets()
 const presets = computed(() => sortPresets(storedPresets.value))
 const failed = reportFailure('change preset', t('presets.actionFailed'))
-
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs
-        ? formatDuration(config.timeCapMs)
-        : t('timer.modes.forTime.description')
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
 
 function usePreset(preset: TimerPreset): void {
   void router.push({
