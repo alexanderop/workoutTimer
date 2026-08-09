@@ -17,6 +17,7 @@
     "test": "vitest run --project=default",
     "test:watch": "vitest --project=default",
     "test:unit": "vitest run --project=unit",
+    "test:touch": "vitest run --project=touch",
     "test:a11y": "vitest run --project=a11y",
     "test:visual": "vitest run --project=visual",
     "test:visual:update": "vitest run --project=visual --update",

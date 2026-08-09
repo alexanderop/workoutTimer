@@ -117,6 +117,7 @@ export default defineConfig({
             'src/__tests__/a11y/**',
             'src/__tests__/visual/**',
             'src/__tests__/unit/**',
+            'src/__tests__/touch/**',
           ],
           browser: browserConfig('default-browser'),
         },
@@ -155,6 +156,31 @@ export default defineConfig({
                 },
               },
             },
+          },
+        },
+      },
+
+      // Touch: the only tier with a coarse pointer. Every other browser
+      // project launches a stock desktop Chromium, where `hover: hover` and
+      // `pointer: fine` match — so a mobile-first app whose stated product is
+      // the shell had no tier that experienced it the way its users do, and
+      // every touch convention could rot silently because nothing was
+      // looking. `matchMedia` is read-only from inside the page, so the
+      // coarse pointer has to come from the browser context.
+      {
+        plugins,
+        resolve,
+        optimizeDeps: optimizeDependencies,
+        test: {
+          ...sharedTestConfig,
+          name: 'touch',
+          include: ['src/__tests__/touch/**/*.spec.ts'],
+          browser: {
+            ...browserConfig('touch-browser'),
+            // hasTouch + isMobile are what make Chromium report
+            // `pointer: coarse` and `hover: none`. This is the whole point of
+            // the tier; without them it is a duplicate of `default`.
+            provider: playwright({ contextOptions: { hasTouch: true, isMobile: true } }),
           },
         },
       },
