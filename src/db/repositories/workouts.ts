@@ -29,7 +29,6 @@ const tryDb = <A>(operation: string, run: () => Promise<A>): Effect.Effect<A, Da
 
 const invalid = (message: string) => new WorkoutInvalidError({ message })
 
-/** Two taps this close together are one round — a finger bouncing, not a split. */
 /**
  * Read one session, hand it to a transition, store whatever comes back — all
  * inside one transaction, so the row cannot move between the read and the
