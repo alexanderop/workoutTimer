@@ -7,6 +7,7 @@ import { useTimestamp } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import { useArmConfirmation } from '@/composables/useArmConfirmation'
 import { useReportFailure } from '@/composables/useReportFailure'
 import {
   addSessionRound,
@@ -87,15 +88,9 @@ onMounted(() => {
 })
 
 const transitionPending = ref(false)
-const finishArmed = ref(false)
-const cancelArmed = ref(false)
-let finishTimeout: ReturnType<typeof setTimeout> | undefined
-let cancelTimeout: ReturnType<typeof setTimeout> | undefined
-
-onBeforeUnmount(() => {
-  if (finishTimeout) clearTimeout(finishTimeout)
-  if (cancelTimeout) clearTimeout(cancelTimeout)
-})
+const actionConfirmation = useArmConfirmation<'finish' | 'cancel'>()
+const finishArmed = computed(() => actionConfirmation.isArmed('finish'))
+const cancelArmed = computed(() => actionConfirmation.isArmed('cancel'))
 
 const failed = reportFailure('update timer', t('timer.run.saveFailed'))
 
@@ -212,13 +207,7 @@ async function addRound(): Promise<void> {
 async function finish(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!finishArmed.value) {
-    finishArmed.value = true
-    finishTimeout = setTimeout(() => {
-      finishArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!actionConfirmation.requestConfirmation('finish')) return
   transitionPending.value = true
   const saved = await persistCompletion(current.id, 'manual')
   if (saved) {
@@ -230,13 +219,7 @@ async function finish(): Promise<void> {
 async function cancel(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!cancelArmed.value) {
-    cancelArmed.value = true
-    cancelTimeout = setTimeout(() => {
-      cancelArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!actionConfirmation.requestConfirmation('cancel')) return
   transitionPending.value = true
   const saved = await persistCompletion(current.id, 'cancelled')
   if (saved) {

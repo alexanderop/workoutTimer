@@ -2,11 +2,12 @@
 import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Copy, Pencil, Play, Trash2 } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
+import { useArmConfirmation } from '@/composables/useArmConfirmation'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { createPreset, deletePreset, presetMutation } from '@/db'
 import { formatDuration, sortPresets } from '@/features/timer/domain'
@@ -61,32 +62,11 @@ function duplicate(preset: TimerPreset): Promise<unknown> {
   )
 }
 
-/**
- * Arm-then-confirm, the same two-tap gesture that guards deleting a workout in
- * SessionDetailView. A preset is hand-built and has no undo, and this button
- * sits in a four-icon row under the thumb — one stray tap should not be able
- * to destroy it. Only one preset is armed at a time, so arming a second
- * disarms the first.
- */
-const armedPresetId = ref<string | undefined>()
-let disarmTimeout: ReturnType<typeof setTimeout> | undefined
-
-onBeforeUnmount(() => {
-  if (disarmTimeout) clearTimeout(disarmTimeout)
-})
+const presetDeleteConfirmation = useArmConfirmation<string>()
+const armedPresetId = presetDeleteConfirmation.armedKey
 
 function remove(preset: TimerPreset): Promise<unknown> {
-  if (armedPresetId.value !== preset.id) {
-    armedPresetId.value = preset.id
-    if (disarmTimeout) clearTimeout(disarmTimeout)
-    disarmTimeout = setTimeout(() => {
-      armedPresetId.value = undefined
-    }, 3_000)
-    return Promise.resolve()
-  }
-
-  if (disarmTimeout) clearTimeout(disarmTimeout)
-  armedPresetId.value = undefined
+  if (!presetDeleteConfirmation.requestConfirmation(preset.id)) return Promise.resolve()
   return runMutation(
     deletePreset(preset.id).pipe(
       Effect.tap(() => Effect.sync(() => toast.showToast(t('presets.deleted')))),

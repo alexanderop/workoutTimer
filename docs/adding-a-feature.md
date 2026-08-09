@@ -39,7 +39,7 @@ Atoms via `@effect/atom-vue` — `src/stores/timerData.ts` is the template. Conv
 - Route-level page in `src/views/`, registered in `src/router/index.ts`.
 - New tab? Add one entry to `src/router/navigation.ts` — the shell handles the rest. Full-screen route? `meta: { hideNav: true }`.
 - Every user-facing string goes through i18n (`src/i18n/messages/en.ts` **and** `de.ts` — the `MessageSchema` type makes a missing key a compile error).
-- Give destructive/ambiguous icon buttons an `aria-label` that includes the item name (see `PresetsView.vue`) — the a11y tier will catch bare icon buttons. A destructive action with no undo gets arm-then-confirm: the first tap arms and relabels, the second commits, and a timeout disarms.
+- Give destructive/ambiguous icon buttons an `aria-label` that includes the item name (see `PresetsView.vue`) — the a11y tier will catch bare icon buttons. A destructive action with no undo gets `useArmConfirmation`: the first tap arms and relabels, the second commits, and the shared timeout disarms. Use one keyed instance when a screen has several destructive actions so only one can be armed at a time.
 
 ## 5. Tests, tier by tier
 

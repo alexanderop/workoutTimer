@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Effect } from 'effect'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
+import { useArmConfirmation } from '@/composables/useArmConfirmation'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { deleteSession, sessionMutation } from '@/db'
 import { deriveTimer, formatDuration } from '@/features/timer/domain'
@@ -27,11 +28,8 @@ const result = computed(() => {
   const current = session.value
   return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
 })
-const deleteArmed = ref(false)
-let deleteTimeout: ReturnType<typeof setTimeout> | undefined
-onBeforeUnmount(() => {
-  if (deleteTimeout) clearTimeout(deleteTimeout)
-})
+const deleteConfirmation = useArmConfirmation<'delete'>()
+const deleteArmed = computed(() => deleteConfirmation.isArmed('delete'))
 
 function modeName(): string {
   switch (session.value?.config.mode) {
@@ -66,13 +64,7 @@ function configSummary(config: TimerConfig): string {
 async function remove(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!deleteArmed.value) {
-    deleteArmed.value = true
-    deleteTimeout = setTimeout(() => {
-      deleteArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!deleteConfirmation.requestConfirmation('delete')) return
   let deleted = false
   await runMutation(
     deleteSession(current.id).pipe(
