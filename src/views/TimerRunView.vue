@@ -11,6 +11,7 @@ import { useArmConfirmation } from '@/composables/useArmConfirmation'
 import { useReportFailure } from '@/composables/useReportFailure'
 import {
   addSessionRound,
+  DEFAULT_TIMER_SETTINGS,
   finishSession,
   markSessionRunning,
   pauseSession,
@@ -18,7 +19,6 @@ import {
   sessionMutation,
   settingsMutation,
   type FinishReason,
-  type TimerSettings,
   updateTimerSettings,
 } from '@/db'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
@@ -40,17 +40,9 @@ const now = useTimestamp({ interval: 100 })
 
 const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
 const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
-const fallbackSettings: TimerSettings = {
-  id: 'timer',
-  soundEnabled: true,
-  soundVolume: 1,
-  hapticsEnabled: true,
-  spokenCountdownEnabled: false,
-  startCountdownMs: 3_000,
-  keepAwake: true,
-  updatedAt: 0,
-}
-const settings = computed(() => AsyncResult.getOrElse(settingsResult.value, () => fallbackSettings))
+const settings = computed(() =>
+  AsyncResult.getOrElse(settingsResult.value, () => DEFAULT_TIMER_SETTINGS),
+)
 const derived = computed(() => (session.value ? deriveTimer(session.value, now.value) : undefined))
 const mode = computed(() => session.value?.config.mode ?? 'amrap')
 const displayTime = computed(() =>

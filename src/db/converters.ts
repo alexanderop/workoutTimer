@@ -135,6 +135,22 @@ export const TimerSettingsSchema = Schema.Struct({
 export interface TimerSettings extends Schema.Schema.Type<typeof TimerSettingsSchema> {}
 
 /**
+ * Canonical settings used while the persisted row is loading or absent.
+ * `updatedAt` is zero because this value has not been written; the repository
+ * replaces it with its clock whenever it materializes a row.
+ */
+export const DEFAULT_TIMER_SETTINGS: TimerSettings = Object.freeze({
+  id: 'timer',
+  soundEnabled: true,
+  soundVolume: 1,
+  hapticsEnabled: true,
+  spokenCountdownEnabled: false,
+  startCountdownMs: 3_000,
+  keepAwake: true,
+  updatedAt: 0,
+})
+
+/**
  * Drafts are what a component hands *in*, before validation — so their types
  * come from the schemas' Encoded side. `Schema.Trim`'s decoded type is the
  * trimmed string; its encoded type is the raw one the textarea actually holds.
@@ -173,14 +189,5 @@ export const isPresetDraft = (draft: PresetDraft): boolean =>
   Result.isSuccess(parsePresetDraft(draft))
 
 export function makeDefaultTimerSettings(now: number): TimerSettings {
-  return {
-    id: 'timer',
-    soundEnabled: true,
-    soundVolume: 1,
-    hapticsEnabled: true,
-    spokenCountdownEnabled: false,
-    startCountdownMs: 3_000,
-    keepAwake: true,
-    updatedAt: now,
-  }
+  return { ...DEFAULT_TIMER_SETTINGS, updatedAt: now }
 }

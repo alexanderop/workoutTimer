@@ -14,6 +14,7 @@ import { useLocale } from '@/composables/useLocale'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { useTheme } from '@/composables/useTheme'
 import {
+  DEFAULT_TIMER_SETTINGS,
   exportData,
   importData,
   restoreMutation,
@@ -38,17 +39,9 @@ const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise'
 const runRestoreMutation = useAtomSet(() => restoreMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('settings')
 const settingsResult = useAtomValue(() => timerSettingsAtom)
-const fallbackSettings: TimerSettings = {
-  id: 'timer',
-  soundEnabled: true,
-  soundVolume: 1,
-  hapticsEnabled: true,
-  spokenCountdownEnabled: false,
-  startCountdownMs: 3_000,
-  keepAwake: true,
-  updatedAt: 0,
-}
-const settings = computed(() => AsyncResult.getOrElse(settingsResult.value, () => fallbackSettings))
+const settings = computed(() =>
+  AsyncResult.getOrElse(settingsResult.value, () => DEFAULT_TIMER_SETTINGS),
+)
 
 function localeName(code: SupportedLocale): string {
   return t('settings.language.nativeName', {}, { locale: code })

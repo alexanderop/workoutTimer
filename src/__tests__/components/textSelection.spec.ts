@@ -63,7 +63,7 @@ describe('selection follows what the element is', () => {
     ).toBe('')
   })
 
-  it('still selects the user’s own prose', async ({ detail }) => {
+  it('still selects the user’s own prose', async ({ detail: _detail }) => {
     await userEvent.dblClick(page.getByText(WORKOUT_NOTES))
 
     expect(

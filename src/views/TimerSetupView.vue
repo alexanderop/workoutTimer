@@ -13,6 +13,7 @@ import { useReportFailure } from '@/composables/useReportFailure'
 import {
   createPreset,
   createSession,
+  DEFAULT_TIMER_SETTINGS,
   presetMutation,
   updatePreset,
   workoutStartMutation,
@@ -47,7 +48,9 @@ const presetsResult = useAtomValue(() => presetsAtom)
 const settingsResult = useAtomValue(() => timerSettingsAtom)
 const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
 const presets = computed(() => AsyncResult.getOrElse(presetsResult.value, () => []))
-const settings = computed(() => AsyncResult.getOrElse(settingsResult.value, () => undefined))
+const settings = computed(() =>
+  AsyncResult.getOrElse(settingsResult.value, () => DEFAULT_TIMER_SETTINGS),
+)
 const hasActiveSession = computed(() =>
   sessions.value.some((session) => ['countdown', 'running', 'paused'].includes(session.status)),
 )
@@ -126,7 +129,7 @@ async function start(): Promise<void> {
       config: config.value,
       ...(presetId.value === undefined ? {} : { presetId: presetId.value }),
       workoutNotes: workoutNotes.value,
-      countdownDurationMs: settings.value?.startCountdownMs ?? 3_000,
+      countdownDurationMs: settings.value.startCountdownMs,
     }).pipe(
       Effect.tap((session) =>
         Effect.sync(() => {

@@ -1,6 +1,12 @@
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
-import { decodeNewSession, decodePresetDraft, decodeTimerSettings } from '@/db/converters'
+import {
+  DEFAULT_TIMER_SETTINGS,
+  decodeNewSession,
+  decodePresetDraft,
+  decodeTimerSettings,
+  makeDefaultTimerSettings,
+} from '@/db/converters'
 
 const v1SettingsRow = {
   id: 'timer',
@@ -13,6 +19,10 @@ const v1SettingsRow = {
 }
 
 describe('workout schemas', () => {
+  it('materializes the canonical settings with the repository clock', () => {
+    expect(makeDefaultTimerSettings(42)).toEqual({ ...DEFAULT_TIMER_SETTINGS, updatedAt: 42 })
+  })
+
   it('rejects an AMRAP without a positive duration', async () => {
     await expect(
       Effect.runPromise(

@@ -10,7 +10,7 @@ export {
   workoutStartMutation,
 } from './atoms'
 export { exportData, importData } from './backup'
-export { isPresetDraft } from './converters'
+export { DEFAULT_TIMER_SETTINGS, isPresetDraft } from './converters'
 export type {
   FinishReason,
   PresetDraft,
