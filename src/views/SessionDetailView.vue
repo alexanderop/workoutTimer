@@ -8,7 +8,7 @@ import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { deleteSession, sessionMutation } from '@/db'
-import { deriveTimer, formatDuration } from '@/features/timer/domain'
+import { finalResult, formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { useSession } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
@@ -23,7 +23,7 @@ const reportFailure = useReportFailure('session-detail')
 const session = useSession(() => String(route.params.id))
 const result = computed(() => {
   const current = session.value
-  return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
+  return current ? finalResult(current) : undefined
 })
 const deleteArmed = ref(false)
 let deleteTimeout: ReturnType<typeof setTimeout> | undefined

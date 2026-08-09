@@ -20,7 +20,14 @@ import {
   updateTimerSettings,
 } from '@/db'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
-import { deriveTimer, formatDuration, SECOND_MS } from '@/features/timer/domain'
+import {
+  capturesRoundSplits,
+  deriveTimer,
+  formatDuration,
+  isActiveSession,
+  isFinishedSession,
+  SECOND_MS,
+} from '@/features/timer/domain'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import { useWakeLock } from '@/features/timer/useWakeLock'
 import { RouteNames } from '@/router'
@@ -43,12 +50,12 @@ const displayTime = computed(() =>
     ? formatDuration(derived.value.primaryMs, derived.value.primaryMs <= 10 * SECOND_MS)
     : '00:00',
 )
-const canCaptureRound = computed(() => ['amrap', 'forTime'].includes(mode.value))
+const canCaptureRound = computed(() => capturesRoundSplits(mode.value))
 const keepAwake = computed(
   () =>
     settings.value.keepAwake &&
     session.value !== undefined &&
-    ['countdown', 'running', 'paused'].includes(session.value.status),
+    isActiveSession(session.value.status),
 )
 
 useWakeLock(keepAwake)
@@ -105,7 +112,7 @@ watch([session, now], async ([current, currentNow]) => {
     return
   }
   const state = deriveTimer(current, currentNow)
-  if (!state.isComplete || ['completed', 'cancelled'].includes(current.status)) return
+  if (!state.isComplete || isFinishedSession(current.status)) return
   transitionPending.value = true
   const reason = current.config.mode === 'forTime' ? 'timeCap' : 'endpoint'
   const saved = await runMutation(

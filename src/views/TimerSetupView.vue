@@ -20,7 +20,13 @@ import {
 } from '@/db'
 import TimePicker from '@/features/timer/components/TimePicker.vue'
 import ValuePicker from '@/features/timer/components/ValuePicker.vue'
-import { DEFAULT_CONFIGS, isTimerConfig, SECOND_MS } from '@/features/timer/domain'
+import {
+  DEFAULT_CONFIGS,
+  isActiveSession,
+  isTimerConfig,
+  parseTimerMode,
+  SECOND_MS,
+} from '@/features/timer/domain'
 import {
   countValues,
   includeSelectedValue,
@@ -41,10 +47,7 @@ const reportFailure = useReportFailure('timer-setup')
 const runStartMutation = useAtomSet(() => workoutStartMutation, { mode: 'promise' })
 const runPresetMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
 
-const routeMode = computed<TimerMode>(() => {
-  const value = String(route.params.mode)
-  return ['amrap', 'forTime', 'emom', 'tabata'].includes(value) ? (value as TimerMode) : 'amrap'
-})
+const routeMode = computed<TimerMode>(() => parseTimerMode(route.params.mode) ?? 'amrap')
 const presetId = computed(() =>
   typeof route.query.preset === 'string' ? route.query.preset : undefined,
 )
@@ -53,7 +56,7 @@ const { data: sessions } = useSessions()
 const { data: presets, settled: presetsSettled } = usePresets()
 const { data: settings } = useTimerSettings()
 const hasActiveSession = computed(() =>
-  sessions.value.some((session) => ['countdown', 'running', 'paused'].includes(session.status)),
+  sessions.value.some((session) => isActiveSession(session.status)),
 )
 
 const MAX_DURATION_SECONDS = 24 * 60 * 60

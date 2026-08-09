@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { sessionMutation, updateSessionNotes } from '@/db'
-import { deriveTimer, formatDuration } from '@/features/timer/domain'
+import { finalResult, formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { useSession } from '@/stores/timerData'
 
@@ -22,7 +22,7 @@ const reportFailure = useReportFailure('timer-result')
 const session = useSession(() => String(route.params.id))
 const result = computed(() => {
   const current = session.value
-  return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
+  return current ? finalResult(current) : undefined
 })
 const notes = ref('')
 const isSaving = ref(false)

@@ -2,17 +2,28 @@ import { describe, expect, it } from '@effect/vitest'
 import { Result, Schema } from 'effect'
 import { FastCheck } from 'effect/testing'
 import {
+  capturesRoundSplits,
   DEFAULT_CONFIGS,
   deriveTimer,
   elapsedSessionMs,
+  finalResult,
   formatDuration,
+  isActiveSession,
+  isFinishedSession,
   isTimerConfig,
   MINUTE_MS,
+  parseTimerMode,
   sortPresets,
   sortSessions,
+  TIMER_MODES,
   totalDurationMs,
 } from '@/features/timer/domain'
-import { TimerConfigSchema, TimerPresetSchema, WorkoutSessionSchema } from '@/db/converters'
+import {
+  SESSION_STATUSES,
+  TimerConfigSchema,
+  TimerPresetSchema,
+  WorkoutSessionSchema,
+} from '@/db/converters'
 import type { TimerConfig, TimerPreset, WorkoutSession } from '@/db'
 
 function session(config: TimerConfig, patch: Partial<WorkoutSession> = {}): WorkoutSession {
@@ -349,6 +360,88 @@ describe('timer domain', () => {
     expect(sortSessions(sessions).map(({ id }) => id)).toEqual(['new', 'old'])
     expect(presets.map(({ id }) => id)).toEqual(['old', 'used'])
     expect(sessions.map(({ id }) => id)).toEqual(['old', 'new'])
+  })
+})
+
+/**
+ * The vocabulary the screens share: which modes exist, which statuses are
+ * still running, and what a finished workout came to. Each of these used to
+ * be an array literal or a `?? Date.now()` spelled out in four `<script setup>`
+ * blocks, so what these tests really pin is that there is now one answer.
+ */
+describe('timer vocabulary', () => {
+  it('lists every mode, in the order the home screen offers them', () => {
+    expect(TIMER_MODES).toEqual(['amrap', 'forTime', 'emom', 'tabata'])
+  })
+
+  /**
+   * The list is read off `DEFAULT_CONFIGS`, which is keyed by `TimerMode` — so
+   * this is the assertion that a mode added to the type cannot go missing from
+   * the screens. It fails the moment the two disagree.
+   */
+  it('covers exactly the modes that have a default config', () => {
+    expect([...TIMER_MODES].sort()).toEqual(Object.keys(DEFAULT_CONFIGS).sort())
+    expect(TIMER_MODES.every((mode) => DEFAULT_CONFIGS[mode].mode === mode)).toBe(true)
+  })
+
+  it('parses a route param into a mode, and nothing else into one', () => {
+    expect(TIMER_MODES.map(parseTimerMode)).toEqual([...TIMER_MODES])
+    for (const value of ['', 'AMRAP', 'sprint', undefined, null, 3, ['amrap']]) {
+      expect(parseTimerMode(value)).toBeUndefined()
+    }
+  })
+
+  /**
+   * Running and finished partition the statuses. A sixth status that belongs
+   * to neither would leave a workout that history will not list and the home
+   * screen will not offer to resume — invisible in the app, still on disk.
+   */
+  it('sorts every status into exactly one of running or finished', () => {
+    for (const status of SESSION_STATUSES) {
+      expect(isActiveSession(status) !== isFinishedSession(status)).toBe(true)
+    }
+    expect(SESSION_STATUSES.filter(isActiveSession)).toEqual(['countdown', 'running', 'paused'])
+    expect(SESSION_STATUSES.filter(isFinishedSession)).toEqual(['completed', 'cancelled'])
+  })
+
+  /**
+   * Splits are tapped in exactly the modes whose `completedRounds` counts taps.
+   * The run screen offers "Add round" off this rule, so a mode on the wrong
+   * side of it would either hide the button or record splits nothing reads.
+   */
+  it('offers round splits exactly where completedRounds counts them', () => {
+    const rounds = [{ capturedAtElapsedMs: 1_000 }]
+
+    for (const mode of TIMER_MODES) {
+      const stored = session(DEFAULT_CONFIGS[mode], {
+        rounds,
+        status: 'completed',
+        finishedAt: 2_000,
+      })
+      const countsTaps = finalResult(stored).completedRounds === rounds.length
+
+      expect(capturesRoundSplits(mode)).toBe(countsTaps)
+    }
+  })
+
+  it('freezes a finished workout at the moment it stopped', () => {
+    const stored = session(
+      { mode: 'amrap', durationMs: 60_000 },
+      { status: 'completed', startedAt: 1_000, finishedAt: 31_000 },
+    )
+
+    // `now` moving must not move the result — that is the whole point of
+    // reading `finishedAt` first.
+    expect(finalResult(stored, 40_000)).toEqual(finalResult(stored, 9_000_000))
+    expect(finalResult(stored, 40_000).elapsedMs).toBe(30_000)
+    expect(finalResult(stored, 40_000)).toEqual(deriveTimer(stored, 31_000))
+  })
+
+  /** A row still open is graded against the clock, since it has no end yet. */
+  it('falls back to now for a session that never finished', () => {
+    const open = session({ mode: 'amrap', durationMs: 60_000 }, { startedAt: 1_000 })
+
+    expect(finalResult(open, 21_000)).toEqual(deriveTimer(open, 21_000))
   })
 })
 

@@ -6,7 +6,7 @@ import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import ModeCard from '@/features/timer/components/ModeCard.vue'
-import { formatDuration, sortPresets } from '@/features/timer/domain'
+import { formatDuration, isActiveSession, sortPresets, TIMER_MODES } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { usePresets, useSessions } from '@/stores/timerData'
 import type { TimerConfig, TimerMode } from '@/db'
@@ -17,10 +17,9 @@ const { data: sessions, failed: sessionsFailed } = useSessions()
 const { data: presets, failed: presetsFailed } = usePresets()
 const loadFailed = computed(() => sessionsFailed.value || presetsFailed.value)
 const activeSession = computed(() =>
-  sessions.value.find((session) => ['countdown', 'running', 'paused'].includes(session.status)),
+  sessions.value.find((session) => isActiveSession(session.status)),
 )
 const recentPresets = computed(() => sortPresets(presets.value).slice(0, 4))
-const modes: ReadonlyArray<TimerMode> = ['amrap', 'forTime', 'emom', 'tabata']
 
 function modeName(mode: TimerMode): string {
   switch (mode) {
@@ -102,7 +101,7 @@ function openMode(mode: TimerMode): void {
       <section class="flex flex-col gap-3" aria-labelledby="timer-modes-heading">
         <h2 id="timer-modes-heading" class="sr-only">{{ t('timer.title') }}</h2>
         <ModeCard
-          v-for="mode in modes"
+          v-for="mode in TIMER_MODES"
           :key="mode"
           :mode="mode"
           :title="modeName(mode)"

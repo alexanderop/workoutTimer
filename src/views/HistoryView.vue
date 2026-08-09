@@ -5,7 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
-import { deriveTimer, formatDuration, sortSessions } from '@/features/timer/domain'
+import {
+  finalResult,
+  formatDuration,
+  isFinishedSession,
+  sortSessions,
+} from '@/features/timer/domain'
 import { RouteNames } from '@/router'
 import { useSessions } from '@/stores/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
@@ -19,7 +24,7 @@ const filter = ref<Filter>('all')
 const sessions = computed(() =>
   sortSessions(storedSessions.value).filter(
     (session) =>
-      ['completed', 'cancelled'].includes(session.status) &&
+      isFinishedSession(session.status) &&
       (filter.value === 'all' || session.status === filter.value),
   ),
 )
@@ -47,7 +52,7 @@ function modeName(session: WorkoutSession): string {
 }
 
 function resultLabel(session: WorkoutSession): string {
-  const result = deriveTimer(session, session.finishedAt ?? Date.now())
+  const result = finalResult(session)
   const rounds =
     result.completedRounds > 0 ? ` · ${result.completedRounds} ${t('timer.result.rounds')}` : ''
   return `${formatDuration(result.elapsedMs)}${rounds}`

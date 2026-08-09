@@ -98,11 +98,28 @@ export const TimerPresetSchema = Schema.Struct({
 
 export interface TimerPreset extends Schema.Schema.Type<typeof TimerPresetSchema> {}
 
+/**
+ * The status list, spelled once. It feeds the schema *and* is what the timer
+ * domain groups into "still going" and "over" — a new status has to be added
+ * here, and the exhaustiveness tests over those two groups fail until it is
+ * sorted into one of them.
+ */
+export const SESSION_STATUSES = [
+  'countdown',
+  'running',
+  'paused',
+  'completed',
+  'cancelled',
+] as const
+
+/** Same treatment: one list, feeding the schema and — via the row — the type. */
+const FINISH_REASONS = ['endpoint', 'manual', 'timeCap', 'cancelled'] as const
+
 export const WorkoutSessionSchema = Schema.Struct({
   id: Schema.NonEmptyString,
   presetId: Schema.optionalKey(Schema.NonEmptyString),
   config: TimerConfigSchema,
-  status: Schema.Literals(['countdown', 'running', 'paused', 'completed', 'cancelled']),
+  status: Schema.Literals(SESSION_STATUSES),
   workoutNotes: Schema.String,
   notes: Schema.String,
   countdownDurationMs: Milliseconds,
@@ -110,7 +127,7 @@ export const WorkoutSessionSchema = Schema.Struct({
   pauseStartedAt: Schema.optionalKey(Timestamp),
   accumulatedPausedMs: Milliseconds,
   finishedAt: Schema.optionalKey(Timestamp),
-  finishReason: Schema.optionalKey(Schema.Literals(['endpoint', 'manual', 'timeCap', 'cancelled'])),
+  finishReason: Schema.optionalKey(Schema.Literals(FINISH_REASONS)),
   rounds: Schema.Array(RoundSplitSchema),
   createdAt: Timestamp,
   updatedAt: Timestamp,
@@ -119,7 +136,13 @@ export const WorkoutSessionSchema = Schema.Struct({
 export interface WorkoutSession extends Schema.Schema.Type<typeof WorkoutSessionSchema> {}
 
 export type SessionStatus = WorkoutSession['status']
-export type FinishReason = 'endpoint' | 'manual' | 'timeCap' | 'cancelled'
+
+/**
+ * Derived, not restated. This used to be a hand-written union sitting beside
+ * the schema's literal list — two declarations of one rule, which is the
+ * drift this module exists to prevent.
+ */
+export type FinishReason = NonNullable<WorkoutSession['finishReason']>
 
 export const TimerSettingsSchema = Schema.Struct({
   id: Schema.Literal('timer'),
