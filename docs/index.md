@@ -22,6 +22,7 @@ There is no `CLAUDE.md` and no `AGENTS.md`. A `SessionStart` hook (`.claude/hook
 | [Adding a feature](adding-a-feature.md) | Building a new feature — the build order and the test home for each step |
 | [Testing strategy](testing-strategy.md) | Choosing which tier a test belongs in, or whether to write a property |
 | [Vitest practices](vitest-practices.md) | Writing browser specs with fixtures, screen objects, helpers, tags, and ARIA snapshots |
+| [What jsdom cannot see](jsdom-vs-browser.md) | Justifying the cost of a browser tier, or wondering whether a spec could move to jsdom |
 | [Driving the app with agent-browser](agent-browser.md) | Verifying a feature yourself in a real browser — before claiming it works |
 | [Mutation testing](mutation-testing.md) | Reading a surviving mutant, or changing what `pnpm test:mutation` grades |
 | [UI components](ui-components.md) | Any work in `src/components/ui/` — adding a primitive, or wondering why a component takes `class` |

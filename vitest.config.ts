@@ -103,6 +103,10 @@ export default defineConfig({
       // Unit: pure Node tier for logic with no DOM/browser dependency.
       './vitest.unit.config.ts',
 
+      // jsdom: not a gate. A demonstration tier that pairs with the browser
+      // specs to show what a simulated DOM cannot see (docs/jsdom-vs-browser.md).
+      './vitest.jsdom.config.ts',
+
       // Default: component + feature specs in a real browser.
       {
         plugins,
@@ -118,6 +122,7 @@ export default defineConfig({
             'src/__tests__/visual/**',
             'src/__tests__/unit/**',
             'src/__tests__/touch/**',
+            'src/__tests__/jsdom/**',
           ],
           browser: browserConfig('default-browser'),
         },
