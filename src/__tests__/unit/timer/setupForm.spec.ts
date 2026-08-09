@@ -76,13 +76,24 @@ describe('setup form', () => {
    * `timeCapMs: 0`, which is a workout that ends the moment it starts.
    */
   it('treats an unset optional as absent, not as zero', () => {
-    const values: SetupFormValues = {
-      ...defaultFormValues(),
-      timeCapSeconds: undefined,
-      targetRounds: 0,
-    }
+    const base = defaultFormValues()
 
-    expect(configFromValues('forTime', values)).toEqual({ mode: 'forTime' })
+    // Both spellings of "none": the empty chip leaves the value undefined, and
+    // the zero option on the rest picker sets it to 0.
+    expect(
+      configFromValues('forTime', { ...base, timeCapSeconds: undefined, targetRounds: undefined }),
+    ).toEqual({ mode: 'forTime' })
+    expect(configFromValues('forTime', { ...base, timeCapSeconds: 0, targetRounds: 0 })).toEqual({
+      mode: 'forTime',
+    })
+    expect(configFromValues('forTime', { ...base, timeCapSeconds: 0, targetRounds: 3 })).toEqual({
+      mode: 'forTime',
+      targetRounds: 3,
+    })
+    expect(configFromValues('forTime', { ...base, timeCapSeconds: 60, targetRounds: 0 })).toEqual({
+      mode: 'forTime',
+      timeCapMs: 60_000,
+    })
   })
 
   /**

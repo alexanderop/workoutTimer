@@ -23,7 +23,9 @@ export default {
   // Required, not optional: the default glob includes `vue`, and Stryker really
   // does mutate SFC script blocks. Every mutant outside the unit tier's reach
   // survives by construction and buries the signal. Keep this list in step with
-  // what src/__tests__/unit/ actually covers.
+  // what src/__tests__/unit/ actually covers — the list is the answer to "which
+  // logic is pure enough to grade", so a module that belongs here and is not
+  // here is a module whose tests nobody has checked.
   //
   // Deliberately NOT here:
   //   - src/db/repositories/** — half the file is the Dexie layer (browser
@@ -38,7 +40,21 @@ export default {
   //     not boot.
   //   - src/db/generateId.ts, src/lib/observability.ts — a crypto.randomUUID
   //     wrapper and a DEV-only gate. Equivalent mutants by construction.
-  mutate: ['src/features/*/domain.ts', 'src/lib/backupFile.ts', 'src/lib/installPlatform.ts'],
+  //   - src/features/*/use*.ts, src/stores/** — these bind a pure module to
+  //     Vue's reactivity or to i18n. The logic they wire up is in the modules
+  //     below; what is left is the wiring, which the browser tier grades by
+  //     driving the screen. useArmedAction is the exception and is in scope:
+  //     it *is* logic (a state machine over a timeout) that happens to need a
+  //     scope, and its spec runs it under effectScope with fake timers.
+  mutate: [
+    'src/features/*/domain.ts',
+    'src/features/*/labels.ts',
+    'src/features/*/pickerOptions.ts',
+    'src/features/*/setupForm.ts',
+    'src/composables/useArmedAction.ts',
+    'src/lib/backupFile.ts',
+    'src/lib/installPlatform.ts',
+  ],
 
   // Reuse the previous run's verdicts for unchanged code+tests. The report
   // lives in reports/, which is gitignored — CI gets a cold run.

@@ -44,7 +44,10 @@ export function useArmedAction(disarmAfterMs: number = DISARM_AFTER_MS): ArmedAc
   let disarmTimeout: ReturnType<typeof setTimeout> | undefined
 
   function disarm(): void {
-    if (disarmTimeout !== undefined) clearTimeout(disarmTimeout)
+    // No guard: clearTimeout of an already-cleared or never-set handle is a
+    // no-op in both the DOM and Node, so checking first only adds a branch
+    // nothing can distinguish.
+    clearTimeout(disarmTimeout)
     disarmTimeout = undefined
     armedKey.value = undefined
   }
