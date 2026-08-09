@@ -93,6 +93,37 @@ Assertions that claim a control is reachable use `toBeInViewport`, as in the
 keyboard-shrunk dialog test: the submit button begins outside the viewport and
 enters it after the dialog body scrolls.
 
+## Assert the computed effect, never the declaration
+
+Most touch conventions are "a declaration exists in a class string", and the
+obvious test asserts the class string. Don't: a `toHaveClass('select-none')`
+assertion goes red on a harmless rename and stays green when the CSS is
+broken. It is a change detector aimed at the wrong thing, and
+[testing-strategy.md](testing-strategy.md) already forbids reaching into
+internals.
+
+`getComputedStyle` and `getBoundingClientRect` are the deliberate exception,
+and the three specs that introduced them show the shape:
+
+- **Measure the distance a user perceives, not the property that produces
+  it.** `dialogContent.spec.ts` asserts the gap between the sheet's bottom
+  edge and its last control, so a fix that swapped padding for a spacer
+  element would still pass.
+- **Ask the DOM which elements have the trait, then hold those to the rule.**
+  `scrollContainers.spec.ts` finds every element whose computed `overflow-y`
+  scrolls rather than naming `<main>` — the bug it pins was a correct
+  declaration on an element that never scrolls, so a test naming the element
+  would miss the next instance.
+- **Assert the query found something.** Both of the above check
+  `length > 0` first. A loop over an empty list is a green check that means
+  nothing; the same lesson `a11yCoverage` teaches.
+
+Where the effect is invisible to every tier we can afford, the test goes to
+`arch` as a **static tripwire labelled as one** — never a spec that pretends
+to be behavioral. `touchConventions.test.ts` is the worked example, and it
+follows `uiPrimitives.test.ts`'s house rule: every helper is exercised
+against a synthetic violation as well as the real tree.
+
 ## Retries are narrow; cross-cutting policy is tagged
 
 Browser projects retry only infrastructure-shaped failures in CI. Assertion

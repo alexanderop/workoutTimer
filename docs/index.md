@@ -25,6 +25,7 @@ There is no `CLAUDE.md` and no `AGENTS.md`. A `SessionStart` hook (`.claude/hook
 | [Driving the app with agent-browser](agent-browser.md) | Verifying a feature yourself in a real browser — before claiming it works |
 | [Mutation testing](mutation-testing.md) | Reading a surviving mutant, or changing what `pnpm test:mutation` grades |
 | [UI components](ui-components.md) | Any work in `src/components/ui/` — adding a primitive, or wondering why a component takes `class` |
+| [Touch conventions](touch-conventions.md) | Adding any control, or touching the shell, safe areas, or a sheet — the rules that make it feel native |
 | [Effect](effect/index.md) | Any Effect work — branch chooser into the per-topic concepts |
 
 Adding a doc means adding a concept file with frontmatter and linking it from this table, so the bundle stays conformant and navigable.
@@ -39,6 +40,7 @@ pnpm check          # ← verify your work: lint + format + types + knip + unit 
 pnpm dev            # Dev server
 pnpm test:unit      # Node unit tier — pure logic, ~100 ms
 pnpm test           # Browser tier (Vitest browser mode)
+pnpm test:touch     # Coarse-pointer tier — the only one under touch emulation
 pnpm test:a11y      # axe-core sweeps + ARIA snapshots (-- --update to rebaseline)
 pnpm test:visual    # Screenshot comparisons (test:visual:update to rebaseline)
 pnpm test:arch      # ArchUnitTS boundary rules
@@ -55,8 +57,9 @@ pnpm build          # Production build (+ pnpm size-limit for the budget)
 
 `pnpm check` covers every gate that runs without a browser; the lint and
 formatting parts of it are fixable with `pnpm lint` and `pnpm format`. The
-browser tiers (`test`, `test:a11y`, `test:visual`, `test:e2e`) cost minutes and
-stay separate — run the ones your change touches, and let CI run the rest.
+browser tiers (`test`, `test:touch`, `test:a11y`, `test:visual`, `test:e2e`) cost
+minutes and stay separate — run the ones your change touches, and let CI run the
+rest.
 
 ## Effect
 
@@ -145,6 +148,7 @@ an untrusted directory.
 - **Features never import other features**; shared layers never import features. Enforced twice: ArchUnitTS in `src/__tests__/architecture/` reads the TypeScript module graph, and `no-restricted-imports` in `eslint.config.ts` covers `.vue` files, which ArchUnitTS does not parse.
 - **Two-way binding**: `const open = defineModel<boolean>('open')` — except where a reka part already owns the model (`Switch` forwards `modelValue` to `SwitchRoot`), since two owners of one value drift.
 - **i18n**: every user-facing string in `src/i18n/messages/en.ts` and `de.ts`; the schema type makes missing keys a compile error.
+- **Every control answers a finger, and every environment value is clamped.** Tailwind v4 gates `hover:` behind `@media (hover: hover)`, so a control whose only feedback is a `hover:` answers a phone tap with nothing — press states are `active:`, and the transition list names `scale` (v4 compiles `scale-*` to the standalone `scale` property, so `transform` covers nothing). Sizes are written touch-first and collapse with `pointer-fine:`, so the 44px floor is the default. `env(safe-area-inset-*)` may only be read inside the three clamped `@utility` blocks in `src/style.css` — a bare `env()` is 0 on flat-bottomed hardware and in every headless browser, which is every place anyone looks, and pairing one with `pb-6` hands `padding-bottom` to stylesheet order. Selection is suppressed globally and granted back to prose (`select-text`) and fields **in the same commit** — global `user-select: none` without the input exemption breaks caret placement on iOS and on no desktop browser. Enforced three ways: `src/__tests__/architecture/touchConventions.test.ts` for coverage, the `touch` tier for sizing, and browser specs for the sheet inset, overscroll containment, and selection. Full reasoning: [touch-conventions.md](touch-conventions.md).
 - **Tests are not colocated**: they live in `src/__tests__/`, mirroring the source tree. Which tier a test belongs in: [testing-strategy.md](testing-strategy.md).
 - Keep logic in `.ts` modules, not `<script setup>` — that is what makes it unit-testable and visible to the arch tests.
 

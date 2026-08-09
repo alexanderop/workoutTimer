@@ -209,6 +209,11 @@ covers file shape, which ESLint cannot see:
   and a primitive that accepts `class` actually uses it;
 - a primitive declares **at most three configuration props beyond `class`**.
 
+`touchConventions.test.ts` sits beside it and covers the same layer from the
+other direction: not whether a primitive is *shaped* right, but whether the
+controls built on it answer a finger. Its rules and their reasoning are in
+[touch-conventions.md](touch-conventions.md).
+
 That last one is the flag-sprawl tripwire. Props forwarded from a reka type
 (`DialogContentProps & { … }`) are not counted — only the ones the component
 invents.
@@ -312,8 +317,20 @@ upstream file:
 - **Strings come from i18n.** Upstream hard-codes `"Close"`; this project
   requires every user-facing string in `src/i18n/messages/*`, so
   `DialogContent` uses `useI18n()`.
-- **Touch-target sizing.** Sizes resolve `--spacing-touch-target` rather than
-  upstream's tighter desktop heights.
+- **Touch-target sizing is written touch-first and collapses.** Sizes resolve
+  `--spacing-touch-target` and shrink to upstream's tighter heights only under
+  `pointer-fine:` — so `default` is 44px on a phone and 40px on a desktop, and
+  a size someone forgets to think about is safe rather than 40px. `sm` clears
+  the 44px floor too: it is a visually smaller button, not a smaller hit area.
+  Graded by the `touch` tier, which is the only one with a coarse pointer.
+- **The button base answers a press.** `active:scale-[0.97]`,
+  `touch-manipulation`, and `select-none` are part of the primitive contract,
+  not decoration — Tailwind v4 gates every `hover:` behind
+  `@media (hover: hover)`, so without the `active:` the variants below fire on
+  a mouse and on nothing else. The transition list names `scale` rather than
+  `transform` because v4 compiles `scale-*` to the standalone `scale`
+  property. A new control that ships hover-only fails the architecture tier.
+  See [touch-conventions.md](touch-conventions.md).
 
 ## Reading the real source
 
