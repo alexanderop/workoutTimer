@@ -25,7 +25,15 @@ const Milliseconds = Schema.Natural
 const Duration = Schema.Int.check(Schema.isBetween({ minimum: 1_000, maximum: 86_400_000 }))
 const RestDuration = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 86_400_000 }))
 const Count = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 999 }))
-const StartCountdown = Schema.Literals([0, 3_000, 5_000, 10_000])
+/**
+ * The countdown lengths the settings screen offers, spelled once. It is the
+ * schema's literal set *and* the list the `<select>` renders, so an option the
+ * schema would refuse cannot appear in the dropdown, and a length added here
+ * shows up without anyone editing a template.
+ */
+export const START_COUNTDOWN_OPTIONS = [0, 3_000, 5_000, 10_000] as const
+
+const StartCountdown = Schema.Literals(START_COUNTDOWN_OPTIONS)
 
 /**
  * Cue gain, 0 (silent) to 1 (full scale). Rows written before db v2 lack the
@@ -156,6 +164,9 @@ export const TimerSettingsSchema = Schema.Struct({
 })
 
 export interface TimerSettings extends Schema.Schema.Type<typeof TimerSettingsSchema> {}
+
+/** Derived from the row, so the setting and its option list cannot disagree. */
+export type StartCountdownMs = TimerSettings['startCountdownMs']
 
 /**
  * Drafts are what a component hands *in*, before validation — so their types
