@@ -7,6 +7,7 @@ import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import {
   finalResult,
+  FINISHED_STATUSES,
   formatDuration,
   isFinishedSession,
   sortSessions,
@@ -16,7 +17,8 @@ import { RouteNames } from '@/router'
 import { useSessions } from '@/stores/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
 
-type Filter = 'all' | 'completed' | 'cancelled'
+/** "Everything", or one of the ways a workout can have ended. */
+type Filter = 'all' | SessionStatus
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -30,14 +32,15 @@ const sessions = computed(() =>
       (filter.value === 'all' || session.status === filter.value),
   ),
 )
-const filters: ReadonlyArray<Filter> = ['all', 'completed', 'cancelled']
+const filters: ReadonlyArray<Filter> = ['all', ...FINISHED_STATUSES]
 
+/**
+ * `history.all`, `history.completed`, `history.cancelled` — the chip labels
+ * are keyed by the filter itself, so a new finished status needs a message
+ * and nothing else. Missing one is a compile error, not a blank chip.
+ */
 function filterLabel(value: Filter): string {
-  return value === 'all'
-    ? t('history.all')
-    : value === 'completed'
-      ? t('history.completed')
-      : t('history.cancelled')
+  return t(`history.${value}`)
 }
 
 function resultLabel(session: WorkoutSession): string {

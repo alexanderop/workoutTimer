@@ -10,7 +10,12 @@ export {
   workoutStartMutation,
 } from './atoms'
 export { exportData, importData } from './backup'
-export { isPresetDraft, makeDefaultTimerSettings, START_COUNTDOWN_OPTIONS } from './converters'
+export {
+  isPresetDraft,
+  makeDefaultTimerSettings,
+  SESSION_STATUSES,
+  START_COUNTDOWN_OPTIONS,
+} from './converters'
 export type {
   FinishReason,
   PresetDraft,

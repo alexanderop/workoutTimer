@@ -1,3 +1,4 @@
+import { SESSION_STATUSES } from '@/db'
 import type { SessionStatus, TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/db'
 
 export const SECOND_MS = 1_000
@@ -38,6 +39,14 @@ export function isActiveSession(status: SessionStatus): boolean {
 export function isFinishedSession(status: SessionStatus): boolean {
   return status === 'completed' || status === 'cancelled'
 }
+
+/**
+ * The statuses history can show, filtered out of the full list rather than
+ * written again — so a new way for a workout to end appears in the filter
+ * chips instead of quietly falling out of them.
+ */
+export const FINISHED_STATUSES: ReadonlyArray<SessionStatus> =
+  SESSION_STATUSES.filter(isFinishedSession)
 
 /**
  * Whether rounds are something the athlete taps rather than something the
