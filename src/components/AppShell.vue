@@ -45,27 +45,43 @@ function navigate(routeName: string): void {
 </script>
 
 <template>
-  <div class="flex h-dvh flex-col bg-background">
+  <!-- The top and side insets go on the shell root, not on <main>. A sticky
+       element's constraint rectangle is the scrollport — the scroll
+       container's padding box — so padding-top on <main> would *not* push
+       PageHeader's `sticky top-0` down; the header would stick flush to the
+       top of <main> and slide under the status bar, which is the bug. One
+       declaration here is correct with or without a sticky header, correct
+       for both view styles, and cannot be double-paid. `bg-background`
+       paints under padding, so the status-bar strip is filled. -->
+  <div class="flex h-dvh flex-col bg-background safe-area-top safe-area-x">
     <!-- `overscroll-contain`, not `none`: chaining out of the scroller is the
          "this is a website" tell, but rubber-banding belongs to the element
          that legitimately scrolls. The `overscroll-behavior-y: none` on body
          (src/style.css) is the outer guard and does not cover this — body
          never scrolls, because the shell is an h-dvh column. -->
-    <main class="flex-1 overflow-y-auto overscroll-contain">
+    <main
+      class="flex-1 overflow-y-auto overscroll-contain"
+      :class="hideNavigation && 'safe-area-bottom'"
+    >
       <slot />
     </main>
 
+    <!-- No `sticky bottom-0`: this is a non-flexing sibling in a non-scrolling
+         h-dvh column, so there is no scrollport for it to stick against. The
+         class read as load-bearing and was inert. With `meta.hideNav` the nav
+         does not render at all, which is why <main> pays the bottom inset in
+         that case. -->
     <nav
       v-if="!hideNavigation"
       :aria-label="t('nav.ariaLabel')"
-      class="sticky bottom-0 border-t bg-card safe-area-bottom"
+      class="border-t bg-card safe-area-bottom"
     >
       <div class="flex justify-around">
         <button
           v-for="item in leftItems"
           :key="item.routeName"
           type="button"
-          class="flex min-h-touch-target flex-1 flex-col items-center justify-center px-2 py-3 transition-colors"
+          class="flex min-h-touch-target flex-1 flex-col items-center justify-center px-2 py-3 select-none touch-manipulation transition-[color,scale] duration-100 active:scale-90"
           :class="
             isActive(item.routeName)
               ? 'border-t-2 border-primary text-primary'
@@ -84,7 +100,7 @@ function navigate(routeName: string): void {
           v-for="item in rightItems"
           :key="item.routeName"
           type="button"
-          class="flex min-h-touch-target flex-1 flex-col items-center justify-center px-2 py-3 transition-colors"
+          class="flex min-h-touch-target flex-1 flex-col items-center justify-center px-2 py-3 select-none touch-manipulation transition-[color,scale] duration-100 active:scale-90"
           :class="
             isActive(item.routeName)
               ? 'border-t-2 border-primary text-primary'

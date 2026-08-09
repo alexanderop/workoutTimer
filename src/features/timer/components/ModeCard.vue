@@ -23,7 +23,7 @@ const icons: Readonly<Record<TimerMode, Component>> = {
   <button
     type="button"
     :data-mode="mode"
-    class="group flex min-h-24 w-full items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-xs transition-transform active:scale-[0.99]"
+    class="group flex min-h-24 w-full select-none touch-manipulation items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-xs transition-transform duration-100 active:scale-[0.99]"
     @click="emit('select')"
   >
     <span

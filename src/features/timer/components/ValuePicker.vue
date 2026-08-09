@@ -39,7 +39,7 @@ function updateValue(event: Event): void {
       <button
         v-if="emptyLabel"
         type="button"
-        class="h-touch-target shrink-0 snap-center rounded-full border px-4 font-medium transition-colors"
+        class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
         :class="
           model === undefined
             ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
@@ -54,7 +54,7 @@ function updateValue(event: Event): void {
         v-for="option in options"
         :key="option.value"
         type="button"
-        class="h-touch-target shrink-0 snap-center rounded-full border px-4 font-medium transition-colors"
+        class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
         :class="
           model === option.value
             ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
@@ -68,7 +68,7 @@ function updateValue(event: Event): void {
     </div>
     <button
       type="button"
-      class="mt-2 min-h-touch-target w-full rounded-xl border border-dashed bg-background px-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+      class="mt-2 min-h-touch-target w-full select-none touch-manipulation rounded-xl border border-dashed bg-background px-3 text-sm font-semibold text-muted-foreground transition-[color,border-color,scale] duration-100 hover:border-foreground/40 hover:text-foreground active:scale-[0.98]"
       :class="customOpen ? 'border-[var(--mode-color)] text-foreground' : ''"
       :aria-expanded="customOpen"
       :aria-controls="`${id}-custom`"

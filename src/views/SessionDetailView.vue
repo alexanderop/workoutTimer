@@ -117,14 +117,19 @@ async function remove(): Promise<void> {
         <p class="mt-2 text-muted-foreground">{{ configSummary(session.config) }}</p>
       </section>
 
+      <!-- `select-text` on both bodies: the app suppresses selection globally
+           because chrome is not a document, but these two are the user's own
+           prose and copying them out is a thing someone wants to do. -->
       <section v-if="session.workoutNotes" class="rounded-2xl border bg-card p-4">
         <h2 class="text-section-title font-semibold">{{ t('history.workoutNotes') }}</h2>
-        <p class="mt-2 whitespace-pre-line text-muted-foreground">{{ session.workoutNotes }}</p>
+        <p class="mt-2 select-text whitespace-pre-line text-muted-foreground">
+          {{ session.workoutNotes }}
+        </p>
       </section>
 
       <section class="rounded-2xl border bg-card p-4">
         <h2 class="text-section-title font-semibold">{{ t('history.resultNotes') }}</h2>
-        <p class="mt-2 whitespace-pre-line text-muted-foreground">
+        <p class="mt-2 select-text whitespace-pre-line text-muted-foreground">
           {{ session.notes || t('history.noNotes') }}
         </p>
       </section>
