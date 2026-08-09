@@ -46,7 +46,12 @@ function navigate(routeName: string): void {
 
 <template>
   <div class="flex h-dvh flex-col bg-background">
-    <main class="flex-1 overflow-y-auto">
+    <!-- `overscroll-contain`, not `none`: chaining out of the scroller is the
+         "this is a website" tell, but rubber-banding belongs to the element
+         that legitimately scrolls. The `overscroll-behavior-y: none` on body
+         (src/style.css) is the outer guard and does not cover this — body
+         never scrolls, because the shell is an h-dvh column. -->
+    <main class="flex-1 overflow-y-auto overscroll-contain">
       <slot />
     </main>
 

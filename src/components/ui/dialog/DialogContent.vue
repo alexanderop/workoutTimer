@@ -71,7 +71,10 @@ function handleOpenAutoFocus(event: Event): void {
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(
-          'bg-background fixed bottom-[var(--keyboard-inset,0px)] left-0 right-0 z-50 flex w-full flex-col gap-4 overflow-hidden rounded-t-2xl border pt-2 px-4 pb-6 shadow-lg safe-area-bottom',
+          // `safe-area-bottom` owns padding-bottom outright and clamps to
+          // `--safe-bottom-min`; a `pb-6` beside it would be a second
+          // declaration of the same property fighting on stylesheet order.
+          'bg-background fixed bottom-[var(--keyboard-inset,0px)] left-0 right-0 z-50 flex w-full flex-col gap-4 overflow-hidden rounded-t-2xl border pt-2 px-4 shadow-lg safe-area-bottom [--safe-bottom-min:1.5rem]',
           'max-h-[calc(100dvh-var(--keyboard-inset,0px))]',
           'data-[state=open]:animate-slide-up-mobile data-[state=closed]:animate-slide-down-mobile',
           'sm:data-[state=open]:animate-in sm:data-[state=closed]:animate-out sm:data-[state=closed]:fade-out-0 sm:data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:duration-200',
@@ -99,8 +102,14 @@ function handleOpenAutoFocus(event: Event): void {
       </div>
 
       <!-- Close button (desktop only) — on mobile the sheet is dismissed by
-           tapping the overlay or swiping, and the corner target competes with
-           the drag handle. -->
+           tapping the overlay, and the corner target competes with the drag
+           handle. The handle above is currently a visual grip, not a gesture:
+           it has no pointer handlers. Wiring it means migrating to reka-ui's
+           Drawer (already in node_modules — DrawerHandle, DrawerSwipeArea,
+           velocity dismissal), which is an API migration rather than a CSS
+           change. Until then this comment does not promise a swipe, because
+           an unhonored affordance is worse than no affordance.
+           docs/touch-conventions.md -->
       <DialogClose
         v-if="showCloseButton"
         data-slot="dialog-close"

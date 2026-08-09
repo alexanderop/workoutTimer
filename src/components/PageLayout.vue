@@ -43,7 +43,10 @@ defineSlots<{
       </template>
     </PageHeader>
 
-    <div class="flex-1" :class="scrollable ? 'overflow-y-auto' : 'overflow-hidden'">
+    <div
+      class="flex-1"
+      :class="scrollable ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden'"
+    >
       <slot />
     </div>
 
