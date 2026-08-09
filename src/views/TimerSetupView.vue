@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAtomSet } from '@effect/atom-vue'
 import { Effect } from 'effect'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
@@ -20,32 +20,22 @@ import {
 } from '@/db'
 import TimePicker from '@/features/timer/components/TimePicker.vue'
 import ValuePicker from '@/features/timer/components/ValuePicker.vue'
-import {
-  DEFAULT_CONFIGS,
-  isActiveSession,
-  isTimerConfig,
-  parseTimerMode,
-  SECOND_MS,
-} from '@/features/timer/domain'
-import {
-  countValues,
-  includeSelectedValue,
-  timerDurationValues,
-  type PickerOption,
-} from '@/features/timer/pickerOptions'
+import { isActiveSession, isTimerConfig, parseTimerMode } from '@/features/timer/domain'
+import { MAX_DURATION_SECONDS } from '@/features/timer/setupForm'
 import { unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import { useTimerLabels } from '@/features/timer/useTimerLabels'
+import { useTimerSetupForm } from '@/features/timer/useTimerSetupForm'
 import { RouteNames } from '@/router'
 import { usePresets, useSessions, useTimerSettings } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { PresetDraft, TimerConfig, TimerMode } from '@/db'
+import type { PresetDraft, TimerMode } from '@/db'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const toast = useToastStore()
 const reportFailure = useReportFailure('timer-setup')
-const { humanizeSeconds, modeName } = useTimerLabels()
+const { modeName } = useTimerLabels()
 const runStartMutation = useAtomSet(() => workoutStartMutation, { mode: 'promise' })
 const runPresetMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
 
@@ -61,139 +51,15 @@ const hasActiveSession = computed(() =>
   sessions.value.some((session) => isActiveSession(session.status)),
 )
 
-const MAX_DURATION_SECONDS = 24 * 60 * 60
-const DURATION_VALUES = timerDurationValues(MAX_DURATION_SECONDS, 15)
-const INTERVAL_VALUES = timerDurationValues(60 * 60)
-const ROUND_VALUES = countValues(20)
-
-const durationSeconds = ref(10 * 60)
-const timeCapSeconds = ref<number | undefined>()
-const targetRounds = ref<number | undefined>()
-const intervalSeconds = ref(60)
-const rounds = ref(10)
-const workSeconds = ref(20)
-const restSeconds = ref(10)
-const workoutNotes = ref('')
-const presetName = ref('')
-const isStarting = ref(false)
-const isSavingPreset = ref(false)
-
-function applyConfig(config: TimerConfig): void {
-  switch (config.mode) {
-    case 'amrap':
-      durationSeconds.value = config.durationMs / SECOND_MS
-      break
-    case 'forTime':
-      timeCapSeconds.value =
-        config.timeCapMs === undefined ? undefined : config.timeCapMs / SECOND_MS
-      targetRounds.value = config.targetRounds
-      break
-    case 'emom':
-      intervalSeconds.value = config.intervalMs / SECOND_MS
-      rounds.value = config.rounds
-      break
-    case 'tabata':
-      workSeconds.value = config.workMs / SECOND_MS
-      restSeconds.value = config.restMs / SECOND_MS
-      rounds.value = config.rounds
-      break
-  }
-}
-
-/**
- * Seeds the form once per thing-being-edited, and never again.
- *
- * The subtlety is that `presets` is a *reloading* source: any write to the
- * presets table hands this watcher a brand-new array, and re-seeding on that
- * would throw away everything the user has typed since. That is not
- * hypothetical — saving a preset is itself such a write, so configuring a
- * 20-minute AMRAP and pressing "Save as preset" used to snap the form back to
- * the mode default, leaving a Start button that would run a workout the user
- * never asked for.
- *
- * So the trigger is the *identity* of what we are editing (`mode:presetId`),
- * not the data behind it. Seeding is deferred while a named preset is still
- * loading, because arriving rows must still be allowed to fill the form in.
- */
-let seededFor: string | undefined
-
-watch(
-  [routeMode, presetId, presets, presetsSettled],
-  ([mode, id, availablePresets, settled]) => {
-    const key = `${mode}:${id ?? ''}`
-    if (seededFor === key) return
-
-    const preset = availablePresets.find((item) => item.id === id)
-    if (preset && preset.config.mode === mode) {
-      applyConfig(preset.config)
-      workoutNotes.value = preset.workoutNotes
-      presetName.value = preset.name
-      seededFor = key
-      return
-    }
-
-    applyConfig(DEFAULT_CONFIGS[mode])
-    // A named preset that has not arrived yet may still turn up; a preset that
-    // is absent from settled data (or was never named) is the final answer.
-    if (id === undefined || settled) seededFor = key
-  },
-  { immediate: true },
-)
-
-const config = computed<TimerConfig>(() => {
-  switch (routeMode.value) {
-    case 'amrap':
-      return { mode: 'amrap', durationMs: Math.round(durationSeconds.value * SECOND_MS) }
-    case 'forTime':
-      return {
-        mode: 'forTime',
-        ...(timeCapSeconds.value === undefined || timeCapSeconds.value === 0
-          ? {}
-          : { timeCapMs: Math.round(timeCapSeconds.value * SECOND_MS) }),
-        ...(targetRounds.value === undefined || targetRounds.value === 0
-          ? {}
-          : { targetRounds: Math.round(targetRounds.value) }),
-      }
-    case 'emom':
-      return {
-        mode: 'emom',
-        intervalMs: Math.round(intervalSeconds.value * SECOND_MS),
-        rounds: Math.round(rounds.value),
-      }
-    case 'tabata':
-      return {
-        mode: 'tabata',
-        workMs: Math.round(workSeconds.value * SECOND_MS),
-        restMs: Math.round(restSeconds.value * SECOND_MS),
-        rounds: Math.round(rounds.value),
-      }
-  }
+const { values, workoutNotes, presetName, config, pickers } = useTimerSetupForm({
+  mode: routeMode,
+  presetId,
+  presets,
+  presetsSettled,
 })
 
-function timeOptions(
-  values: ReadonlyArray<number>,
-  selected: number | undefined,
-): Array<PickerOption> {
-  return includeSelectedValue(values, selected).map((value) => ({
-    value,
-    label: humanizeSeconds(value),
-  }))
-}
-
-function roundOptions(selected: number | undefined): Array<PickerOption> {
-  return includeSelectedValue(ROUND_VALUES, selected).map((value) => ({
-    value,
-    label: String(value),
-  }))
-}
-
-const durationOptions = computed(() => timeOptions(DURATION_VALUES, durationSeconds.value))
-const timeCapOptions = computed(() => timeOptions(DURATION_VALUES, timeCapSeconds.value))
-const targetRoundOptions = computed(() => roundOptions(targetRounds.value))
-const intervalOptions = computed(() => timeOptions(INTERVAL_VALUES, intervalSeconds.value))
-const roundPickerOptions = computed(() => roundOptions(rounds.value))
-const workOptions = computed(() => timeOptions(INTERVAL_VALUES, workSeconds.value))
-const restOptions = computed(() => timeOptions([0, ...INTERVAL_VALUES], restSeconds.value))
+const isStarting = ref(false)
+const isSavingPreset = ref(false)
 
 const canStart = computed(
   () => isTimerConfig(config.value) && !isStarting.value && !hasActiveSession.value,
@@ -272,9 +138,9 @@ async function savePreset(): Promise<void> {
         <div v-if="routeMode === 'amrap'">
           <TimePicker
             id="duration"
-            v-model="durationSeconds"
+            v-model="values.durationSeconds"
             :label="t('timer.setup.duration')"
-            :options="durationOptions"
+            :options="pickers.duration"
             :custom-label="t('timer.setup.customTime')"
             :minutes-label="t('timer.setup.minutes')"
             :seconds-label="t('timer.setup.seconds')"
@@ -285,9 +151,9 @@ async function savePreset(): Promise<void> {
         <div v-else-if="routeMode === 'forTime'" class="grid gap-4 sm:grid-cols-2">
           <TimePicker
             id="time-cap"
-            v-model="timeCapSeconds"
+            v-model="values.timeCapSeconds"
             :label="t('timer.setup.timeCap')"
-            :options="timeCapOptions"
+            :options="pickers.timeCap"
             :empty-label="t('timer.setup.noTimeCap')"
             :custom-label="t('timer.setup.customTime')"
             :minutes-label="t('timer.setup.minutes')"
@@ -297,9 +163,9 @@ async function savePreset(): Promise<void> {
           />
           <ValuePicker
             id="target-rounds"
-            v-model="targetRounds"
+            v-model="values.targetRounds"
             :label="t('timer.setup.targetRounds')"
-            :options="targetRoundOptions"
+            :options="pickers.targetRounds"
             :empty-label="t('timer.setup.noTargetRounds')"
             :custom-label="t('timer.setup.customRounds')"
           />
@@ -307,9 +173,9 @@ async function savePreset(): Promise<void> {
         <div v-else-if="routeMode === 'emom'" class="grid gap-4 sm:grid-cols-2">
           <TimePicker
             id="interval"
-            v-model="intervalSeconds"
+            v-model="values.intervalSeconds"
             :label="t('timer.setup.interval')"
-            :options="intervalOptions"
+            :options="pickers.interval"
             :custom-label="t('timer.setup.customTime')"
             :minutes-label="t('timer.setup.minutes')"
             :seconds-label="t('timer.setup.seconds')"
@@ -318,18 +184,18 @@ async function savePreset(): Promise<void> {
           />
           <ValuePicker
             id="emom-rounds"
-            v-model="rounds"
+            v-model="values.rounds"
             :label="t('timer.setup.rounds')"
-            :options="roundPickerOptions"
+            :options="pickers.rounds"
             :custom-label="t('timer.setup.customRounds')"
           />
         </div>
         <div v-else class="grid gap-4 sm:grid-cols-3">
           <TimePicker
             id="work"
-            v-model="workSeconds"
+            v-model="values.workSeconds"
             :label="t('timer.setup.work')"
-            :options="workOptions"
+            :options="pickers.work"
             :custom-label="t('timer.setup.customTime')"
             :minutes-label="t('timer.setup.minutes')"
             :seconds-label="t('timer.setup.seconds')"
@@ -338,9 +204,9 @@ async function savePreset(): Promise<void> {
           />
           <TimePicker
             id="rest"
-            v-model="restSeconds"
+            v-model="values.restSeconds"
             :label="t('timer.setup.rest')"
-            :options="restOptions"
+            :options="pickers.rest"
             :custom-label="t('timer.setup.customTime')"
             :minutes-label="t('timer.setup.minutes')"
             :seconds-label="t('timer.setup.seconds')"
@@ -349,9 +215,9 @@ async function savePreset(): Promise<void> {
           />
           <ValuePicker
             id="tabata-rounds"
-            v-model="rounds"
+            v-model="values.rounds"
             :label="t('timer.setup.rounds')"
-            :options="roundPickerOptions"
+            :options="pickers.rounds"
             :custom-label="t('timer.setup.customRounds')"
           />
         </div>

@@ -40,3 +40,17 @@ export function includeSelectedValue(
   if (selected === undefined || values.includes(selected)) return [...values]
   return [...values, selected].sort((left, right) => left - right)
 }
+
+/**
+ * A picker's list: the offered values with the current one folded in, each
+ * given a label. Keeping the selected value in the list is what lets a custom
+ * duration survive — a picker that does not offer what it is showing snaps to
+ * something else the moment it re-renders.
+ */
+export function pickerOptions(
+  values: ReadonlyArray<number>,
+  selected: number | undefined,
+  label: (value: number) => string,
+): Array<PickerOption> {
+  return includeSelectedValue(values, selected).map((value) => ({ value, label: label(value) }))
+}
