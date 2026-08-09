@@ -620,6 +620,37 @@ the time anyone rereads it, the comment explaining why is three years old.
 
 📄 `src/__tests__/jsdom/platformApis.spec.ts`
 
+## If you're reaching for happy-dom instead
+
+happy-dom is the usual answer to "jsdom is slow". On the axis this document
+cares about it is worse, and in a specific way: **jsdom refuses, happy-dom
+guesses.**
+
+Measured side by side — jsdom 30.0.1 against happy-dom 20.11.2, same markup:
+
+| | jsdom | happy-dom | browser |
+| --- | --- | --- | --- |
+| `<p hidden>` → `display` | `none` ✅ | **`block`** ✗ | `none` |
+| `<p hidden>.checkVisibility()` | not implemented | **`true`** ✗ | `false` |
+| `IntersectionObserver` | `undefined` | **`function`** | real |
+| `ResizeObserver` | `undefined` | **`function`** | real |
+
+The observers are the trap. They are constructors that pass feature detection
+and accept `observe()` — and then never fire. Zero callbacks, ever:
+
+```ts
+if (window.IntersectionObserver) {          // ✅ true in happy-dom
+  const observer = new IntersectionObserver(onIntersect)
+  observer.observe(target)                  // ✅ accepted
+}
+// onIntersect is never called. Not once.
+```
+
+So lazy-loading, infinite scroll, reveal-on-scroll and virtualised lists all
+silently do nothing, and the test that asserts nothing happened yet is green.
+jsdom's `undefined` is the friendlier failure: it throws, you notice, and you
+have to decide what to do about it.
+
 ## What browser mode costs
 
 Being fair about the trade:
@@ -683,3 +714,28 @@ Keep every spec paired with a browser counterpart and named after it, keep them
 green, and end each file at the point where the blindness is proven rather than
 asserting the browser's answer and failing. A red test here gets "fixed" by
 someone eventually. A green one that documents what it cannot see survives.
+
+## Sources
+
+Worth reading before repeating any of this:
+
+- **Younes Jaaidi, "Ashes to Ashes, Spec to Spec"** (React Summit 2026) — the
+  best real-world version of Example 8. Someone added a `height` to a shared
+  design-system card; the product image ended up covering the add-to-cart
+  button; the unit test kept passing because the click landed on the image.
+  *"whenever it tries to click on the add button, it's actually clicking on
+  the picture of the salad."*
+- **Matan Borenkraout** (TestJS Summit 2023) — a Testing Library maintainer on
+  why that is structurally invisible: *"there's no layout, meaning all of the
+  components are sitting one on top of the other."*
+- **Artem Zakharchenko, [Why I Won't Use JSDOM](https://www.epicweb.dev/why-i-won-t-use-jsdom)**
+  — the realm argument behind Example 10.
+- **Jessica Sachs** (JSNation US 2024) — the honest counterweight, from someone
+  who led Cypress Component Testing: real browsers lost the first time for good
+  reasons. *"The stability in Jest and other node based runners far outweighed
+  the benefit of working in your own browser environment."*
+
+One argument to **avoid**: that jsdom is unmaintained. It was fair in 2022 (24
+commits that year) and is not fair now — 152 commits in 2025 and 156 in the
+first eight months of 2026, shipping v28 through v30. The layout argument does
+not need it.
