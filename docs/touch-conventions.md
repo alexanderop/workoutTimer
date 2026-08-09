@@ -1,7 +1,7 @@
 ---
 type: Convention
 title: Touch conventions
-description: The five reflexes that make this app feel native on a phone — press feedback, touch-first sizing, suppressed document behavior, clamped environment values, and never drawing an unwired affordance.
+description: The six reflexes that make this app feel native on a phone — press feedback, touch-first sizing, suppressed document behavior, clamped environment values, sizing against the real viewport, and never drawing an unwired affordance.
 tags: [ui, mobile, touch, tailwind, safe-area, accessibility]
 status: stable
 ---
@@ -75,7 +75,24 @@ Two corollaries:
 
 `index.html` sets `viewport-fit=cover`, which is a request for the full display **and** the responsibility for it. Adding `apple-mobile-web-app-status-bar-style: black-translucent` is what buys the modern full-bleed look — and is only safe now that the top inset is paid. Shipping it before that would have put every header under the clock.
 
-## 5. Never draw an affordance you have not wired
+## 5. Size against the viewport you were given, not the one the browser claims
+
+**`dvh` is a claim; the height:100% chain is the fact.** The dynamic-viewport units are computed by the browser, and Android Chrome in an installed PWA can include the status-bar and gesture-bar bands in that computation while the window it actually hands the document excludes them. An `h-dvh` shell then outgrows the screen by roughly the tab bar's height, the tab bar lands below the visible bottom, and — because `<main>` correctly contains its overscroll — no gesture can ever scroll it into view. Every CI browser renders that shell perfectly, because in a stock Chromium the claim and the fact agree; the defect exists only on hardware.
+
+```text
+✗  <div class="flex h-dvh flex-col">                 the shell root
+✓  <div class="flex h-full flex-col">                html/body/#app carry height: 100%
+✗  max-h-[calc(100dvh-var(--keyboard-inset,0px))]    on a fixed-position sheet
+✓  max-h-[calc(100%-var(--keyboard-inset,0px))]      fixed % resolves against the real viewport
+```
+
+In-flow elements reach the real viewport through the `height: 100%` chain (`html, body, #app` in `src/style.css`); fixed-position elements get it from a bare percentage, which resolves against the initial containing block. Full-screen routes under the shell (`TimerRunView`, `TimerResultView`) use `min-h-full` against `<main>`'s definite flex height for the same reason.
+
+This is also why the nav bar does **not** carry `sticky bottom-0`: with an `h-full` root the column is exactly the scrollport's height and there is nothing to stick against. That sticky was in fact load-bearing under the old `h-dvh` root — it hauled the nav back into view on the devices where the claim over-reported — which is the cautionary tale: the class read as inert precisely because the tier that judged it never experienced the bug.
+
+Enforced by `C9`: no `dvh`/`svh`/`lvh` (or `vw` sibling) sizing anywhere in `src/`. Plain `vh` is left alone — desktop-scoped uses like `sm:max-h-[calc(100vh-4rem)]` are legitimate.
+
+## 6. Never draw an affordance you have not wired
 
 An unhonored affordance is worse than no affordance: the user tries it, gets nothing, and stops trusting the rest of the screen.
 
