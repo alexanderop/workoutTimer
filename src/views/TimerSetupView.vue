@@ -13,6 +13,7 @@ import { useReportFailure } from '@/composables/useReportFailure'
 import {
   createPreset,
   createSession,
+  isActiveSession,
   isPresetDraft,
   presetMutation,
   updatePreset,
@@ -20,7 +21,7 @@ import {
 } from '@/db'
 import TimePicker from '@/features/timer/components/TimePicker.vue'
 import ValuePicker from '@/features/timer/components/ValuePicker.vue'
-import { isActiveSession, isTimerConfig, parseTimerMode } from '@/features/timer/domain'
+import { isTimerConfig, parseTimerMode } from '@/features/timer/domain'
 import { MAX_DURATION_SECONDS } from '@/features/timer/setupForm'
 import { unlockTimerAudio } from '@/features/timer/useTimerFeedback'
 import { useTimerLabels } from '@/features/timer/useTimerLabels'

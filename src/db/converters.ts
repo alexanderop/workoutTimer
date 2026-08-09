@@ -146,6 +146,31 @@ export interface WorkoutSession extends Schema.Schema.Type<typeof WorkoutSession
 export type SessionStatus = WorkoutSession['status']
 
 /**
+ * The two groups every layer sorts a status into.
+ *
+ * They live here, with the status list, rather than in the timer feature that
+ * reads them — because the repository is where the grouping is actually
+ * *enforced*: `createSession` refuses to start a workout while any active one
+ * exists, and it looks them up by exactly this set. Two spellings of "still
+ * going" would let the screen offer a Start the database then refuses.
+ */
+export const ACTIVE_STATUSES: ReadonlyArray<SessionStatus> = SESSION_STATUSES.filter(
+  (status) => status === 'countdown' || status === 'running' || status === 'paused',
+)
+
+/** The statuses history lists: over, however it ended. */
+export const FINISHED_STATUSES: ReadonlyArray<SessionStatus> = SESSION_STATUSES.filter(
+  (status) => status === 'completed' || status === 'cancelled',
+)
+
+/** A workout still on the clock — the one the run screen owns. */
+export const isActiveSession = (status: SessionStatus): boolean => ACTIVE_STATUSES.includes(status)
+
+/** A workout that is over, however it ended. */
+export const isFinishedSession = (status: SessionStatus): boolean =>
+  FINISHED_STATUSES.includes(status)
+
+/**
  * Derived, not restated. This used to be a hand-written union sitting beside
  * the schema's literal list — two declarations of one rule, which is the
  * drift this module exists to prevent.

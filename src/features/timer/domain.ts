@@ -1,5 +1,4 @@
-import { SESSION_STATUSES } from '@/db'
-import type { SessionStatus, TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/db'
+import type { TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/db'
 
 export const SECOND_MS = 1_000
 export const MINUTE_MS = 60 * SECOND_MS
@@ -26,27 +25,6 @@ export const TIMER_MODES = Object.keys(DEFAULT_CONFIGS) as ReadonlyArray<TimerMo
 export function parseTimerMode(value: unknown): TimerMode | undefined {
   return TIMER_MODES.find((mode) => mode === value)
 }
-
-/**
- * A workout still on the clock — the one the run screen owns, and the one
- * whose existence blocks starting another.
- */
-export function isActiveSession(status: SessionStatus): boolean {
-  return status === 'countdown' || status === 'running' || status === 'paused'
-}
-
-/** A workout that is over, however it ended. What history lists. */
-export function isFinishedSession(status: SessionStatus): boolean {
-  return status === 'completed' || status === 'cancelled'
-}
-
-/**
- * The statuses history can show, filtered out of the full list rather than
- * written again — so a new way for a workout to end appears in the filter
- * chips instead of quietly falling out of them.
- */
-export const FINISHED_STATUSES: ReadonlyArray<SessionStatus> =
-  SESSION_STATUSES.filter(isFinishedSession)
 
 /**
  * Whether rounds are something the athlete taps rather than something the

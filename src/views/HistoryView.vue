@@ -5,13 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
-import {
-  finalResult,
-  FINISHED_STATUSES,
-  formatDuration,
-  isFinishedSession,
-  sortSessions,
-} from '@/features/timer/domain'
+import { FINISHED_STATUSES, isFinishedSession } from '@/db'
+import { finalResult, formatDuration, sortSessions } from '@/features/timer/domain'
 import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
 import { useSessions } from '@/stores/timerData'

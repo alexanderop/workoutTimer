@@ -28,9 +28,11 @@ export default {
   // here is a module whose tests nobody has checked.
   //
   // Deliberately NOT here:
-  //   - src/db/repositories/** — half the file is the Dexie layer (browser
-  //     tier) and half is the in-memory fake; mutating a test double grades
-  //     the double, not the product.
+  //   - src/db/repositories/** — every method is a Dexie call inside a
+  //     transaction, exercised by the browser tier this Node-only run does not
+  //     boot. What used to be worth grading in there — how paused time
+  //     accumulates across a pause, resume and finish — is now pure, in
+  //     src/db/sessionTransitions.ts, and is in scope below.
   //   - src/db/converters.ts — Effect Schema constructs its validator at
   //     module evaluation time. Those static mutants cannot be selected by
   //     per-test coverage reliably; decoder behavior is asserted in both the
@@ -52,6 +54,7 @@ export default {
     'src/features/*/pickerOptions.ts',
     'src/features/*/setupForm.ts',
     'src/composables/useArmedAction.ts',
+    'src/db/sessionTransitions.ts',
     'src/lib/backupFile.ts',
     'src/lib/installPlatform.ts',
   ],

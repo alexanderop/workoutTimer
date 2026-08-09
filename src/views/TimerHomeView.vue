@@ -6,10 +6,11 @@ import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import ModeCard from '@/features/timer/components/ModeCard.vue'
-import { isActiveSession, sortPresets, TIMER_MODES } from '@/features/timer/domain'
+import { sortPresets, TIMER_MODES } from '@/features/timer/domain'
 import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
 import { usePresets, useSessions } from '@/stores/timerData'
+import { isActiveSession } from '@/db'
 import type { TimerMode } from '@/db'
 
 const { t } = useI18n()

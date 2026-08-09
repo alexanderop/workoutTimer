@@ -12,6 +12,8 @@ import { useReportFailure } from '@/composables/useReportFailure'
 import {
   addSessionRound,
   finishSession,
+  isActiveSession,
+  isFinishedSession,
   markSessionRunning,
   pauseSession,
   resumeSession,
@@ -25,8 +27,6 @@ import {
   capturesRoundSplits,
   deriveTimer,
   formatDuration,
-  isActiveSession,
-  isFinishedSession,
   SECOND_MS,
 } from '@/features/timer/domain'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'

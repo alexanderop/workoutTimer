@@ -10,10 +10,15 @@ export {
   workoutStartMutation,
 } from './atoms'
 export { exportData, importData } from './backup'
+// ACTIVE_STATUSES and SESSION_STATUSES stay internal: the app asks the
+// predicates, and the lists themselves are for the repository's index lookup
+// and for the specs that walk every status.
 export {
+  FINISHED_STATUSES,
+  isActiveSession,
+  isFinishedSession,
   isPresetDraft,
   makeDefaultTimerSettings,
-  SESSION_STATUSES,
   START_COUNTDOWN_OPTIONS,
 } from './converters'
 export type {

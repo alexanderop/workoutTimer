@@ -8,6 +8,7 @@ import type {
   WorkoutSession,
 } from '../converters'
 import {
+  ACTIVE_STATUSES,
   decodeNewSession,
   decodePresetDraft,
   decodeTimerPreset,
@@ -18,6 +19,7 @@ import {
 import { DatabaseError, WorkoutInvalidError } from '../errors'
 import { GenerateId } from '../generateId'
 import { db } from '../schema'
+import { appendRound, finishAt, pauseAt, resumeAt, startRunning } from '../sessionTransitions'
 
 const tryDb = <A>(operation: string, run: () => Promise<A>): Effect.Effect<A, DatabaseError> =>
   Effect.tryPromise({
@@ -28,7 +30,29 @@ const tryDb = <A>(operation: string, run: () => Promise<A>): Effect.Effect<A, Da
 const invalid = (message: string) => new WorkoutInvalidError({ message })
 
 /** Two taps this close together are one round — a finger bouncing, not a split. */
-const ROUND_DEBOUNCE_MS = 250
+/**
+ * Read one session, hand it to a transition, store whatever comes back — all
+ * inside one transaction, so the row cannot move between the read and the
+ * write. `false` means the transition declined (or the row is gone), which
+ * every caller here treats as a no-op rather than a failure.
+ */
+const changeSession = (
+  operation: string,
+  id: string,
+  change: (current: WorkoutSession) => WorkoutSession | undefined,
+): Effect.Effect<boolean, DatabaseError> =>
+  tryDb(operation, () =>
+    db.transaction('rw', db.sessions, async () => {
+      const current = await db.sessions.get(id)
+      if (current === undefined) return false
+
+      const next = change(current)
+      if (next === undefined) return false
+
+      await db.sessions.put(next)
+      return true
+    }),
+  )
 
 const validateSessionDraft = (draft: NewSession) =>
   decodeNewSession(draft).pipe(Effect.mapError((error) => invalid(error.message)))
@@ -131,7 +155,7 @@ export class WorkoutsRepo extends Context.Service<
             db.transaction('rw', db.sessions, db.presets, async () => {
               const active = await db.sessions
                 .where('status')
-                .anyOf('countdown', 'running', 'paused')
+                .anyOf([...ACTIVE_STATUSES])
                 .first()
               if (active) throw new Error('an active session already exists')
               await db.sessions.add(session)
@@ -145,47 +169,17 @@ export class WorkoutsRepo extends Context.Service<
 
         markRunning: Effect.fn('WorkoutsRepo.markRunning')(function* (id: string) {
           const now = yield* Clock.currentTimeMillis
-          yield* tryDb('mark session running', () =>
-            db.transaction('rw', db.sessions, async () => {
-              const current = await db.sessions.get(id)
-              if (current?.status !== 'countdown') return
-              await db.sessions.update(id, { status: 'running', updatedAt: now })
-            }),
-          )
+          yield* changeSession('mark session running', id, (current) => startRunning(current, now))
         }),
 
         pauseSession: Effect.fn('WorkoutsRepo.pauseSession')(function* (id: string) {
           const now = yield* Clock.currentTimeMillis
-          yield* tryDb('pause session', () =>
-            db.transaction('rw', db.sessions, async () => {
-              const current = await db.sessions.get(id)
-              if (current?.status !== 'running') return
-              await db.sessions.update(id, {
-                status: 'paused',
-                pauseStartedAt: now,
-                updatedAt: now,
-              })
-            }),
-          )
+          yield* changeSession('pause session', id, (current) => pauseAt(current, now))
         }),
 
         resumeSession: Effect.fn('WorkoutsRepo.resumeSession')(function* (id: string) {
           const now = yield* Clock.currentTimeMillis
-          yield* tryDb('resume session', () =>
-            db.transaction('rw', db.sessions, async () => {
-              const current = await db.sessions.get(id)
-              if (current?.status !== 'paused' || current.pauseStartedAt === undefined) return
-              const next = {
-                ...current,
-                status: 'running',
-                accumulatedPausedMs:
-                  current.accumulatedPausedMs + Math.max(0, now - current.pauseStartedAt),
-                updatedAt: now,
-              } as WorkoutSession & { pauseStartedAt?: number }
-              delete next.pauseStartedAt
-              await db.sessions.put(next)
-            }),
-          )
+          yield* changeSession('resume session', id, (current) => resumeAt(current, now))
         }),
 
         /**
@@ -202,20 +196,8 @@ export class WorkoutsRepo extends Context.Service<
             return yield* Effect.fail(invalid('round elapsed time must be a natural number'))
           }
           const now = yield* Clock.currentTimeMillis
-          return yield* tryDb('add round', () =>
-            db.transaction('rw', db.sessions, async () => {
-              const current = await db.sessions.get(id)
-              if (!current || !['running', 'paused'].includes(current.status)) return false
-              const last = current.rounds.at(-1)
-              if (last && Math.abs(last.capturedAtElapsedMs - elapsedMs) < ROUND_DEBOUNCE_MS) {
-                return false
-              }
-              await db.sessions.update(id, {
-                rounds: [...current.rounds, { capturedAtElapsedMs: elapsedMs }],
-                updatedAt: now,
-              })
-              return true
-            }),
+          return yield* changeSession('add round', id, (current) =>
+            appendRound(current, elapsedMs, now),
           )
         }),
 
@@ -224,26 +206,7 @@ export class WorkoutsRepo extends Context.Service<
           reason: FinishReason,
         ) {
           const now = yield* Clock.currentTimeMillis
-          yield* tryDb('finish session', () =>
-            db.transaction('rw', db.sessions, async () => {
-              const current = await db.sessions.get(id)
-              if (!current || ['completed', 'cancelled'].includes(current.status)) return
-              const pausedMs =
-                current.pauseStartedAt === undefined
-                  ? current.accumulatedPausedMs
-                  : current.accumulatedPausedMs + Math.max(0, now - current.pauseStartedAt)
-              const next = {
-                ...current,
-                status: reason === 'cancelled' ? 'cancelled' : 'completed',
-                finishReason: reason,
-                finishedAt: now,
-                accumulatedPausedMs: pausedMs,
-                updatedAt: now,
-              } as WorkoutSession & { pauseStartedAt?: number }
-              delete next.pauseStartedAt
-              await db.sessions.put(next)
-            }),
-          )
+          yield* changeSession('finish session', id, (current) => finishAt(current, reason, now))
         }),
 
         updateSessionNotes: Effect.fn('WorkoutsRepo.updateSessionNotes')(function* (
@@ -326,7 +289,10 @@ export class WorkoutsRepo extends Context.Service<
             ),
           )
           yield* tryDb('update timer settings', async () => db.timerSettings.put(validated))
-          return next
+          // The decoded row, not the one handed to the decoder: they agree
+          // today, and returning the value that was actually stored is what
+          // keeps them agreeing if the schema grows a decoding default.
+          return validated
         }),
 
         /**

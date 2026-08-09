@@ -8,8 +8,6 @@ import {
   elapsedSessionMs,
   finalResult,
   formatDuration,
-  isActiveSession,
-  isFinishedSession,
   isTimerConfig,
   MINUTE_MS,
   parseTimerMode,
@@ -19,6 +17,8 @@ import {
   totalDurationMs,
 } from '@/features/timer/domain'
 import {
+  isActiveSession,
+  isFinishedSession,
   SESSION_STATUSES,
   TimerConfigSchema,
   TimerPresetSchema,
