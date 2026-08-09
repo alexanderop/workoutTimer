@@ -155,10 +155,14 @@ const HOVER_ONLY_ALLOWED: Record<string, string> = {}
 const VIEWPORT_CLAIM_UNIT = /\d(?:d|s|l)v[hw]\b|-(?:d|s|l)v[hw]\b/g
 
 function stripComments(source: string): string {
-  return source
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|\s)\/\/.*$/gm, '$1')
+  return (
+    source
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      // `[^:]` rather than `\s`: a line comment may start immediately after
+      // code (`value();// h-dvh`), but `https://` must not read as one.
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  )
 }
 
 export function viewportClaimUses(source: string): string[] {
@@ -297,14 +301,22 @@ describe('the checks reject the conventions written the wrong way', () => {
     expect(hoverOnlyControls(composed)).toHaveLength(0)
   })
 
-  it('rejects a dvh-sized utility, the exact pre-fix shell', () => {
-    expect(viewportClaimUses('<div class="flex h-dvh flex-col" />')).toEqual(['-dvh'])
-  })
+  it.each(['dvh', 'svh', 'lvh', 'dvw', 'svw', 'lvw'])(
+    'rejects a %s-sized utility — h-dvh being the exact pre-fix shell',
+    (unit) => {
+      expect(viewportClaimUses(`<div class="flex h-${unit} flex-col" />`)).toEqual([`-${unit}`])
+    },
+  )
 
-  it('rejects the unit inside an arbitrary value and inside raw CSS', () => {
-    expect(viewportClaimUses(`'max-h-[calc(100dvh-var(--keyboard-inset,0px))]'`)).toEqual(['0dvh'])
-    expect(viewportClaimUses('.shell { min-height: 100svh }')).toEqual(['0svh'])
-  })
+  it.each(['dvh', 'svh', 'lvh', 'dvw', 'svw', 'lvw'])(
+    'rejects 100%s inside an arbitrary value and inside raw CSS',
+    (unit) => {
+      expect(viewportClaimUses(`'max-h-[calc(100${unit}-var(--keyboard-inset,0px))]'`)).toEqual([
+        `0${unit}`,
+      ])
+      expect(viewportClaimUses(`.shell { min-height: 100${unit} }`)).toEqual([`0${unit}`])
+    },
+  )
 
   it('accepts the same shell sized by the height chain', () => {
     expect(viewportClaimUses('<div class="flex h-full min-h-full flex-col" />')).toEqual([])
@@ -313,6 +325,15 @@ describe('the checks reject the conventions written the wrong way', () => {
   it('does not read prose about the units as a violation', () => {
     const documented = `<!-- h-full, not h-dvh: 100dvh over-reports. -->\n<div class="h-full" /> /* was 100dvh */ // old h-dvh root`
     expect(viewportClaimUses(documented)).toEqual([])
+  })
+
+  it('strips a line comment that starts immediately after code', () => {
+    expect(viewportClaimUses('resize();// the old h-dvh shell, 100dvh tall')).toEqual([])
+  })
+
+  it('does not read the // of a URL as a comment', () => {
+    const url = `const docs = 'https://example.com/dvh' // prose: h-dvh was 100dvh\nconst height = '100dvh'`
+    expect(viewportClaimUses(url)).toEqual(['0dvh'])
   })
 
   it('leaves plain vh alone — desktop-scoped uses are legitimate', () => {
