@@ -38,9 +38,17 @@ const it = base.extend('tallSheet', async ({}, { onCleanup }) => {
       if (!(body instanceof HTMLElement)) throw new Error('dialog body not found')
       return body
     },
+    get sheet(): HTMLElement {
+      const sheet = document.querySelector('[data-slot="dialog-content"]')
+      if (!(sheet instanceof HTMLElement)) throw new Error('dialog content not found')
+      return sheet
+    },
     submit: page.getByRole('button', { name: 'Save' }),
   }
 })
+
+/** The floor `safe-area-bottom` clamps to, in px — `[--safe-bottom-min:1.5rem]`. */
+const MINIMUM_BOTTOM_INSET = 24
 
 describe('DialogContent', () => {
   it('scrolls its content when the keyboard shrinks the viewport', async ({ tallSheet }) => {
@@ -57,5 +65,26 @@ describe('DialogContent', () => {
     body.scrollTop = body.scrollHeight
     await expect.element(submit).toBeInViewport()
     await expect.element(submit).toBeVisible()
+  })
+
+  // Measures the gap a user perceives rather than the property that produces
+  // it, so swapping padding for a spacer element would still pass. The runner
+  // resolves env(safe-area-inset-bottom) to 0 — exactly what a flat-bottomed
+  // phone does, which is the case the clamp in `safe-area-bottom` exists for.
+  it('keeps its last control clear of the bottom edge with no home indicator', async ({
+    tallSheet,
+  }) => {
+    const { body, sheet, submit } = tallSheet
+
+    body.scrollTop = body.scrollHeight
+    await expect.element(submit).toBeInViewport()
+
+    const gap =
+      sheet.getBoundingClientRect().bottom - submit.element().getBoundingClientRect().bottom
+
+    expect(
+      gap,
+      'the sheet is flush against its last control. `safe-area-bottom` and `pb-6` both write padding-bottom at equal specificity, and the utility is emitted last — so env(safe-area-inset-bottom) wins and resolves to 0 on every device without a home indicator.',
+    ).toBeGreaterThanOrEqual(MINIMUM_BOTTOM_INSET)
   })
 })
