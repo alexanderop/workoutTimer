@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { useAtomSet } from '@effect/atom-vue'
 import { Effect } from 'effect'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
+import { useArmedAction } from '@/composables/useArmedAction'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { deleteSession, sessionMutation } from '@/db'
 import { finalResult, formatDuration } from '@/features/timer/domain'
@@ -26,11 +27,8 @@ const result = computed(() => {
   const current = session.value
   return current ? finalResult(current) : undefined
 })
-const deleteArmed = ref(false)
-let deleteTimeout: ReturnType<typeof setTimeout> | undefined
-onBeforeUnmount(() => {
-  if (deleteTimeout) clearTimeout(deleteTimeout)
-})
+/** Deleting a workout is not undoable, so it takes two taps. */
+const deletion = useArmedAction()
 
 /** No workout yet — loading, or a URL for one that is not there. */
 const title = computed(() =>
@@ -40,13 +38,8 @@ const title = computed(() =>
 async function remove(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!deleteArmed.value) {
-    deleteArmed.value = true
-    deleteTimeout = setTimeout(() => {
-      deleteArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!deletion.armFirst()) return
+
   let deleted = false
   await runMutation(
     deleteSession(current.id).pipe(
@@ -125,7 +118,7 @@ async function remove(): Promise<void> {
       </section>
 
       <Button variant="destructive" @click="remove">
-        {{ deleteArmed ? t('history.deleteConfirm') : t('history.delete') }}
+        {{ deletion.isArmed() ? t('history.deleteConfirm') : t('history.delete') }}
       </Button>
     </div>
     <div v-else class="grid min-h-64 place-items-center p-6">

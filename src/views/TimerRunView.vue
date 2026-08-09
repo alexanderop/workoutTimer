@@ -7,6 +7,7 @@ import { useTimestamp } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import { useArmedAction } from '@/composables/useArmedAction'
 import { useReportFailure } from '@/composables/useReportFailure'
 import {
   addSessionRound,
@@ -82,15 +83,11 @@ onMounted(() => {
 })
 
 const transitionPending = ref(false)
-const finishArmed = ref(false)
-const cancelArmed = ref(false)
-let finishTimeout: ReturnType<typeof setTimeout> | undefined
-let cancelTimeout: ReturnType<typeof setTimeout> | undefined
 
-onBeforeUnmount(() => {
-  if (finishTimeout) clearTimeout(finishTimeout)
-  if (cancelTimeout) clearTimeout(cancelTimeout)
-})
+// Both endings are two-tap: they throw away a workout in progress, and both
+// buttons are in reach of a thumb holding the phone mid-set.
+const finishing = useArmedAction()
+const cancelling = useArmedAction()
 
 const failed = reportFailure('update timer', t('timer.run.saveFailed'))
 
@@ -194,13 +191,8 @@ async function addRound(): Promise<void> {
 async function finish(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!finishArmed.value) {
-    finishArmed.value = true
-    finishTimeout = setTimeout(() => {
-      finishArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!finishing.armFirst()) return
+
   transitionPending.value = true
   const saved = await persistCompletion(current.id, 'manual')
   if (saved) {
@@ -212,13 +204,8 @@ async function finish(): Promise<void> {
 async function cancel(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!cancelArmed.value) {
-    cancelArmed.value = true
-    cancelTimeout = setTimeout(() => {
-      cancelArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!cancelling.armFirst()) return
+
   transitionPending.value = true
   const saved = await persistCompletion(current.id, 'cancelled')
   if (saved) {
@@ -249,7 +236,7 @@ function toggleSound(): Promise<unknown> {
         variant="ghost"
         size="icon"
         class="text-white hover:bg-white/10 hover:text-white"
-        :aria-label="cancelArmed ? t('timer.run.cancelConfirm') : t('timer.run.cancel')"
+        :aria-label="cancelling.isArmed() ? t('timer.run.cancelConfirm') : t('timer.run.cancel')"
         @click="cancel"
       >
         <X />
@@ -318,7 +305,7 @@ function toggleSound(): Promise<unknown> {
           class="h-14 border-white/30 bg-transparent text-base text-white hover:bg-white/10 hover:text-white"
           @click="finish"
         >
-          {{ finishArmed ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
+          {{ finishing.isArmed() ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
         </Button>
       </div>
 
@@ -328,7 +315,7 @@ function toggleSound(): Promise<unknown> {
         class="text-white/70 hover:bg-white/10 hover:text-white"
         @click="finish"
       >
-        {{ finishArmed ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
+        {{ finishing.isArmed() ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
       </Button>
     </main>
   </div>
