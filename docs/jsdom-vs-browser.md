@@ -14,7 +14,7 @@ why it isn't.
 You can run both sides:
 
 ```bash
-pnpm test:jsdom   # 52 tests, all green, all of them lying
+pnpm test:jsdom   # 70 tests, all green, all of them lying
 pnpm test         # the same behaviours in a real Chromium
 ```
 
@@ -47,8 +47,8 @@ On iOS this presents as a keyboard that won't open:
 
 | | jsdom tier | browser tier |
 | --- | --- | --- |
-| Bug 1 | ✅ 52/52 pass | ❌ `the "default" button is 32px on a touch device` |
-| Bug 2 | ✅ 52/52 pass | ❌ `expected 'none' to be 'text'` |
+| Bug 1 | ✅ 70/70 pass | ❌ `the "default" button is 32px on a touch device` |
+| Bug 2 | ✅ 70/70 pass | ❌ `expected 'none' to be 'text'` |
 
 Both bugs are visible to a user in the first second of use. Neither is visible
 to a test suite that doesn't have a browser in it.
@@ -121,7 +121,7 @@ family of bugs the first picture doesn't.
 
 In the jsdom tier your test runs in Node, with browser globals *installed over*
 Node's. Two objects called `Blob` exist in the same process and are not the same
-class — that's Example 10, and it corrupts a backup file without throwing.
+class — that's Example 14, and it corrupts a backup file without throwing.
 
 In browser mode your test is shipped into the page and runs there. It isn't
 driving the browser from outside; it's *inside* the thing under test. That's why
@@ -241,7 +241,53 @@ expect(getComputedStyle(field).userSelect).toBe('text')
 📄 `src/__tests__/jsdom/cascade.spec.ts` · `textSelection.spec.ts` ↔
 `components/textSelection.spec.ts`
 
-### Example 2: the media query you can't fake
+### Example 2: the cascade that ranks wrongly
+
+Example 1 was about rules that never arrive. This one is about rules that
+arrive and are then ordered wrongly, which is harder to spot because the
+cascade is *nearly* right — jsdom 30 really does compute specificity, using
+`@bramus/specificity`, wired in for v28.1.0.
+
+Three results, all measured, all wrong in a different way:
+
+**Your stylesheet loses to the browser's own.** jsdom loads the user-agent sheet
+into the same pass as yours, sharing one specificity map with no origin
+weighting:
+
+```ts
+// a { color: rgb(255, 0, 0) }   ← your stylesheet
+expect(getComputedStyle(link).color).toBe('rgb(0, 0, 238)')  // the UA :link blue
+```
+
+The UA's `:link` is (0,1,0); your `a` is (0,0,1). The UA wins on the number. In a
+real cascade, author origin outranks user-agent origin *before* specificity is
+consulted — which is why you are allowed to write a bare tag selector at all.
+
+**A print stylesheet styles the screen.** The cascade reads `sheet.cssRules`
+directly and never consults `sheet.media`:
+
+```ts
+// <style media="print"> .sheet-only { color: rgb(7, 7, 7) } </style>
+expect(getComputedStyle(element).color).toBe('rgb(7, 7, 7)')  // on screen
+```
+
+Only `@media` blocks *inside* a sheet are gated, and those by string equality.
+
+**`!important` throws specificity away.** Among important declarations jsdom is
+pure last-one-wins:
+
+```ts
+// #hero { color: blue !important }   p.para { color: red !important }
+expect(getComputedStyle(paragraph).color).toBe('rgb(255, 0, 0)')  // red
+```
+
+`#hero` is (1,0,0) against `p.para` at (0,1,1), so a browser keeps the blue. If
+importance collapses to source order, every targeted override becomes
+order-dependent.
+
+📄 `src/__tests__/jsdom/cascadeOrigin.spec.ts` ↔ `components/cascadeOrigin.spec.ts`
+
+### Example 3: the media query you can't fake
 
 Buttons here are sized touch-first and shrink on desktop:
 
@@ -313,7 +359,7 @@ That distinction is worth sitting with, because it generalises:
 
 📄 `src/__tests__/touch/touchTargets.spec.ts`
 
-### Example 3: the dialog that's already gone
+### Example 4: the dialog that's already gone
 
 This is the subtlest one, and for a Vue + Reka UI app it's the most valuable.
 
@@ -397,7 +443,7 @@ have.
 
 ## Part 2 — there is no layout
 
-### Example 4: measuring a button
+### Example 5: measuring a button
 
 Every control in this app has to be at least 44px on a touch screen. Here's the
 test, both ways.
@@ -440,7 +486,7 @@ out.
 
 📄 `src/__tests__/jsdom/touchTargets.spec.ts` ↔ `touch/touchTargets.spec.ts`
 
-### Example 5: the loop that never runs
+### Example 6: the loop that never runs
 
 The shell's inner containers must stop scroll-chaining. The spec asks the DOM
 which elements actually scroll, then holds those to the rule:
@@ -481,7 +527,7 @@ it was protecting passes vacuously.
 📄 `src/__tests__/jsdom/scrollContainers.spec.ts` ↔
 `components/scrollContainers.spec.ts`
 
-### Example 6: the scroll lock that always works
+### Example 7: the scroll lock that always works
 
 My favourite, because the bug it hides is the most-reported mobile modal
 complaint there is: *the page scrolls behind the open sheet.*
@@ -526,9 +572,101 @@ Only a real browser can report a `0` there.
 
 ---
 
+### Example 8: the scroll position that isn't one
+
+Example 15 shows `scrollIntoView` missing, and a stub turning a behaviour test
+into a call-signature test. This is about the property you reach for *instead*,
+which is worse, because it is present and writable.
+
+jsdom declares `scrollTop` as a plain data field in the Element constructor —
+`this.scrollTop = 0` — with no getter, no setter, and no clamping:
+
+```ts
+element.scrollTop = 5000
+
+expect(element.scrollTop).toBe(5000)     // stored verbatim
+expect(element.scrollHeight).toBe(0)     // ...on an element with no extent
+expect(element.clientHeight).toBe(0)
+```
+
+Those three numbers are mutually impossible. You cannot be scrolled 5000px down
+something whose scrollable extent is zero. A browser clamps every write to
+`scrollHeight - clientHeight`, which here is `0`. It also accepts `-5`.
+
+And nothing observes the write:
+
+```ts
+element.addEventListener('scroll', () => (events += 1))
+element.scrollTop = 400
+await new Promise((r) => setTimeout(r, 20))
+
+expect(events).toBe(0)  // not one, ever
+```
+
+So a virtualised-list test writes 5000, reads 5000, derives a window of rows
+from it, and passes — while the same code in a browser clamps to 0 and renders
+row 0. Any `scroll` handler under test only ever runs because the test itself
+dispatched one: *"scrolling loads the next page"* is really *"calling my handler
+calls my handler."*
+
+**Browser mode** can ask the question the stub was standing in for — did the row
+end up visible? — because "visible" is a geometry comparison:
+
+```ts
+target.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' })
+
+const rowBox = target.getBoundingClientRect()
+const containerBox = container.getBoundingClientRect()
+expect(rowBox.top >= containerBox.top && rowBox.bottom <= containerBox.bottom).toBe(true)
+```
+
+📄 `src/__tests__/jsdom/scrolling.spec.ts` ↔ `components/scrolling.spec.ts`
+
+### Example 9: the text nobody can read
+
+`innerText` is the one text property defined against *rendering* rather than
+markup. It drops what isn't displayed, collapses whitespace the way the box tree
+does, and turns `<br>` into a newline. It is what you reach for when the question
+is "what does the user actually read" — and it cannot exist without layout.
+
+jsdom doesn't have it. The IDL line is commented out:
+
+```ts
+expect(Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerText')).toBeUndefined()
+```
+
+Which would be a loud failure, except for the write path. Assigning to a
+property that doesn't exist isn't an error in JavaScript — it creates an own
+property on the object:
+
+```ts
+paragraph.textContent = 'Rest 90 seconds'
+paragraph.innerText = 'Rest 60 seconds'
+
+expect(paragraph.innerText).toBe('Rest 60 seconds')       // reads back!
+expect(Object.hasOwn(paragraph, 'innerText')).toBe(true)  // ...from the expando
+expect(paragraph.textContent).toBe('Rest 90 seconds')     // the DOM never changed
+```
+
+No throw, no console warning, not even a `jsdomError`. The assignment appears to
+work and the document is untouched. This is the purest silent failure in the
+tier.
+
+So every "what does the screen say" assertion gets written against `textContent`
+instead — which reports the hidden span too:
+
+```ts
+// <span>Visible</span><span style="display: none">Hidden</span>
+expect(container.textContent).toContain('Hidden')   // jsdom, and browser
+expect(container.innerText).not.toContain('Hidden') // browser only
+expect(container.innerText).toBe('Round 1\nRound 2')  // <br> became a newline
+```
+
+📄 `src/__tests__/jsdom/renderedText.spec.ts` ↔ `components/renderedText.spec.ts`
+
 ## Part 3 — no layout means no hit-testing
 
-### Example 7: the click that lands on a button nobody could hit
+### Example 10: the click that lands on a button nobody could hit
 
 A real click is resolved by *hit-testing*: the browser takes a point and finds
 the topmost element there. jsdom has no layout, so it has no hit-testing at all
@@ -612,7 +750,7 @@ click a button the user cannot see.
 
 📄 `src/__tests__/jsdom/hitTesting.spec.ts`
 
-### Example 8: focus that lands anywhere
+### Example 11: focus that lands anywhere
 
 Focus is what a dialog test is really about, and jsdom will focus anything.
 
@@ -670,9 +808,72 @@ about" is exactly the kind of claim that gets stale.
 
 ---
 
+### Example 12: what a click is made of
+
+jsdom's `HTMLElement.click()` fires exactly one `PointerEvent` of type `click`.
+No `pointerdown`, no `mousedown`, no `focus`, no `pointerup`, no `mouseup` — and
+no focus change:
+
+```ts
+button.click()
+
+expect(seen).toEqual(['click'])
+expect(document.activeElement).toBe(document.body)  // not the button
+```
+
+Here is the subtle part, and it is worth being precise about: **that is
+spec-correct.** `.click()` is meant to be this narrow, and it behaves identically
+in Chromium — the browser spec asserts exactly that, so the contrast isn't
+mistaken for a jsdom bug. The gap is that a simulated DOM has nothing *else* to
+offer. A real user pressing the same button produces the full sequence:
+
+```text
+   .click()  in either environment      a real click, browser mode only
+   ──────────────────────────────       ──────────────────────────────
+   click                                pointerdown
+                                        mousedown
+                                        focus          ← activeElement moves
+                                        pointerup
+                                        mouseup
+                                        click
+```
+
+Browser mode drives real input through the browser, so the sequence is the
+browser's, not a library's approximation of it:
+
+```ts
+await userEvent.click(page.getByRole('button', { name: 'Delete workout' }))
+
+expect(seen).toEqual(['pointerdown', 'mousedown', 'focus', 'pointerup', 'mouseup', 'click'])
+expect(document.activeElement).toBe(button)
+```
+
+The practical cost is `mousedown`. Menus, drag handles, and anything that must
+act before a blur bind to it — and a suite whose only click is `.click()` never
+runs those handlers once.
+
+The same shape shows up in constraint validation. jsdom returns one hardcoded
+string for every kind of violation, and `reportValidity` is aliased to
+`checkValidity` — the source says why: *"Since jsdom has no user interaction,
+it's the same as #checkValidity"*:
+
+```ts
+expect(missing.validationMessage).toBe('Constraints not satisfied')      // valueMissing
+expect(overflowing.validationMessage).toBe('Constraints not satisfied')  // rangeOverflow
+
+form.reportValidity()
+expect(document.activeElement).toBe(document.body)  // the invalid field is not revealed
+```
+
+An assertion on message text passes without describing anything, and the half of
+validation users actually experience — being taken to the offending field — is
+absent.
+
+📄 `src/__tests__/jsdom/interaction.spec.ts` ↔ `components/interaction.spec.ts`
+
 ## Part 4 — no paint, so no pixels to inspect
 
-### Example 9: an accessibility suite that's green on an unreadable page
+### Example 13: an accessibility suite that's green on an unreadable page
 
 This is the one that should worry you most, because nothing about it looks
 environment-dependent. axe-core runs fine in jsdom.
@@ -718,7 +919,7 @@ reads `violations`. In a real browser the same rule runs, and fails.
 
 ## Part 5 — not a browser at all
 
-### Example 10: the backup that downloads as "undefined"
+### Example 14: the backup that downloads as "undefined"
 
 Everything so far has been about the rendering pipeline. This one comes from the
 *second* picture — jsdom objects and Node objects living in the same process,
@@ -827,7 +1028,7 @@ expect(new Blob(['x'])).not.toBeInstanceOf(NodeBlob)  // two classes, one name
 
 📄 `src/__tests__/jsdom/download.spec.ts` ↔ `lib/download.spec.ts`
 
-### Example 11: the stub that becomes the thing under test
+### Example 15: the stub that becomes the thing under test
 
 Nine APIs this app uses don't exist in jsdom:
 
@@ -921,7 +1122,7 @@ user-agent defaults included — rather than a stylesheet rewritten to swap
 
 **4. Assertions can wait for the browser instead of racing it.**
 `expect.element()` retries until the locator settles, which is what makes it
-safe to assert on something mid-transition — the window Example 3 showed jsdom
+safe to assert on something mid-transition — the window Example 4 showed jsdom
 doesn't have:
 
 ```ts
@@ -983,7 +1184,7 @@ Being fair about the trade:
 
 - **Startup.** A Chromium boot per project, a few seconds. The `unit` tier
   exists partly so the pre-commit hook never pays it.
-- **Speed.** ~18s for 40 component tests here, versus ~2.1s for 52 jsdom ones.
+- **Speed.** ~18s for 61 component tests here, versus ~2.0s for 70 jsdom ones.
 - **CI setup.** You need browsers installed (`playwright install chromium`).
 
 ## Setting it up
@@ -1033,7 +1234,7 @@ someone eventually. A green one that documents what it cannot see survives.
 Worth reading before repeating any of this:
 
 - **Younes Jaaidi, "Ashes to Ashes, Spec to Spec"** (React Summit 2026) — the
-  best real-world version of Example 7. Someone added a `height` to a shared
+  best real-world version of Example 10. Someone added a `height` to a shared
   design-system card; the product image ended up covering the add-to-cart
   button; the unit test kept passing because the click landed on the image.
   *"whenever it tries to click on the add button, it's actually clicking on the
@@ -1042,7 +1243,7 @@ Worth reading before repeating any of this:
   why that is structurally invisible: *"there's no layout, meaning all of the
   components are sitting one on top of the other."*
 - **Artem Zakharchenko, [Why I Won't Use JSDOM](https://www.epicweb.dev/why-i-won-t-use-jsdom)**
-  — the realm argument behind Example 10.
+  — the realm argument behind Example 14.
 - **Jessica Sachs** (JSNation US 2024) — the honest counterweight, from someone
   who led Cypress Component Testing: real browsers lost the first time for good
   reasons. *"The stability in Jest and other node based runners far outweighed
