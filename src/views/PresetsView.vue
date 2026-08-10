@@ -1,44 +1,31 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Copy, Pencil, Play, Trash2 } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
+import { useArmedAction } from '@/composables/useArmedAction'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { createPreset, deletePreset, presetMutation } from '@/db'
-import { formatDuration, sortPresets } from '@/features/timer/domain'
+import { sortPresets } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
-import { presetsAtom } from '@/stores/timerData'
+import { usePresets } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { TimerConfig, TimerPreset } from '@/db'
+import type { TimerPreset } from '@/db'
 
 const { t } = useI18n()
 const router = useRouter()
 const toast = useToastStore()
 const reportFailure = useReportFailure('presets')
+const { configSummary } = useTimerLabels()
 const runMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
-const presetsResult = useAtomValue(() => presetsAtom)
-const presets = computed(() => sortPresets(AsyncResult.getOrElse(presetsResult.value, () => [])))
-const loadFailed = computed(() => AsyncResult.isFailure(presetsResult.value))
+const { data: storedPresets, failed: loadFailed } = usePresets()
+const presets = computed(() => sortPresets(storedPresets.value))
 const failed = reportFailure('change preset', t('presets.actionFailed'))
-
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs
-        ? formatDuration(config.timeCapMs)
-        : t('timer.modes.forTime.description')
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
 
 function usePreset(preset: TimerPreset): void {
   void router.push({
@@ -62,31 +49,15 @@ function duplicate(preset: TimerPreset): Promise<unknown> {
 }
 
 /**
- * Arm-then-confirm, the same two-tap gesture that guards deleting a workout in
- * SessionDetailView. A preset is hand-built and has no undo, and this button
- * sits in a four-icon row under the thumb — one stray tap should not be able
- * to destroy it. Only one preset is armed at a time, so arming a second
- * disarms the first.
+ * A preset is hand-built and has no undo, and this button sits in a four-icon
+ * row under the thumb — one stray tap should not be able to destroy it. Keyed
+ * by preset id, so arming a second row disarms the first.
  */
-const armedPresetId = ref<string | undefined>()
-let disarmTimeout: ReturnType<typeof setTimeout> | undefined
-
-onBeforeUnmount(() => {
-  if (disarmTimeout) clearTimeout(disarmTimeout)
-})
+const deletion = useArmedAction()
 
 function remove(preset: TimerPreset): Promise<unknown> {
-  if (armedPresetId.value !== preset.id) {
-    armedPresetId.value = preset.id
-    if (disarmTimeout) clearTimeout(disarmTimeout)
-    disarmTimeout = setTimeout(() => {
-      armedPresetId.value = undefined
-    }, 3_000)
-    return Promise.resolve()
-  }
+  if (!deletion.armFirst(preset.id)) return Promise.resolve()
 
-  if (disarmTimeout) clearTimeout(disarmTimeout)
-  armedPresetId.value = undefined
   return runMutation(
     deletePreset(preset.id).pipe(
       Effect.tap(() => Effect.sync(() => toast.showToast(t('presets.deleted')))),
@@ -148,9 +119,9 @@ function remove(preset: TimerPreset): Promise<unknown> {
           /></Button>
           <Button
             size="icon"
-            :variant="armedPresetId === preset.id ? 'destructive' : 'ghost'"
+            :variant="deletion.isArmed(preset.id) ? 'destructive' : 'ghost'"
             :aria-label="
-              armedPresetId === preset.id
+              deletion.isArmed(preset.id)
                 ? t('presets.deleteConfirm', { name: preset.name })
                 : t('presets.delete', { name: preset.name })
             "

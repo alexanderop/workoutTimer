@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Check } from '@lucide/vue'
 import { Effect } from 'effect'
 import { computed, ref, watch } from 'vue'
@@ -10,21 +10,19 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { sessionMutation, updateSessionNotes } from '@/db'
-import { deriveTimer, formatDuration } from '@/features/timer/domain'
+import { finalResult, formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
+import { useSession } from '@/stores/timerData'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('timer-result')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
+const session = useSession(() => String(route.params.id))
 const result = computed(() => {
   const current = session.value
-  return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
+  return current ? finalResult(current) : undefined
 })
 const notes = ref('')
 const isSaving = ref(false)

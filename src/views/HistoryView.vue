@@ -1,55 +1,45 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomValue } from '@effect/atom-vue'
 import { ChevronRight } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
-import { deriveTimer, formatDuration, sortSessions } from '@/features/timer/domain'
+import { FINISHED_STATUSES, isFinishedSession } from '@/db'
+import { finalResult, formatDuration, sortSessions } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
+import { useSessions } from '@/stores/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
 
-type Filter = 'all' | 'completed' | 'cancelled'
+/** "Everything", or one of the ways a workout can have ended. */
+type Filter = 'all' | SessionStatus
 
 const { t, locale } = useI18n()
 const router = useRouter()
-const sessionsResult = useAtomValue(() => sessionsAtom)
+const { modeName } = useTimerLabels()
+const { data: storedSessions, failed: loadFailed } = useSessions()
 const filter = ref<Filter>('all')
 const sessions = computed(() =>
-  sortSessions(AsyncResult.getOrElse(sessionsResult.value, () => [])).filter(
+  sortSessions(storedSessions.value).filter(
     (session) =>
-      ['completed', 'cancelled'].includes(session.status) &&
+      isFinishedSession(session.status) &&
       (filter.value === 'all' || session.status === filter.value),
   ),
 )
-const loadFailed = computed(() => AsyncResult.isFailure(sessionsResult.value))
-const filters: ReadonlyArray<Filter> = ['all', 'completed', 'cancelled']
+const filters: ReadonlyArray<Filter> = ['all', ...FINISHED_STATUSES]
 
+/**
+ * `history.all`, `history.completed`, `history.cancelled` — the chip labels
+ * are keyed by the filter itself, so a new finished status needs a message
+ * and nothing else. Missing one is a compile error, not a blank chip.
+ */
 function filterLabel(value: Filter): string {
-  return value === 'all'
-    ? t('history.all')
-    : value === 'completed'
-      ? t('history.completed')
-      : t('history.cancelled')
-}
-
-function modeName(session: WorkoutSession): string {
-  switch (session.config.mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
+  return t(`history.${value}`)
 }
 
 function resultLabel(session: WorkoutSession): string {
-  const result = deriveTimer(session, session.finishedAt ?? Date.now())
+  const result = finalResult(session)
   const rounds =
     result.completedRounds > 0 ? ` · ${result.completedRounds} ${t('timer.result.rounds')}` : ''
   return `${formatDuration(result.elapsedMs)}${rounds}`
@@ -105,7 +95,7 @@ function formatDate(timestamp: number): string {
             <span class="min-w-0 flex-1">
               <span class="flex items-baseline justify-between gap-3">
                 <span class="font-bold" :class="statusClass(session.status)">{{
-                  modeName(session)
+                  modeName(session.config.mode)
                 }}</span>
                 <span class="text-xs text-muted-foreground">{{
                   formatDate(session.createdAt)

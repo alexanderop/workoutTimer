@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Pause, Play, Plus, Volume2, VolumeX, X } from '@lucide/vue'
 import { Effect } from 'effect'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -7,25 +7,33 @@ import { useTimestamp } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import { useArmedAction } from '@/composables/useArmedAction'
 import { useReportFailure } from '@/composables/useReportFailure'
 import {
   addSessionRound,
   finishSession,
+  isActiveSession,
+  isFinishedSession,
   markSessionRunning,
   pauseSession,
   resumeSession,
   sessionMutation,
   settingsMutation,
   type FinishReason,
-  type TimerSettings,
   updateTimerSettings,
 } from '@/db'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
-import { deriveTimer, formatDuration, SECOND_MS } from '@/features/timer/domain'
+import {
+  capturesRoundSplits,
+  deriveTimer,
+  formatDuration,
+  SECOND_MS,
+} from '@/features/timer/domain'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { useWakeLock } from '@/features/timer/useWakeLock'
 import { RouteNames } from '@/router'
-import { sessionsAtom, timerSettingsAtom } from '@/stores/timerData'
+import { useSession, useTimerSettings } from '@/stores/timerData'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -33,23 +41,11 @@ const router = useRouter()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('timer-run')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const settingsResult = useAtomValue(() => timerSettingsAtom)
+const { modeName } = useTimerLabels()
+const session = useSession(() => String(route.params.id))
+const { data: settings } = useTimerSettings()
 const now = useTimestamp({ interval: 100 })
 
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
-const fallbackSettings: TimerSettings = {
-  id: 'timer',
-  soundEnabled: true,
-  soundVolume: 1,
-  hapticsEnabled: true,
-  spokenCountdownEnabled: false,
-  startCountdownMs: 3_000,
-  keepAwake: true,
-  updatedAt: 0,
-}
-const settings = computed(() => AsyncResult.getOrElse(settingsResult.value, () => fallbackSettings))
 const derived = computed(() => (session.value ? deriveTimer(session.value, now.value) : undefined))
 const mode = computed(() => session.value?.config.mode ?? 'amrap')
 const displayTime = computed(() =>
@@ -57,12 +53,12 @@ const displayTime = computed(() =>
     ? formatDuration(derived.value.primaryMs, derived.value.primaryMs <= 10 * SECOND_MS)
     : '00:00',
 )
-const canCaptureRound = computed(() => ['amrap', 'forTime'].includes(mode.value))
+const canCaptureRound = computed(() => capturesRoundSplits(mode.value))
 const keepAwake = computed(
   () =>
     settings.value.keepAwake &&
     session.value !== undefined &&
-    ['countdown', 'running', 'paused'].includes(session.value.status),
+    isActiveSession(session.value.status),
 )
 
 useWakeLock(keepAwake)
@@ -87,15 +83,11 @@ onMounted(() => {
 })
 
 const transitionPending = ref(false)
-const finishArmed = ref(false)
-const cancelArmed = ref(false)
-let finishTimeout: ReturnType<typeof setTimeout> | undefined
-let cancelTimeout: ReturnType<typeof setTimeout> | undefined
 
-onBeforeUnmount(() => {
-  if (finishTimeout) clearTimeout(finishTimeout)
-  if (cancelTimeout) clearTimeout(cancelTimeout)
-})
+// Both endings are two-tap: they throw away a workout in progress, and both
+// buttons are in reach of a thumb holding the phone mid-set.
+const finishing = useArmedAction()
+const cancelling = useArmedAction()
 
 const failed = reportFailure('update timer', t('timer.run.saveFailed'))
 
@@ -119,7 +111,7 @@ watch([session, now], async ([current, currentNow]) => {
     return
   }
   const state = deriveTimer(current, currentNow)
-  if (!state.isComplete || ['completed', 'cancelled'].includes(current.status)) return
+  if (!state.isComplete || isFinishedSession(current.status)) return
   transitionPending.value = true
   const reason = current.config.mode === 'forTime' ? 'timeCap' : 'endpoint'
   const saved = await runMutation(
@@ -166,19 +158,6 @@ function phaseLabel(): string {
   }
 }
 
-function modeName(): string {
-  switch (mode.value) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
-
 async function togglePause(): Promise<void> {
   const current = session.value
   if (!current) return
@@ -212,13 +191,8 @@ async function addRound(): Promise<void> {
 async function finish(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!finishArmed.value) {
-    finishArmed.value = true
-    finishTimeout = setTimeout(() => {
-      finishArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!finishing.armFirst()) return
+
   transitionPending.value = true
   const saved = await persistCompletion(current.id, 'manual')
   if (saved) {
@@ -230,13 +204,8 @@ async function finish(): Promise<void> {
 async function cancel(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!cancelArmed.value) {
-    cancelArmed.value = true
-    cancelTimeout = setTimeout(() => {
-      cancelArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!cancelling.armFirst()) return
+
   transitionPending.value = true
   const saved = await persistCompletion(current.id, 'cancelled')
   if (saved) {
@@ -267,12 +236,12 @@ function toggleSound(): Promise<unknown> {
         variant="ghost"
         size="icon"
         class="text-white hover:bg-white/10 hover:text-white"
-        :aria-label="cancelArmed ? t('timer.run.cancelConfirm') : t('timer.run.cancel')"
+        :aria-label="cancelling.isArmed() ? t('timer.run.cancelConfirm') : t('timer.run.cancel')"
         @click="cancel"
       >
         <X />
       </Button>
-      <h1 class="font-bold tracking-widest">{{ modeName() }}</h1>
+      <h1 class="font-bold tracking-widest">{{ modeName(mode) }}</h1>
       <Button
         variant="ghost"
         size="icon"
@@ -336,7 +305,7 @@ function toggleSound(): Promise<unknown> {
           class="h-14 border-white/30 bg-transparent text-base text-white hover:bg-white/10 hover:text-white"
           @click="finish"
         >
-          {{ finishArmed ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
+          {{ finishing.isArmed() ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
         </Button>
       </div>
 
@@ -346,7 +315,7 @@ function toggleSound(): Promise<unknown> {
         class="text-white/70 hover:bg-white/10 hover:text-white"
         @click="finish"
       >
-        {{ finishArmed ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
+        {{ finishing.isArmed() ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
       </Button>
     </main>
   </div>

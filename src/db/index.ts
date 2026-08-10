@@ -10,11 +10,22 @@ export {
   workoutStartMutation,
 } from './atoms'
 export { exportData, importData } from './backup'
-export { isPresetDraft } from './converters'
+// ACTIVE_STATUSES and SESSION_STATUSES stay internal: the app asks the
+// predicates, and the lists themselves are for the repository's index lookup
+// and for the specs that walk every status.
+export {
+  FINISHED_STATUSES,
+  isActiveSession,
+  isFinishedSession,
+  isPresetDraft,
+  makeDefaultTimerSettings,
+  START_COUNTDOWN_OPTIONS,
+} from './converters'
 export type {
   FinishReason,
   PresetDraft,
   SessionStatus,
+  StartCountdownMs,
   TimerConfig,
   TimerMode,
   TimerPreset,

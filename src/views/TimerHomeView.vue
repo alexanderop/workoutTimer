@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomValue } from '@effect/atom-vue'
 import { Bookmark, Play } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -7,67 +6,23 @@ import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import ModeCard from '@/features/timer/components/ModeCard.vue'
-import { formatDuration, sortPresets } from '@/features/timer/domain'
+import { sortPresets, TIMER_MODES } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
-import { presetsAtom, sessionsAtom } from '@/stores/timerData'
-import type { TimerConfig, TimerMode } from '@/db'
+import { usePresets, useSessions } from '@/stores/timerData'
+import { isActiveSession } from '@/db'
+import type { TimerMode } from '@/db'
 
 const { t } = useI18n()
 const router = useRouter()
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const presetsResult = useAtomValue(() => presetsAtom)
-
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const presets = computed(() => AsyncResult.getOrElse(presetsResult.value, () => []))
-const loadFailed = computed(
-  () => AsyncResult.isFailure(sessionsResult.value) || AsyncResult.isFailure(presetsResult.value),
-)
+const { configSummary, modeDescription, modeName } = useTimerLabels()
+const { data: sessions, failed: sessionsFailed } = useSessions()
+const { data: presets, failed: presetsFailed } = usePresets()
+const loadFailed = computed(() => sessionsFailed.value || presetsFailed.value)
 const activeSession = computed(() =>
-  sessions.value.find((session) => ['countdown', 'running', 'paused'].includes(session.status)),
+  sessions.value.find((session) => isActiveSession(session.status)),
 )
 const recentPresets = computed(() => sortPresets(presets.value).slice(0, 4))
-const modes: ReadonlyArray<TimerMode> = ['amrap', 'forTime', 'emom', 'tabata']
-
-function modeName(mode: TimerMode): string {
-  switch (mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
-
-function modeDescription(mode: TimerMode): string {
-  switch (mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.description')
-    case 'forTime':
-      return t('timer.modes.forTime.description')
-    case 'emom':
-      return t('timer.modes.emom.description')
-    case 'tabata':
-      return t('timer.modes.tabata.description')
-  }
-}
-
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs === undefined
-        ? modeDescription('forTime')
-        : formatDuration(config.timeCapMs)
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
 
 function openMode(mode: TimerMode): void {
   void router.push({ name: RouteNames.timerSetup, params: { mode } })
@@ -108,7 +63,7 @@ function openMode(mode: TimerMode): void {
       <section class="flex flex-col gap-3" aria-labelledby="timer-modes-heading">
         <h2 id="timer-modes-heading" class="sr-only">{{ t('timer.title') }}</h2>
         <ModeCard
-          v-for="mode in modes"
+          v-for="mode in TIMER_MODES"
           :key="mode"
           :mode="mode"
           :title="modeName(mode)"

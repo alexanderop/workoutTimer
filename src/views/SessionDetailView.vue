@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtomSet } from '@effect/atom-vue'
 import { Effect } from 'effect'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
+import { useArmedAction } from '@/composables/useArmedAction'
 import { useReportFailure } from '@/composables/useReportFailure'
 import { deleteSession, sessionMutation } from '@/db'
-import { deriveTimer, formatDuration } from '@/features/timer/domain'
+import { finalResult, formatDuration } from '@/features/timer/domain'
+import { useTimerLabels } from '@/features/timer/useTimerLabels'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
+import { useSession } from '@/stores/timerData'
 import { useToastStore } from '@/stores/toast'
-import type { TimerConfig } from '@/db'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -20,59 +21,25 @@ const router = useRouter()
 const toast = useToastStore()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const reportFailure = useReportFailure('session-detail')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
+const { configSummary, modeName } = useTimerLabels()
+const session = useSession(() => String(route.params.id))
 const result = computed(() => {
   const current = session.value
-  return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
+  return current ? finalResult(current) : undefined
 })
-const deleteArmed = ref(false)
-let deleteTimeout: ReturnType<typeof setTimeout> | undefined
-onBeforeUnmount(() => {
-  if (deleteTimeout) clearTimeout(deleteTimeout)
-})
+/** Deleting a workout is not undoable, so it takes two taps. */
+const deletion = useArmedAction()
 
-function modeName(): string {
-  switch (session.value?.config.mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-    default:
-      return t('history.detail')
-  }
-}
-
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs
-        ? formatDuration(config.timeCapMs)
-        : t('timer.modes.forTime.description')
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
+/** No workout yet — loading, or a URL for one that is not there. */
+const title = computed(() =>
+  session.value ? modeName(session.value.config.mode) : t('history.detail'),
+)
 
 async function remove(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!deleteArmed.value) {
-    deleteArmed.value = true
-    deleteTimeout = setTimeout(() => {
-      deleteArmed.value = false
-    }, 3_000)
-    return
-  }
+  if (!deletion.armFirst()) return
+
   let deleted = false
   await runMutation(
     deleteSession(current.id).pipe(
@@ -95,7 +62,7 @@ async function remove(): Promise<void> {
 </script>
 
 <template>
-  <PageLayout :title="modeName()" back-to="/history">
+  <PageLayout :title="title" back-to="/history">
     <div
       v-if="session && result"
       :data-mode="session.config.mode"
@@ -151,7 +118,7 @@ async function remove(): Promise<void> {
       </section>
 
       <Button variant="destructive" @click="remove">
-        {{ deleteArmed ? t('history.deleteConfirm') : t('history.delete') }}
+        {{ deletion.isArmed() ? t('history.deleteConfirm') : t('history.delete') }}
       </Button>
     </div>
     <div v-else class="grid min-h-64 place-items-center p-6">
