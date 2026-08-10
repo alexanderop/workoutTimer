@@ -181,17 +181,28 @@ That is every `md:`, `lg:`, `dark:`, `motion-reduce:` and `pointer-coarse:`
 utility you own. A bare `@media screen` *does* work, which is what makes it hard
 to spot: media queries aren't unsupported, they're selectively supported.
 
-**3. Nested rules are parsed and discarded.** The parent's own declarations
-apply; the nested branch doesn't:
+**3. Nested rules are dropped — and they take later declarations with them.**
+This one is worth slowing down for, because it is position-dependent. The parser
+buffers every declaration that appears *after* the first nested rule into a
+separate `CSSNestedDeclarations` object, and the cascade only ever reads the
+rule's own `style`:
 
 ```css
-.parent { font-size: 11px; & .child { font-weight: 700 } }
+.card {
+  color: rgb(1, 1, 1);        /* before the nested rule → applies */
+  &:hover { color: … }        /* nested rule → never applies */
+  background: rgb(2, 2, 2);   /* after it → SILENTLY SWALLOWED */
+}
 ```
 
 ```ts
-expect(getComputedStyle(parent).fontSize).toBe('11px')     // ✅ applied
-expect(getComputedStyle(child).fontWeight).toBe('normal')  // ✗ dropped
+expect(getComputedStyle(card).color).toBe('rgb(1, 1, 1)')          // ✅ applied
+expect(getComputedStyle(card).backgroundColor).toBe('rgba(0, 0, 0, 0)')  // ✗ gone
 ```
+
+Two declarations in the same block, one works and one doesn't, decided purely by
+which side of the nested rule they sit on. Move `background` up one line and it
+starts working again.
 
 **4. `var()` is never substituted.** This is nastier than an initial value,
 because the string that comes back is *truthy*:
@@ -306,19 +317,30 @@ That distinction is worth sitting with, because it generalises:
 
 This is the subtlest one, and for a Vue + Reka UI app it's the most valuable.
 
-jsdom expands **no shorthand**. Write your transition the normal way and the
-number that matters comes back zero:
+jsdom expands **some** shorthands and not others, and `transition` is one of the
+nots. Which would be survivable, except that the shorthand property itself reads
+back perfectly:
 
 ```ts
-// .sheet { transition: opacity 300ms ease 50ms; animation: spin 1s linear }
+// .sheet { transition: opacity 300ms ease 50ms; animation: spin 1s linear;
+//          margin: 5px 10px; border: 2px solid red }
+
+// Expanded — jsdom 30 has real handlers for these:
+expect(getComputedStyle(el).marginLeft).toBe('10px')       // ✅
+expect(getComputedStyle(el).borderTopStyle).toBe('solid')  // ✅
+
+// Not expanded — no handler for transition or animation:
 expect(getComputedStyle(el).transitionDuration).toBe('0s')  // not 0.3s
 expect(getComputedStyle(el).transitionDelay).toBe('0s')     // not 0.05s
 expect(getComputedStyle(el).animationName).toBe('none')     // not "spin"
 
-// Longhand survives — which is why this looks fine until it doesn't:
-// .sheet { transition-duration: 300ms }
-expect(getComputedStyle(el).transitionDuration).toBe('300ms')  // ✅
+// ...while the shorthand hands your own string straight back:
+expect(getComputedStyle(el).transition).toBe('opacity 300ms ease 50ms')  // ✅ 🙃
 ```
+
+So `transition` says `"opacity 300ms ease 50ms"` and `transitionDuration` says
+`0s`, in the same computed style, at the same moment. If you check the property
+you wrote, everything looks right. The libraries read the longhand.
 
 Those aren't cosmetic values. They are branch conditions in two libraries this
 app depends on:
@@ -713,26 +735,54 @@ export function downloadBlob(blob: Blob, filename: string): void {
 }
 ```
 
-Under jsdom, `URL.createObjectURL` is **Node's**, and the `Blob` handed to it is
-**jsdom's**. Node doesn't recognise the object, so it stringifies it:
+Under jsdom there are two classes named `Blob` in one process — jsdom's and
+Node's — and they share nothing. jsdom brands its objects with an *unregistered*
+`Symbol("impl")`, not an internal slot, so nothing outside jsdom can recognise
+one:
 
 ```text
    ┌─ node realm ───────────────┐   ┌─ jsdom realm ──────────────┐
-   │  URL.createObjectURL  ◀────┼───┼─── new Blob(['backup'])    │
    │  class Blob (node:buffer)  │   │  class Blob (jsdom)        │
+   │  brand: internal slot      │   │  brand: Symbol("impl")     │
    └────────────────────────────┘   └────────────────────────────┘
-       same name. different class. no error. String(blob) → "undefined"
+       same name · same String(blob) · same Object.prototype.toString
+       different class · instanceof false in both directions
 ```
 
-| step | browser | jsdom |
-| --- | --- | --- |
-| `URL.createObjectURL(blob)` | `blob:http://localhost:5173/<uuid>` | `blob:nodedata:<uuid>` |
-| `await fetch(url)` | `ok: true` | `ok: true` |
-| `await response.text()` | `"backup contents"` | `"undefined"` |
+Because the two can't interoperate, the runner bridges them by hand. `URL` in a
+Vitest jsdom test is neither jsdom's nor Node's — it is Vitest's shim, which
+reaches through jsdom's private symbol to steal the bytes:
 
-Nothing throws. The user's backup file contains the nine characters `undefined`.
-The browser spec's assertion is the only thing in the repo that would have caught
-it:
+```js
+// vitest/dist/chunks/…  — the comment is theirs
+// this is cursed, and jsdom should just implement fetch API itself
+const implSymbol = Object.getOwnPropertySymbols(…new window.Blob())[0]
+makeCompatBlob(blob) {
+  const buffer = blob[implSymbol]._buffer      // ← jsdom renamed this to _bytes in v28
+  return new NodeBlob_([buffer], { type: blob.type })
+}
+```
+
+`_buffer` is `undefined`. `new Blob([undefined])` is the nine ASCII characters
+`undefined`. That is where the corrupted backup comes from — not from Node
+stringifying anything, but from a private-symbol reach-around that silently
+rotted when the other side renamed a field.
+
+The consequence is that **one Blob now reads back three different ways in the
+same test**, depending on who's holding it:
+
+```ts
+const blob = new Blob(['REAL FILE CONTENT'])
+
+await blob.text()                                    // "REAL FILE CONTENT"  ← jsdom's own
+await (await fetch(URL.createObjectURL(blob))).text() // "undefined"         ← Vitest's shim
+await new Response(blob).text()                       // "[object Blob]"     ← no shim: Web IDL
+                                                      //   union falls through to USVString
+```
+
+Nothing throws for any of them. The user's backup file contains the nine
+characters `undefined`. The browser spec's assertion is the only thing in the
+repo that would have caught it:
 
 ```ts
 expect(await response.text()).toBe('backup contents')
@@ -750,7 +800,24 @@ expect(Object.keys(cloned)).toEqual([])  // ...an empty one
 ```
 
 A browser returns a Blob, or throws `DataCloneError` on something genuinely
-uncloneable. jsdom returns `{}` and no error. The root cause, in two lines:
+uncloneable. jsdom returns `{}` and no error.
+
+And that is not theoretical, because `fake-indexeddb` faithfully calls the
+ambient `structuredClone` on insertion — the ambient one being Node's. Writing a
+Blob to IndexedDB and reading it back, measured in this tier:
+
+```text
+   put(new Blob(['backup contents']))   →  get()  →  {}          ← Object, no keys
+   put(new NodeBlob(['backup contents']))→ get()  →  Blob(15)    ← survives
+   put({ sets: 5, weight: 60 })          → get()  →  { sets, weight }
+```
+
+The `put` succeeds, the transaction completes, `onsuccess` fires. The row is
+`{}`. A real browser stores and returns a real Blob — and for a local-first app
+whose entire product is data on the device, that is the write path for every
+offline asset, every export, every cached image.
+
+The root cause, in two lines:
 
 ```ts
 import { Blob as NodeBlob } from 'node:buffer'

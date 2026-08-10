@@ -5,10 +5,11 @@ import { defineComponent, h, nextTick, Transition } from 'vue'
 /**
  * Counterpart to `src/__tests__/components/ui/dialog/dialogContent.spec.ts`.
  *
- * The highest-value gap for this stack, and the least obvious. jsdom expands
- * no shorthand: `transition: opacity 300ms` computes to `transition-duration:
- * 0s`, and `animation: spin 1s` computes to `animation-name: none`. Only the
- * longhands survive.
+ * The highest-value gap for this stack, and the least obvious. jsdom 30 expands
+ * `margin`, `padding`, `border`, `font`, `flex` and `background` — it has real
+ * handlers for those — but not `transition` or `animation`, which have none. So
+ * `transition: opacity 300ms` computes to `transition-duration: 0s` while the
+ * `transition` property itself hands your own string straight back.
  *
  * That number is not decorative — it is a branch condition in two libraries
  * this app depends on:
