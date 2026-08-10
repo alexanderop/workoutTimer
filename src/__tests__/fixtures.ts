@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 import { test } from 'vitest'
 import { nextTick } from 'vue'
 import { resetThemeState, useTheme } from '@/composables/useTheme'
-import { createSession, runDb, updateTimerSettings } from '@/db'
+import { createPreset, createSession, runDb, updateTimerSettings } from '@/db'
 import { resetAppState } from './helpers/reset'
 import { AppScreen } from './pages/appScreen'
 import { TimerScreen } from './pages/timerScreen'
@@ -40,6 +40,22 @@ export const it = test
     const timer = await TimerScreen.open('/timer/amrap')
     onCleanup(() => timer.close())
     return timer
+  })
+  // Setup opened *as a preset* — the /timer/:mode?preset=… link the presets
+  // list pushes. Seeded before the mount so the form has a named preset to
+  // find in its first watcher run.
+  .extend('presetSetup', async ({}, { onCleanup }) => {
+    await prepareTimer()
+    const preset = await runDb(
+      createPreset({
+        name: 'Friday conditioning',
+        config: { mode: 'amrap', durationMs: 1_200_000 },
+        workoutNotes: 'Ten burpees, ten pull-ups',
+      }).pipe(Effect.orDie),
+    )
+    const timer = await TimerScreen.open(`/timer/amrap?preset=${preset.id}`)
+    onCleanup(() => timer.close())
+    return { preset, timer }
   })
   .extend('recoverableTimer', async ({}, { onCleanup }) => {
     await prepareTimer()

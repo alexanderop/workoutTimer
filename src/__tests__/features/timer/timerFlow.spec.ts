@@ -53,6 +53,26 @@ describe('workout timer flow', () => {
     ])
   })
 
+  /**
+   * Leaving a preset has to take its text with it. `/timer/amrap?preset=…`
+   * and `/timer/amrap` are two addresses of one route, so moving between them
+   * re-seeds the form in place rather than remounting it. The config was
+   * re-seeded from the mode default; the notes and the preset name were not,
+   * and the plain workout opened carrying the preset's coaching notes — then
+   * stored them, since `workoutNotes` goes onto the session.
+   */
+  it('leaves no preset text behind when the same screen becomes a plain workout', async ({
+    presetSetup: { timer },
+  }) => {
+    await timer.setup.expectWorkoutNotes('Ten burpees, ten pull-ups')
+    await timer.setup.expectPresetName('Friday conditioning')
+
+    await timer.followLink('/timer/amrap')
+
+    await timer.setup.expectWorkoutNotes('')
+    await timer.setup.expectPresetName('')
+  })
+
   it('offers 15-second shortcuts and accepts a custom raw time', async ({ amrapSetup: timer }) => {
     await timer.setup.expectTimeShortcut('15 sec')
     await timer.setup.chooseCustomTime('2', '7')

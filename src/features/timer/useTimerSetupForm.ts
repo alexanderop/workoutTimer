@@ -102,7 +102,14 @@ export function useTimerSetupForm(source: SetupFormSource): TimerSetupForm {
         return
       }
 
+      // The preset's text leaves with its config. `?preset=…` and the bare
+      // mode are two addresses of one route, so a screen that stays mounted
+      // across that change would otherwise keep the old preset's notes and
+      // name — and `workoutNotes` is stored on the session, so the plain
+      // workout would ship with instructions nobody wrote for it.
       seed(DEFAULT_CONFIGS[mode])
+      workoutNotes.value = ''
+      presetName.value = ''
       // A named preset that has not arrived yet may still turn up; a preset
       // that is absent from settled data (or was never named) is the final
       // answer.

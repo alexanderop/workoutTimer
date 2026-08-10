@@ -29,6 +29,7 @@ export async function renderApp(initialPath = '/') {
   return {
     screen,
     container: screen.container,
+    /** Exposed so a screen object can follow a link the UI does not offer. */
     router,
     // unmount() removes the DOM synchronously but is typed Promise-returning;
     // hand the promise to callers so fixture cleanup can await it.

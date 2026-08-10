@@ -30,7 +30,7 @@ The timer splits that module three ways, and a feature with the same shapes shou
 | `labels.ts` | what it *reads like* — pure functions over a `translate`, so the unit tier can hold them without a component | `domain.ts` |
 | `setupForm.ts` | the translation between a stored shape and the fields a form binds to | `domain.ts` |
 
-Each gets a thin `use*` composable that binds the reactive or i18n edge (`useTimerLabels`, `useTimerSetupForm`). Anything a screen would otherwise `switch` on belongs in one of them — the arch tier rejects a mode `switch` in a `.vue` file.
+Add a thin `use*` composable only for the modules that have a reactive or i18n edge to bind — `useTimerLabels` over `labels.ts`, `useTimerSetupForm` over `setupForm.ts`. `domain.ts` is pure and has no such edge, so it has no composable and is imported directly. Anything a screen would otherwise `switch` on belongs in one of these three modules — the arch tier rejects a mode `switch` in a `.vue` file.
 
 ## 3. State
 

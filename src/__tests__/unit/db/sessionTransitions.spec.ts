@@ -137,6 +137,33 @@ describe('finishAt', () => {
     expect(finished !== undefined && 'pauseStartedAt' in finished).toBe(false)
   })
 
+  /**
+   * The counterpart to resumeAt's backwards-clock guard. A `now` behind the
+   * open pause must not become a `finishedAt` behind it too: the workout's
+   * clock stopped at the pause, so that is the finish time, and storing the
+   * earlier `now` would make `elapsedSessionMs` report a shorter workout than
+   * the athlete did.
+   */
+  it('does not finish a paused workout before the pause began', () => {
+    const paused = session({ status: 'paused', pauseStartedAt: 9_000, accumulatedPausedMs: 1_000 })
+    const finished = finishAt(paused, 'manual', 5_000)
+
+    expect(finished?.finishedAt).toBe(9_000)
+    expect(finished?.updatedAt).toBe(9_000)
+    expect(finished?.accumulatedPausedMs).toBe(1_000)
+  })
+
+  /**
+   * Cancelling during the countdown finishes before `startedAt` — that field
+   * is when the countdown *ends* — so the clamp must not drag the finish
+   * forward to it.
+   */
+  it('finishes a countdown at the moment it was cancelled', () => {
+    const counting = session({ status: 'countdown', startedAt: 9_000 })
+
+    expect(finishAt(counting, 'cancelled', 7_000)?.finishedAt).toBe(7_000)
+  })
+
   /** The automatic endpoint finish can race the athlete's manual one. */
   it('declines a workout that is already over', () => {
     for (const status of ['completed', 'cancelled'] as const) {

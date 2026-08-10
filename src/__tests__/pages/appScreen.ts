@@ -1,4 +1,5 @@
 import { expect, vi } from 'vitest'
+import type { Router } from 'vue-router'
 import type { Locator } from 'vitest/browser'
 import { page } from 'vitest/browser'
 import { renderApp } from '../helpers/renderApp'
@@ -18,15 +19,26 @@ export class AppScreen {
     /** The mounted subtree used by axe and screenshot assertions. */
     readonly container: HTMLElement,
     private readonly unmount: () => Promise<void>,
+    private readonly router: Router,
   ) {}
 
   static async openAt(path: string): Promise<AppScreen> {
     const app = await renderApp(path)
-    return new AppScreen(app.container, app.cleanup)
+    return new AppScreen(app.container, app.cleanup, app.router)
   }
 
   async close(): Promise<void> {
     await this.unmount()
+  }
+
+  /**
+   * A URL the running app navigates to without unmounting the view — what a
+   * deep link, a PWA shortcut, or a forward button does between two addresses
+   * of the same route. Reserved for transitions no on-screen control offers;
+   * anything reachable by tapping goes through a locator instead.
+   */
+  async followLink(path: string): Promise<void> {
+    await this.router.push(path)
   }
 
   get root(): Locator {

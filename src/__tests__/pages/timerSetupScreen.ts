@@ -25,4 +25,13 @@ export class TimerSetupScreen {
   readonly expectTimeShortcut = vi.defineHelper(async (label: string): Promise<void> => {
     await expect.element(page.getByRole('button', { name: label, exact: true })).toBeVisible()
   })
+
+  /** The two text fields a preset fills in, and a fresh workout must not. */
+  readonly expectWorkoutNotes = vi.defineHelper(async (value: string): Promise<void> => {
+    await expect.element(page.getByLabelText('Workout description')).toHaveValue(value)
+  })
+
+  readonly expectPresetName = vi.defineHelper(async (value: string): Promise<void> => {
+    await expect.element(page.getByLabelText('Preset name')).toHaveValue(value)
+  })
 }

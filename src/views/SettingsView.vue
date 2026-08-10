@@ -84,8 +84,15 @@ function toStartCountdown(value: string): StartCountdownMs | undefined {
 }
 
 function handleCountdownChange(event: Event): Promise<unknown> {
-  const startCountdownMs = toStartCountdown((event.target as HTMLSelectElement).value)
-  if (startCountdownMs === undefined) return Promise.resolve()
+  const select = event.target as HTMLSelectElement
+  const startCountdownMs = toStartCountdown(select.value)
+  if (startCountdownMs === undefined) {
+    // Nothing was stored, so `:value` did not change and Vue has no reason to
+    // re-render the control — it would sit there showing a length this build
+    // rejected. Put it back on the setting that is actually in the database.
+    select.value = String(settings.value.startCountdownMs)
+    return Promise.resolve()
+  }
 
   return saveSetting({ startCountdownMs })
 }

@@ -18,7 +18,7 @@ export class TimerScreen extends AppScreen {
 
   static async open(path = '/'): Promise<TimerScreen> {
     const app = await renderApp(path)
-    return new TimerScreen(app.container, app.cleanup)
+    return new TimerScreen(app.container, app.cleanup, app.router)
   }
 
   async modeChooser(): Promise<Locator> {

@@ -76,6 +76,15 @@ export function resumeAt(session: WorkoutSession, now: number): WorkoutSession |
  * Banking the paused time matters here: finishing *while paused* would
  * otherwise leave the last pause uncounted, and every elapsed time the result
  * and history screens derive from the row would be that much too long.
+ *
+ * The finish time is never allowed behind the open pause. A device that slept
+ * hands back a `now` earlier than `pauseStartedAt` — `resumeAt` already refuses
+ * to bank a negative interval for that, but storing the same `now` as
+ * `finishedAt` would leave the row claiming it ended before it was paused, and
+ * `elapsedSessionMs` reads `finishedAt` for a finished workout. The clock is
+ * frozen at the pause anyway, so the pause mark *is* the honest finish time.
+ * `startedAt` is deliberately not in the clamp: it is when the countdown ends,
+ * so cancelling mid-countdown legitimately finishes before it.
  */
 export function finishAt(
   session: WorkoutSession,
@@ -84,13 +93,15 @@ export function finishAt(
 ): WorkoutSession | undefined {
   if (isFinishedSession(session.status)) return undefined
 
+  const finishedAt = Math.max(now, session.pauseStartedAt ?? now)
+
   return withoutPauseMark({
     ...session,
     status: reason === 'cancelled' ? 'cancelled' : 'completed',
     finishReason: reason,
-    finishedAt: now,
-    accumulatedPausedMs: pausedThrough(session, now),
-    updatedAt: now,
+    finishedAt,
+    accumulatedPausedMs: pausedThrough(session, finishedAt),
+    updatedAt: finishedAt,
   })
 }
 

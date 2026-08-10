@@ -45,9 +45,9 @@ const presetId = computed(() =>
   typeof route.query.preset === 'string' ? route.query.preset : undefined,
 )
 
-const { data: sessions } = useSessions()
+const { data: sessions, settled: sessionsSettled } = useSessions()
 const { data: presets, settled: presetsSettled } = usePresets()
-const { data: settings } = useTimerSettings()
+const { data: settings, settled: settingsSettled } = useTimerSettings()
 const hasActiveSession = computed(() =>
   sessions.value.some((session) => isActiveSession(session.status)),
 )
@@ -62,8 +62,22 @@ const { values, workoutNotes, presetName, config, pickers } = useTimerSetupForm(
 const isStarting = ref(false)
 const isSavingPreset = ref(false)
 
+/**
+ * Start waits for the reads, for the same reason the setup form waits for
+ * presets: until a table settles, its composable is handing back the empty
+ * value, and the empty value answers both of Start's questions wrongly. An
+ * unsettled settings read is `makeDefaultTimerSettings(0)`, whose 3-second
+ * countdown would be stored on the session instead of the athlete's "off"; an
+ * unsettled sessions read is `[]`, which says no workout is running and lets
+ * the tap through for the repository to reject.
+ */
 const canStart = computed(
-  () => isTimerConfig(config.value) && !isStarting.value && !hasActiveSession.value,
+  () =>
+    isTimerConfig(config.value) &&
+    settingsSettled.value &&
+    sessionsSettled.value &&
+    !isStarting.value &&
+    !hasActiveSession.value,
 )
 const presetDraft = computed<PresetDraft>(() => ({
   name: presetName.value,

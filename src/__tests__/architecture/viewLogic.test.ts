@@ -80,6 +80,12 @@ export function modeSwitches(source: string): string[] {
  *
  * Nothing type-checks a string array against a union, which is exactly why
  * this needs a text rule rather than the compiler.
+ *
+ * Both quote styles count. Prettier settles this repo on single quotes, but a
+ * tripwire that leans on the formatter is a tripwire the formatter can switch
+ * off: an attribute delimited with `'` puts the list inside it in double
+ * quotes, and so does anything pasted from JSON. `["running", "paused"]` is
+ * the same second copy as `['running', 'paused']`.
  */
 const VOCABULARY = [
   'amrap',
@@ -97,7 +103,11 @@ const ARRAY_LITERAL = /\[[^[\]]*\]/g
 export function vocabularyLiterals(source: string): string[] {
   return [...stripComments(source).matchAll(ARRAY_LITERAL)]
     .map((match) => match[0])
-    .filter((literal) => VOCABULARY.filter((word) => literal.includes(`'${word}'`)).length > 1)
+    .filter(
+      (literal) =>
+        VOCABULARY.filter((word) => literal.includes(`'${word}'`) || literal.includes(`"${word}"`))
+          .length > 1,
+    )
 }
 
 // --- V3: AsyncResult is unwrapped in one place -----------------------------
@@ -167,6 +177,13 @@ describe('V2 — no screen re-spells the mode or status vocabulary', () => {
       vocabularyLiterals(`['countdown', 'running', 'paused'].includes(s.status)`),
     ).toHaveLength(1)
     expect(vocabularyLiterals(`['amrap', 'forTime'].includes(mode.value)`)).toHaveLength(1)
+  })
+
+  /** Same list, other quote — the rule must not depend on Prettier's choice. */
+  it('catches a double-quoted list too', () => {
+    expect(vocabularyLiterals(`["running", "paused"].includes(session.status)`)).toHaveLength(1)
+    expect(vocabularyLiterals(`["amrap", "forTime", "emom", "tabata"]`)).toHaveLength(1)
+    expect(vocabularyLiterals(`status === "completed"`)).toEqual([])
   })
 
   it('catches the status list too — history builds its filters from FINISHED_STATUSES', () => {
