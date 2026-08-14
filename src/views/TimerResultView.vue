@@ -62,7 +62,7 @@ async function save(): Promise<void> {
 <template>
   <div
     :data-mode="session?.config.mode ?? 'amrap'"
-    class="flex min-h-dvh flex-col bg-neutral-950 text-white safe-area-bottom"
+    class="flex min-h-full flex-col bg-neutral-950 text-white safe-area-bottom"
   >
     <main
       v-if="session && result"

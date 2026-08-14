@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { deleteSession, sessionMutation } from '@/db'
 import { currentSessionAtom, currentSessionResultAtom } from '@/features/timer/atoms'
 import { formatDuration } from '@/features/timer/domain'
+import { configSummary, modeName } from '@/features/timer/labels'
 import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
 import { armedConfirmationAtom, requestConfirmationIn } from '@/state/confirmation'
@@ -26,35 +27,14 @@ const result = useAtomValue(() => currentSessionResultAtom)
 // subscription is what gives the 3 s expiry a registry to write back to.
 const armedKey = useAtomValue(() => armedConfirmationAtom('session-detail'))
 
-function modeName(): string {
-  switch (session.value?.config.mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-    default:
-      return t('history.detail')
-  }
+// The page title before the row arrives — and for a `/history/:id` that names
+// no workout this app has.
+const title = (): string => {
+  const config = session.value?.config
+  return config === undefined ? t('history.detail') : modeName(config.mode, t)
 }
 
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs
-        ? formatDuration(config.timeCapMs)
-        : t('timer.modes.forTime.description')
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
+const summary = (config: TimerConfig): string => configSummary(config, t)
 
 async function remove(): Promise<void> {
   const current = session.value
@@ -82,7 +62,7 @@ async function remove(): Promise<void> {
 </script>
 
 <template>
-  <PageLayout :title="modeName()" back-to="/history">
+  <PageLayout :title="title()" back-to="/history">
     <div
       v-if="session && result"
       :data-mode="session.config.mode"
@@ -101,7 +81,7 @@ async function remove(): Promise<void> {
 
       <section class="rounded-2xl border bg-card p-4">
         <h2 class="text-section-title font-semibold">{{ t('history.configuration') }}</h2>
-        <p class="mt-2 text-muted-foreground">{{ configSummary(session.config) }}</p>
+        <p class="mt-2 text-muted-foreground">{{ summary(session.config) }}</p>
       </section>
 
       <!-- `select-text` on both bodies: the app suppresses selection globally

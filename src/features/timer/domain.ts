@@ -11,6 +11,32 @@ export const DEFAULT_CONFIGS: Readonly<Record<TimerMode, TimerConfig>> = {
   tabata: { mode: 'tabata', workMs: 20 * SECOND_MS, restMs: 10 * SECOND_MS, rounds: 8 },
 }
 
+/**
+ * Every mode, in the order the home screen offers them.
+ *
+ * Read off `DEFAULT_CONFIGS` rather than written out again: that record is
+ * keyed by `TimerMode`, so a new mode cannot compile without an entry, and
+ * this list picks it up for free. Screens used to spell the four names inline,
+ * which is how a fifth mode would have shipped invisible.
+ */
+export const TIMER_MODES = Object.keys(DEFAULT_CONFIGS) as ReadonlyArray<TimerMode>
+
+/** A route param is a string from the address bar: `undefined` means "not a mode". */
+export function parseTimerMode(value: unknown): TimerMode | undefined {
+  return TIMER_MODES.find((mode) => mode === value)
+}
+
+/**
+ * Whether rounds are something the athlete taps rather than something the
+ * clock counts. It is the same split `deriveTimer` makes when it fills
+ * `completedRounds` — open-ended modes report tapped splits, structural modes
+ * report finished work phases — so the run screen's "Add round" button is
+ * offered by this rule rather than by a second list of mode names.
+ */
+export function capturesRoundSplits(mode: TimerMode): boolean {
+  return mode === 'amrap' || mode === 'forTime'
+}
+
 const MAX_DURATION_MS = 24 * HOUR_MS
 
 function isDuration(value: number): boolean {
@@ -221,6 +247,17 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       }
     }
   }
+}
+
+/**
+ * What a finished workout came to: `deriveTimer` frozen at the moment it
+ * stopped. Screens that report a result rather than run one — history, the
+ * detail page, the result page — all want this and all used to spell the
+ * `finishedAt ?? Date.now()` fallback themselves. The fallback covers a row
+ * that is somehow still open, which those screens can be pointed at by URL.
+ */
+export function finalResult(session: WorkoutSession, now: number = Date.now()): DerivedTimer {
+  return deriveTimer(session, session.finishedAt ?? now)
 }
 
 export function formatDuration(milliseconds: number, showTenths = false): string {

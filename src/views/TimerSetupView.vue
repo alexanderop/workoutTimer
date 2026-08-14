@@ -34,6 +34,7 @@ import {
   setupValidPresetAtom,
   type TimerSetupDraft,
 } from '@/features/timer/setupForm'
+import { humanizeSeconds, modeName } from '@/features/timer/labels'
 import { unlockTimerAudio } from '@/features/timer/timerFeedback'
 import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
@@ -72,36 +73,12 @@ function edit<K extends keyof TimerSetupDraft>(field: K, value: TimerSetupDraft[
   setDraft({ ...draft.value, [field]: value })
 }
 
-function formatTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3_600)
-  const minutes = Math.floor((seconds % 3_600) / 60)
-  const remainingSeconds = seconds % 60
-  const parts: Array<string> = []
-
-  if (hours > 0) parts.push(t('timer.setup.units.hoursShort', { count: hours }))
-  if (minutes > 0) parts.push(t('timer.setup.units.minutesShort', { count: minutes }))
-  if (remainingSeconds > 0 || parts.length === 0) {
-    parts.push(t('timer.setup.units.secondsShort', { count: remainingSeconds }))
-  }
-
-  return parts.join(' ')
-}
+const formatTime = (seconds: number): string => humanizeSeconds(seconds, t)
 
 const canStart = (): boolean => isValidConfig.value && !isStarting.value && !hasActiveSession.value
 const canSavePreset = (): boolean => isValidPreset.value && !isSavingPreset.value
 
-function modeName(): string {
-  switch (routeMode.value) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
+const title = (): string => modeName(routeMode.value, t)
 
 async function start(): Promise<void> {
   if (!canStart()) return
@@ -150,11 +127,7 @@ async function savePreset(): Promise<void> {
 </script>
 
 <template>
-  <PageLayout
-    :title="t('timer.setup.title', { mode: modeName() })"
-    back-to="/"
-    :data-mode="routeMode"
-  >
+  <PageLayout :title="t('timer.setup.title', { mode: title() })" back-to="/" :data-mode="routeMode">
     <form class="mx-auto flex w-full max-w-lg flex-col gap-section p-4" @submit.prevent="start">
       <section class="rounded-2xl border bg-card p-4 shadow-xs">
         <div v-if="routeMode === 'amrap'">

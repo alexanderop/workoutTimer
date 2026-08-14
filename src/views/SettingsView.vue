@@ -15,9 +15,12 @@ import {
   restoreMutation,
   runDb,
   settingsMutation,
+  START_COUNTDOWN_OPTIONS,
+  type StartCountdownMs,
   type TimerSettings,
   updateTimerSettings,
 } from '@/db'
+import { SECOND_MS } from '@/features/timer/domain'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
 import type { SupportedLocale } from '@/i18n'
 import { downloadBackup, readBackupFile } from '@/lib/backupFile'
@@ -75,10 +78,26 @@ function handleVolumeChange(event: Event): Promise<unknown> {
   return saveSetting({ soundVolume })
 }
 
+/**
+ * A `<select>` hands back a string, and a stale service worker can serve a
+ * template offering a length this build no longer accepts — so the value is
+ * matched against the schema's own list rather than cast to it.
+ */
+function toStartCountdown(value: string): StartCountdownMs | undefined {
+  return START_COUNTDOWN_OPTIONS.find((option) => String(option) === value)
+}
+
 function handleCountdownChange(event: Event): Promise<unknown> {
-  const value = Number((event.target as HTMLSelectElement).value)
-  if (![0, 3_000, 5_000, 10_000].includes(value)) return Promise.resolve()
-  return saveSetting({ startCountdownMs: value as 0 | 3_000 | 5_000 | 10_000 })
+  const startCountdownMs = toStartCountdown((event.target as HTMLSelectElement).value)
+  if (startCountdownMs === undefined) return Promise.resolve()
+
+  return saveSetting({ startCountdownMs })
+}
+
+function countdownLabel(milliseconds: StartCountdownMs): string {
+  return milliseconds === 0
+    ? t('settings.timer.countdownOff')
+    : t('settings.timer.countdownSeconds', { count: milliseconds / SECOND_MS })
 }
 
 function handleExport(): Promise<void> {
@@ -201,15 +220,8 @@ async function handleImportFile(event: Event): Promise<void> {
               :value="settings.startCountdownMs"
               @change="handleCountdownChange"
             >
-              <option :value="0">{{ t('settings.timer.countdownOff') }}</option>
-              <option :value="3000">
-                {{ t('settings.timer.countdownSeconds', { count: 3 }) }}
-              </option>
-              <option :value="5000">
-                {{ t('settings.timer.countdownSeconds', { count: 5 }) }}
-              </option>
-              <option :value="10000">
-                {{ t('settings.timer.countdownSeconds', { count: 10 }) }}
+              <option v-for="option in START_COUNTDOWN_OPTIONS" :key="option" :value="option">
+                {{ countdownLabel(option) }}
               </option>
             </select>
           </label>

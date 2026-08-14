@@ -18,7 +18,8 @@ import {
 } from '@/db'
 import { currentSessionAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
-import { formatDuration, SECOND_MS } from '@/features/timer/domain'
+import { capturesRoundSplits, formatDuration, SECOND_MS } from '@/features/timer/domain'
+import { modeName } from '@/features/timer/labels'
 import { timerCueAtom, timerRunDriverAtom } from '@/features/timer/runDriver'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
 import { wakeLockEffectAtom } from '@/features/timer/wakeLock'
@@ -53,7 +54,7 @@ const displayTime = (): string =>
   derived.value
     ? formatDuration(derived.value.primaryMs, derived.value.primaryMs <= 10 * SECOND_MS)
     : '00:00'
-const canCaptureRound = (): boolean => ['amrap', 'forTime'].includes(mode())
+const canCaptureRound = (): boolean => capturesRoundSplits(mode())
 
 /**
  * An AudioContext may only be created from a user gesture, and this screen is
@@ -118,18 +119,7 @@ function phaseLabel(): string {
   }
 }
 
-function modeName(): string {
-  switch (mode()) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
+const currentModeName = (): string => modeName(mode(), t)
 
 async function togglePause(): Promise<void> {
   const current = session.value
@@ -193,7 +183,7 @@ function toggleSound(): Promise<unknown> {
 <template>
   <div
     :data-mode="mode()"
-    class="flex h-full min-h-dvh flex-col bg-neutral-950 text-white safe-area-bottom"
+    class="flex min-h-full flex-col bg-neutral-950 text-white safe-area-bottom"
   >
     <header class="flex items-center justify-between gap-3 p-4">
       <Button
@@ -205,7 +195,7 @@ function toggleSound(): Promise<unknown> {
       >
         <X />
       </Button>
-      <h1 class="font-bold tracking-widest">{{ modeName() }}</h1>
+      <h1 class="font-bold tracking-widest">{{ currentModeName() }}</h1>
       <Button
         variant="ghost"
         size="icon"

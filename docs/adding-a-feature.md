@@ -22,11 +22,22 @@ The timer feature (`src/features/timer`) is the worked example — this walkthro
 
 Pure functions in `src/features/<name>/domain.ts` (sorting, deriving, validating). Keeping them out of components is what makes them unit-tier testable — `src/features/timer/domain.ts` and its spec in `src/__tests__/unit/features/timer/` are the template. `deriveTimer` shows the payoff: the whole timer is a pure function of the stored session and `now`, so a backgrounded tab or a reload costs nothing and the tricky part is testable without a browser.
 
+The timer splits that module four ways, and a feature with the same shapes should copy the split:
+
+| Module | Holds | Depends on |
+| --- | --- | --- |
+| `domain.ts` | what the thing *is* — the vocabulary lists, the predicates over them, the deriving | nothing but `@/db` types |
+| `labels.ts` | what it *reads like* — pure functions over a `translate` | `domain.ts` |
+| `setupForm.ts` | the translation between a stored shape and the fields a form binds to, as one draft atom per thing being edited | `domain.ts`, `@/state` |
+| `atoms.ts` | what the screens read — derivations over the shared read atoms | `domain.ts`, `@/state` |
+
+The first two are pure and need no binding layer: a screen calls `modeName(mode, t)` from its template, because a value derived only from arguments and translations is a plain function, not a memo and not a composable. Anything a screen would otherwise `switch` on belongs in one of these — the arch tier rejects a mode `switch` in a `.vue` file.
+
 ## 3. State
 
 Atoms via `@effect/atom-vue` — `src/state/timerData.ts` is the template, and `src/state/` (shared) or `src/features/<name>/atoms.ts` (yours) is where the atom goes. Conventions:
 
-- **Reads are atoms.** Build them with `dbRuntime.atom(program)` and wire them with `Atom.withReactivity([SESSIONS_KEY])` (add a key per table). The atom's value is an `AsyncResult` — loading, failure, and data in one value — and components subscribe with `useAtomValue(() => yourAtom)`. Subscribing *is* the load; there is no `onMounted` fetch and no `isLoaded` flag.
+- **Reads are atoms, and the `AsyncResult` is unwrapped once.** Build the atom with `dbRuntime.atom(program)` and wire it with `Atom.withReactivity([SESSIONS_KEY])` (add a key per table), then keep it **module-private** and export the unwrapped derivations beside it — `sessionListAtom` (rows, empty while loading or failed) and `sessionsLoadFailedAtom` (the flag the error panel reads) are the templates. Subscribing *is* the load; there is no `onMounted` fetch and no `isLoaded` flag. The table's empty value lives with the table, and a `.vue` file that names `AsyncResult` fails the arch tier.
 - **Writes go through a mutation atom** picked to match the tables they touch — `sessionMutation`, `presetMutation`, `settingsMutation`, `workoutStartMutation`, `restoreMutation`, all from `@/db`. Each only accepts `Effect<unknown, never, DbServices>`, so the component composes the repository program with `Effect.catchTag`/`Effect.catchTags` first, then hands it to the setter from `useAtomSet(() => sessionMutation, { mode: 'promise' })`. When the write lands, that atom's keys are invalidated and the read atoms built on them re-read — state always mirrors disk with no store method remembering to re-read.
 - **A new table means a new key and a new mutation atom**, not a wider existing one. Invalidating a key you did not write re-reads data nobody changed, and every re-read hands components freshly decoded objects — so any watcher keyed on that identity fires. That is how the setup form used to lose what the user had typed whenever an unrelated write landed.
 - Plain UI state (a sheet's open flag, a pending flag, toasts) is a writable `Atom.make(...)` at module scope, or an `Atom.family` when there is one per instance — `src/state/toast.ts` and `src/state/pending.ts` are the patterns. **Do not wrap it in a composable**; the component calls `useAtomValue`/`useAtom`/`useAtomSet` directly, and a `use*` export is a lint error.
@@ -41,7 +52,7 @@ Atoms via `@effect/atom-vue` — `src/state/timerData.ts` is the template, and `
 - Route-level page in `src/views/`, registered in `src/router/index.ts`.
 - New tab? Add one entry to `src/router/navigation.ts` — the shell handles the rest. Full-screen route? `meta: { hideNav: true }`.
 - Every user-facing string goes through i18n (`src/i18n/messages/en.ts` **and** `de.ts` — the `MessageSchema` type makes a missing key a compile error).
-- Give destructive/ambiguous icon buttons an `aria-label` that includes the item name (see `PresetsView.vue`) — the a11y tier will catch bare icon buttons. A destructive action with no undo gets `useArmConfirmation`: the first tap arms and relabels, the second commits, and the shared timeout disarms. Use one keyed instance when a screen has several destructive actions so only one can be armed at a time.
+- Give destructive/ambiguous icon buttons an `aria-label` that includes the item name (see `PresetsView.vue`) — the a11y tier will catch bare icon buttons. A destructive action with no undo gets arm-then-confirm, and that gesture is `src/state/confirmation.ts`, not a fresh flag and timeout: `requestConfirmationIn(registry, scope, key)` is false on the first tap and true on the second, the key disarms the other rows of a list, and the atom's finalizer clears the pending timeout when the screen goes. Read `armedConfirmationAtom(scope)` too — the label depends on it, and the subscription is what gives the expiry a registry to write back to.
 
 ## 5. Tests, tier by tier
 

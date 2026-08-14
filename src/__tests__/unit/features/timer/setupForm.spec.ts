@@ -1,6 +1,10 @@
 import { AtomRegistry } from '@effect/atom-vue'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from '@effect/vitest'
+import { Schema } from 'effect'
+import { DEFAULT_CONFIGS, isTimerConfig, TIMER_MODES } from '@/features/timer/domain'
 import {
+  applyConfigToDraft,
+  BASE_DRAFT,
   durationOptions,
   roundOptions,
   setupConfigAtom,
@@ -9,7 +13,8 @@ import {
   toTimerConfig,
   type TimerSetupDraft,
 } from '@/features/timer/setupForm'
-import type { TimerMode } from '@/db'
+import { TimerConfigSchema } from '@/db/converters'
+import type { TimerConfig, TimerMode } from '@/db'
 
 /**
  * The setup form used to be nine `ref`s and a seeding `watch` inside a
@@ -63,6 +68,74 @@ describe('setupDraftAtom', () => {
 
     expect(form.config()).toEqual({ mode: 'emom', intervalMs: 90_000, rounds: 12 })
   })
+
+  it('keys the draft on what is being edited, not on the data behind it', () => {
+    expect(setupKey({ mode: 'amrap', presetId: undefined })).toBe('amrap:')
+    expect(setupKey({ mode: 'amrap', presetId: 'preset-1' })).toBe('amrap:preset-1')
+    expect(setupKey({ mode: 'emom', presetId: 'preset-1' })).not.toBe(
+      setupKey({ mode: 'amrap', presetId: 'preset-1' }),
+    )
+    expect(setupKey({ mode: 'amrap', presetId: 'preset-2' })).not.toBe(
+      setupKey({ mode: 'amrap', presetId: 'preset-1' }),
+    )
+  })
+})
+
+describe('the draft as a flat set of fields', () => {
+  /** What the screen does on arrival: start from the defaults, seed the mode shown. */
+  it('seeds a mode from its default and reads that default back', () => {
+    for (const mode of TIMER_MODES) {
+      const seeded = applyConfigToDraft(BASE_DRAFT, DEFAULT_CONFIGS[mode])
+
+      expect(toTimerConfig(mode, seeded)).toEqual(DEFAULT_CONFIGS[mode])
+    }
+  })
+
+  /**
+   * EMOM and Tabata bind the same `rounds` field, which is why switching
+   * between them keeps the count rather than resetting it — and why
+   * `BASE_DRAFT` cannot hold both modes' default at once. It does not have to:
+   * the draft for a mode seeds that mode last.
+   */
+  it('shares the round count between EMOM and Tabata', () => {
+    const draft = applyConfigToDraft(BASE_DRAFT, {
+      mode: 'emom',
+      intervalMs: 60_000,
+      rounds: 15,
+    })
+    const asTabata = toTimerConfig('tabata', draft)
+
+    expect(asTabata.mode === 'tabata' && asTabata.rounds).toBe(15)
+    expect(BASE_DRAFT.durationSeconds).toBe(600)
+    expect(BASE_DRAFT.intervalSeconds).toBe(60)
+  })
+
+  it('produces a config the repository would accept, for every mode', () => {
+    for (const mode of TIMER_MODES) {
+      expect(isTimerConfig(toTimerConfig(mode, BASE_DRAFT))).toBe(true)
+    }
+  })
+
+  /**
+   * Switching mode must not disturb what was configured for the other one:
+   * the fields are shared, and applying a config patches only the fields that
+   * config has an opinion about.
+   */
+  it('leaves the other modes alone when a config is applied', () => {
+    const after = applyConfigToDraft(BASE_DRAFT, { mode: 'amrap', durationMs: 1_800_000 })
+
+    expect(after.durationSeconds).toBe(1_800)
+    expect(toTimerConfig('tabata', after)).toEqual(toTimerConfig('tabata', BASE_DRAFT))
+    expect(toTimerConfig('forTime', after)).toEqual(toTimerConfig('forTime', BASE_DRAFT))
+  })
+
+  it('does not mutate the draft it is given', () => {
+    const snapshot = { ...BASE_DRAFT }
+
+    applyConfigToDraft(BASE_DRAFT, { mode: 'amrap', durationMs: 1_000 })
+
+    expect(BASE_DRAFT).toEqual(snapshot)
+  })
 })
 
 describe('toTimerConfig', () => {
@@ -100,6 +173,49 @@ describe('toTimerConfig', () => {
     expect(
       toTimerConfig('forTime', { ...base, timeCapSeconds: undefined, targetRounds: 0 }),
     ).toEqual({ mode: 'forTime' })
+  })
+
+  /**
+   * The counterpart: a value that is neither absent nor usable has to reach
+   * the config, so `isTimerConfig` disables Start and says so — rather than
+   * being read as "no cap" and quietly starting an uncapped workout.
+   */
+  it('passes an unusable value through so validation can refuse it', () => {
+    const config = toTimerConfig('forTime', {
+      ...BASE_DRAFT,
+      timeCapSeconds: 0.5,
+      targetRounds: undefined,
+    })
+
+    expect(config).toEqual({ mode: 'forTime', timeCapMs: 500 })
+    expect(isTimerConfig(config)).toBe(false)
+  })
+})
+
+/**
+ * The round trip is the property that matters: a stored preset loaded into the
+ * form and read straight back out has to be the same workout. Anything else
+ * means opening a preset and pressing Start runs something else — silently,
+ * because both values are valid configs.
+ *
+ * The generator is the config schema, so the bounds come from `converters.ts`
+ * rather than from a hand-written arbitrary.
+ */
+describe('the draft, as a property', () => {
+  const anyConfig = Schema.toArbitrary(TimerConfigSchema)
+
+  it.prop('loads a config into the draft and reads the same one back', [anyConfig], ([config]) => {
+    const draft = applyConfigToDraft(BASE_DRAFT, config as TimerConfig)
+
+    expect(toTimerConfig((config as TimerConfig).mode, draft)).toEqual(config)
+  })
+
+  it.prop('survives a second trip through the draft', [anyConfig], ([config]) => {
+    const once = applyConfigToDraft(BASE_DRAFT, config as TimerConfig)
+    const mode = (config as TimerConfig).mode
+    const twice = applyConfigToDraft(once, toTimerConfig(mode, once))
+
+    expect(toTimerConfig(mode, twice)).toEqual(toTimerConfig(mode, once))
   })
 })
 

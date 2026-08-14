@@ -3,8 +3,8 @@ import { it } from '../fixtures'
 
 /**
  * `body` carries `overscroll-behavior-y: none` (src/style.css), and that rule
- * is correct as an outer guard — but `body` never scrolls. The shell is an
- * `h-dvh` flex column whose inner containers own scrolling, so a declaration
+ * is correct as an outer guard — but `body` never scrolls. The shell is a
+ * viewport-height flex column whose inner containers own scrolling, so a declaration
  * on `body` stops nothing: reaching the end of a list chains the gesture
  * outward to the page behind it, which is the single most common "this is a
  * website" tell on a phone.

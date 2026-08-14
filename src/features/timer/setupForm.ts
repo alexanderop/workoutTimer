@@ -1,6 +1,12 @@
 import { Atom } from '@effect/atom-vue'
 import { isPresetDraft } from '@/db'
-import { DEFAULT_CONFIGS, isTimerConfig, SECOND_MS } from '@/features/timer/domain'
+import {
+  DEFAULT_CONFIGS,
+  isTimerConfig,
+  parseTimerMode,
+  SECOND_MS,
+  TIMER_MODES,
+} from '@/features/timer/domain'
 import {
   countValues,
   includeSelectedValue,
@@ -29,6 +35,12 @@ const ROUND_VALUES = countValues(20)
  * table — pausing a timer used to re-seed this form and discard what the user
  * had typed. A family key cannot have that bug: nothing about a preset write
  * changes which atom the screen is reading.
+ *
+ * It also drops the "wait until the presets have settled" clause the watcher
+ * needed. A seed that is *derived* has nothing to defer: while the table is
+ * still loading the answer is the mode's defaults, and the row arriving simply
+ * changes the answer — unless the user has typed, in which case the edit atom
+ * is what the draft reads and the arrival is invisible.
  */
 export interface TimerSetupDraft {
   readonly durationSeconds: number
@@ -42,14 +54,15 @@ export interface TimerSetupDraft {
   readonly presetName: string
 }
 
-const BASE_DRAFT: TimerSetupDraft = {
-  durationSeconds: 10 * 60,
+/** Every field at nothing, before any mode has had its say. */
+const NOTHING_SET: TimerSetupDraft = {
+  durationSeconds: 0,
   timeCapSeconds: undefined,
   targetRounds: undefined,
-  intervalSeconds: 60,
-  rounds: 10,
-  workSeconds: 20,
-  restSeconds: 10,
+  intervalSeconds: 0,
+  rounds: 0,
+  workSeconds: 0,
+  restSeconds: 0,
   workoutNotes: '',
   presetName: '',
 }
@@ -63,17 +76,15 @@ export interface TimerSetupTarget {
 export const setupKey = (target: TimerSetupTarget): string =>
   `${target.mode}:${target.presetId ?? ''}`
 
-const TIMER_MODES: ReadonlyArray<string> = ['amrap', 'forTime', 'emom', 'tabata']
-
 /**
  * The mode being set up, from `/timer/:mode`. An unknown mode falls back to
  * AMRAP rather than rendering nothing — a hand-typed URL should still show a
- * usable screen.
+ * usable screen. `parseTimerMode` is what decides, so the list of modes lives
+ * with `DEFAULT_CONFIGS` and a fifth one cannot go missing here.
  */
-export const setupModeAtom = Atom.make((get): TimerMode => {
-  const mode = get(routeParamAtom('mode'))
-  return mode !== undefined && TIMER_MODES.includes(mode) ? (mode as TimerMode) : 'amrap'
-})
+export const setupModeAtom = Atom.make(
+  (get): TimerMode => parseTimerMode(get(routeParamAtom('mode'))) ?? 'amrap',
+)
 
 /** The preset being edited, from `?preset=…`. */
 export const setupPresetIdAtom = routeQueryAtom('preset')
@@ -91,7 +102,8 @@ const parseKey = (key: string): TimerSetupTarget => {
   }
 }
 
-function applyConfig(draft: TimerSetupDraft, config: TimerConfig): TimerSetupDraft {
+/** The fields a config has an opinion about, in seconds. The rest are left alone. */
+export function applyConfigToDraft(draft: TimerSetupDraft, config: TimerConfig): TimerSetupDraft {
   switch (config.mode) {
     case 'amrap':
       return { ...draft, durationSeconds: config.durationMs / SECOND_MS }
@@ -117,11 +129,26 @@ function applyConfig(draft: TimerSetupDraft, config: TimerConfig): TimerSetupDra
   }
 }
 
+/**
+ * Every field holding its own mode's default, folded out of `DEFAULT_CONFIGS`
+ * rather than written out again — the numbers have one home.
+ *
+ * The fields are flat and shared rather than one set per mode, which is why
+ * applying a config *patches* them: an AMRAP config has nothing to say about
+ * Tabata's rest, and should not reset it. Where two modes share a field
+ * (`rounds`), the last one folded wins; it does not matter which, because
+ * `defaultDraft` applies the mode actually on screen last.
+ */
+export const BASE_DRAFT: TimerSetupDraft = TIMER_MODES.reduce<TimerSetupDraft>(
+  (draft, mode) => applyConfigToDraft(draft, DEFAULT_CONFIGS[mode]),
+  NOTHING_SET,
+)
+
 const defaultDraft = (mode: TimerMode): TimerSetupDraft =>
-  applyConfig(BASE_DRAFT, DEFAULT_CONFIGS[mode])
+  applyConfigToDraft(BASE_DRAFT, DEFAULT_CONFIGS[mode])
 
 const draftFromPreset = (preset: TimerPreset): TimerSetupDraft => ({
-  ...applyConfig(BASE_DRAFT, preset.config),
+  ...applyConfigToDraft(BASE_DRAFT, preset.config),
   workoutNotes: preset.workoutNotes,
   presetName: preset.name,
 })
@@ -169,6 +196,18 @@ export const setupDraftAtom = Atom.family((key: string) =>
   ),
 )
 
+/**
+ * The form read back as the config for one mode. The other modes' fields are
+ * ignored, so what the user set for Tabata does not leak into the AMRAP they
+ * are about to start.
+ *
+ * A zero-valued optional means "not set" — the For Time pickers offer an empty
+ * option, and an empty option that produced `timeCapMs: 0` would be a workout
+ * that ends the instant it starts. The test is `undefined` or `0` and not
+ * falsiness on purpose: any other unusable value has to reach the config, so
+ * that `isTimerConfig` can refuse it out loud rather than have it read as
+ * "no cap" and start an uncapped workout.
+ */
 export function toTimerConfig(mode: TimerMode, draft: TimerSetupDraft): TimerConfig {
   switch (mode) {
     case 'amrap':
@@ -249,6 +288,7 @@ export const intervalOptions = (
   formatTime: (seconds: number) => string,
 ): Array<PickerOption> => optionsFor(INTERVAL_VALUES, selected, formatTime)
 
+/** Rest is the one duration that may legitimately be none: an EMOM-style Tabata. */
 export const restOptions = (
   selected: number | undefined,
   formatTime: (seconds: number) => string,

@@ -1,4 +1,5 @@
 import { Atom } from '@effect/atom-vue'
+import { FINISHED_STATUSES, isActiveSession, isFinishedSession } from '@/db'
 import { clockAtom } from '@/state/browser'
 import {
   presetListAtom,
@@ -8,7 +9,7 @@ import {
   timerSettingsValueAtom,
 } from '@/state/timerData'
 import { routeParamAtom } from '@/state/route'
-import { deriveTimer, sortPresets, sortSessions } from '@/features/timer/domain'
+import { deriveTimer, finalResult, sortPresets, sortSessions } from '@/features/timer/domain'
 import type { SessionStatus, WorkoutSession } from '@/db'
 import type { DerivedTimer } from '@/features/timer/domain'
 
@@ -33,13 +34,15 @@ import type { DerivedTimer } from '@/features/timer/domain'
  */
 export const pickerCustomOpenAtom = Atom.family((_id: string) => Atom.make(false))
 
-/** Statuses that mean a workout is on screen and moving. */
-const LIVE_STATUSES: ReadonlyArray<SessionStatus> = ['countdown', 'running', 'paused']
-
-/** …and the ones that mean it is over and belongs in history. */
-const FINISHED_STATUSES: ReadonlyArray<SessionStatus> = ['completed', 'cancelled']
-
-const isLive = (session: WorkoutSession): boolean => LIVE_STATUSES.includes(session.status)
+/**
+ * Whether a workout is still on the clock. The predicate comes from `@/db`,
+ * where it is derived from the schema's status list, rather than being a
+ * second array spelled out here — the repository refuses to start a workout
+ * while any active one exists and looks them up by exactly that set, so two
+ * spellings of "still going" would let this screen offer a Start the database
+ * then rejects.
+ */
+const isLive = (session: WorkoutSession): boolean => isActiveSession(session.status)
 
 /**
  * Wall-clock time for the running timer, ticking ten times a second.
@@ -63,9 +66,10 @@ export const homeLoadFailedAtom = Atom.make(
   (get) => get(sessionsLoadFailedAtom) || get(presetsLoadFailedAtom),
 )
 
-export type HistoryFilter = 'all' | 'completed' | 'cancelled'
+/** `all`, or one of the ways a workout can be over. */
+export type HistoryFilter = 'all' | SessionStatus
 
-export const HISTORY_FILTERS: ReadonlyArray<HistoryFilter> = ['all', 'completed', 'cancelled']
+export const HISTORY_FILTERS: ReadonlyArray<HistoryFilter> = ['all', ...FINISHED_STATUSES]
 
 /**
  * Which slice of history is on screen. A `ref` in the view before; an atom now,
@@ -85,7 +89,7 @@ export const historySessionsAtom = Atom.make((get) => {
   const filter = get(historyFilterAtom)
   return get(sortedSessionsAtom).filter(
     (session) =>
-      FINISHED_STATUSES.includes(session.status) && (filter === 'all' || session.status === filter),
+      isFinishedSession(session.status) && (filter === 'all' || session.status === filter),
   )
 })
 
@@ -121,7 +125,7 @@ export const currentSessionAtom = Atom.make((get): WorkoutSession | undefined =>
 export const currentSessionResultAtom = Atom.make((get): DerivedTimer | undefined => {
   const session = get(currentSessionAtom)
   if (session === undefined) return undefined
-  return deriveTimer(session, session.finishedAt ?? get(nowAtom))
+  return finalResult(session, get(nowAtom))
 })
 
 /** The current session re-derived against the ticking clock. */

@@ -76,7 +76,11 @@ function handleOpenAutoFocus(event: Event): void {
           // `--safe-bottom-min`; a `pb-6` beside it would be a second
           // declaration of the same property fighting on stylesheet order.
           'bg-background fixed bottom-[var(--keyboard-inset,0px)] left-0 right-0 z-50 flex w-full flex-col gap-4 overflow-hidden rounded-t-2xl border pt-2 px-4 shadow-lg safe-area-bottom [--safe-bottom-min:1.5rem]',
-          'max-h-[calc(100dvh-var(--keyboard-inset,0px))]',
+          // 100%, not 100dvh: the sheet is `fixed`, so a percentage resolves
+          // against the viewport the document actually got — `dvh` can
+          // over-report it in installed PWAs on Android and let a full sheet
+          // run past the visible top.
+          'max-h-[calc(100%-var(--keyboard-inset,0px))]',
           'data-[state=open]:animate-slide-up-mobile data-[state=closed]:animate-slide-down-mobile',
           'sm:data-[state=open]:animate-in sm:data-[state=closed]:animate-out sm:data-[state=closed]:fade-out-0 sm:data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:duration-200',
           'sm:bottom-auto sm:left-[50%] sm:right-auto sm:top-[50%] sm:max-w-lg sm:max-h-[calc(100vh-4rem)] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:p-6',

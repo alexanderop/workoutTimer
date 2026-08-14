@@ -25,7 +25,15 @@ const Milliseconds = Schema.Natural
 const Duration = Schema.Int.check(Schema.isBetween({ minimum: 1_000, maximum: 86_400_000 }))
 const RestDuration = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 86_400_000 }))
 const Count = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 999 }))
-const StartCountdown = Schema.Literals([0, 3_000, 5_000, 10_000])
+/**
+ * The countdown lengths the settings screen offers, spelled once. It is the
+ * schema's literal set *and* the list the `<select>` renders, so an option the
+ * schema would refuse cannot appear in the dropdown, and a length added here
+ * shows up without anyone editing a template.
+ */
+export const START_COUNTDOWN_OPTIONS = [0, 3_000, 5_000, 10_000] as const
+
+const StartCountdown = Schema.Literals(START_COUNTDOWN_OPTIONS)
 
 /**
  * Cue gain, 0 (silent) to 1 (full scale). Rows written before db v2 lack the
@@ -98,11 +106,28 @@ export const TimerPresetSchema = Schema.Struct({
 
 export interface TimerPreset extends Schema.Schema.Type<typeof TimerPresetSchema> {}
 
+/**
+ * The status list, spelled once. It feeds the schema *and* is what the timer
+ * domain groups into "still going" and "over" — a new status has to be added
+ * here, and the exhaustiveness tests over those two groups fail until it is
+ * sorted into one of them.
+ */
+export const SESSION_STATUSES = [
+  'countdown',
+  'running',
+  'paused',
+  'completed',
+  'cancelled',
+] as const
+
+/** Same treatment: one list, feeding the schema and — via the row — the type. */
+const FINISH_REASONS = ['endpoint', 'manual', 'timeCap', 'cancelled'] as const
+
 export const WorkoutSessionSchema = Schema.Struct({
   id: Schema.NonEmptyString,
   presetId: Schema.optionalKey(Schema.NonEmptyString),
   config: TimerConfigSchema,
-  status: Schema.Literals(['countdown', 'running', 'paused', 'completed', 'cancelled']),
+  status: Schema.Literals(SESSION_STATUSES),
   workoutNotes: Schema.String,
   notes: Schema.String,
   countdownDurationMs: Milliseconds,
@@ -110,7 +135,7 @@ export const WorkoutSessionSchema = Schema.Struct({
   pauseStartedAt: Schema.optionalKey(Timestamp),
   accumulatedPausedMs: Milliseconds,
   finishedAt: Schema.optionalKey(Timestamp),
-  finishReason: Schema.optionalKey(Schema.Literals(['endpoint', 'manual', 'timeCap', 'cancelled'])),
+  finishReason: Schema.optionalKey(Schema.Literals(FINISH_REASONS)),
   rounds: Schema.Array(RoundSplitSchema),
   createdAt: Timestamp,
   updatedAt: Timestamp,
@@ -119,7 +144,38 @@ export const WorkoutSessionSchema = Schema.Struct({
 export interface WorkoutSession extends Schema.Schema.Type<typeof WorkoutSessionSchema> {}
 
 export type SessionStatus = WorkoutSession['status']
-export type FinishReason = 'endpoint' | 'manual' | 'timeCap' | 'cancelled'
+
+/**
+ * The two groups every layer sorts a status into.
+ *
+ * They live here, with the status list, rather than in the timer feature that
+ * reads them — because the repository is where the grouping is actually
+ * *enforced*: `createSession` refuses to start a workout while any active one
+ * exists, and it looks them up by exactly this set. Two spellings of "still
+ * going" would let the screen offer a Start the database then refuses.
+ */
+export const ACTIVE_STATUSES: ReadonlyArray<SessionStatus> = SESSION_STATUSES.filter(
+  (status) => status === 'countdown' || status === 'running' || status === 'paused',
+)
+
+/** The statuses history lists: over, however it ended. */
+export const FINISHED_STATUSES: ReadonlyArray<SessionStatus> = SESSION_STATUSES.filter(
+  (status) => status === 'completed' || status === 'cancelled',
+)
+
+/** A workout still on the clock — the one the run screen owns. */
+export const isActiveSession = (status: SessionStatus): boolean => ACTIVE_STATUSES.includes(status)
+
+/** A workout that is over, however it ended. */
+export const isFinishedSession = (status: SessionStatus): boolean =>
+  FINISHED_STATUSES.includes(status)
+
+/**
+ * Derived, not restated. This used to be a hand-written union sitting beside
+ * the schema's literal list — two declarations of one rule, which is the
+ * drift this module exists to prevent.
+ */
+export type FinishReason = NonNullable<WorkoutSession['finishReason']>
 
 export const TimerSettingsSchema = Schema.Struct({
   id: Schema.Literal('timer'),
@@ -133,6 +189,9 @@ export const TimerSettingsSchema = Schema.Struct({
 })
 
 export interface TimerSettings extends Schema.Schema.Type<typeof TimerSettingsSchema> {}
+
+/** Derived from the row, so the setting and its option list cannot disagree. */
+export type StartCountdownMs = TimerSettings['startCountdownMs']
 
 /**
  * Canonical settings used while the persisted row is loading or absent.

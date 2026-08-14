@@ -11,7 +11,8 @@ import {
   historySessionsAtom,
   type HistoryFilter,
 } from '@/features/timer/atoms'
-import { deriveTimer, formatDuration } from '@/features/timer/domain'
+import { finalResult, formatDuration } from '@/features/timer/domain'
+import { modeName } from '@/features/timer/labels'
 import { RouteNames } from '@/router'
 import { sessionsLoadFailedAtom } from '@/state/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
@@ -31,21 +32,10 @@ function filterLabel(value: HistoryFilter): string {
       : t('history.cancelled')
 }
 
-function modeName(session: WorkoutSession): string {
-  switch (session.config.mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
+const sessionModeName = (session: WorkoutSession): string => modeName(session.config.mode, t)
 
 function resultLabel(session: WorkoutSession): string {
-  const result = deriveTimer(session, session.finishedAt ?? Date.now())
+  const result = finalResult(session)
   const rounds =
     result.completedRounds > 0 ? ` · ${result.completedRounds} ${t('timer.result.rounds')}` : ''
   return `${formatDuration(result.elapsedMs)}${rounds}`
@@ -101,7 +91,7 @@ function formatDate(timestamp: number): string {
             <span class="min-w-0 flex-1">
               <span class="flex items-baseline justify-between gap-3">
                 <span class="font-bold" :class="statusClass(session.status)">{{
-                  modeName(session)
+                  sessionModeName(session)
                 }}</span>
                 <span class="text-xs text-muted-foreground">{{
                   formatDate(session.createdAt)

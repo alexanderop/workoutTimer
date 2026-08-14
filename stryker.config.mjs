@@ -23,12 +23,16 @@ export default {
   // Required, not optional: the default glob includes `vue`, and Stryker really
   // does mutate SFC script blocks. Every mutant outside the unit tier's reach
   // survives by construction and buries the signal. Keep this list in step with
-  // what src/__tests__/unit/ actually covers.
+  // what src/__tests__/unit/ actually covers — the list is the answer to "which
+  // logic is pure enough to grade", so a module that belongs here and is not
+  // here is a module whose tests nobody has checked.
   //
   // Deliberately NOT here:
-  //   - src/db/repositories/** — half the file is the Dexie layer (browser
-  //     tier) and half is the in-memory fake; mutating a test double grades
-  //     the double, not the product.
+  //   - src/db/repositories/** — every method is a Dexie call inside a
+  //     transaction, exercised by the browser tier this Node-only run does not
+  //     boot. What used to be worth grading in there — how paused time
+  //     accumulates across a pause, resume and finish — is now pure, in
+  //     src/db/sessionTransitions.ts, and is in scope below.
   //   - src/db/converters.ts — Effect Schema constructs its validator at
   //     module evaluation time. Those static mutants cannot be selected by
   //     per-test coverage reliably; decoder behavior is asserted in both the
@@ -38,17 +42,30 @@ export default {
   //     not boot.
   //   - src/db/generateId.ts, src/lib/observability.ts — a crypto.randomUUID
   //     wrapper and a DEV-only gate. Equivalent mutants by construction.
+  //   - src/state/*, src/features/*/atoms.ts — an effect atom subscribes to a
+  //     platform API or writes to the document, which this Node-only run does
+  //     not have; the browser tier grades those by driving the screen. The
+  //     value atoms below are the exception, and the rule is the same one the
+  //     naming convention encodes: a derivation is gradable, a subscription is
+  //     not.
   //
-  // The last two entries are what the composable removal bought: `reportFailure`
-  // used to be a composable that reached for the toast store itself, and the
-  // banner arbitration used to be reachable only by rendering two banners. Both
-  // are now pure enough for this tier — a function taking `showToast` as a
-  // parameter, and a value atom over two value atoms.
+  // What the composable removal bought this tier is the last three entries.
+  // `reportFailure` used to be a composable that reached for the toast store
+  // itself; the banner arbitration was reachable only by rendering two
+  // banners; and the arm-then-confirm gesture used to need an `effectScope`
+  // and fake timers because it was a `ref` plus `onScopeDispose`. As atoms
+  // they are all drivable from a bare `AtomRegistry.make()`, which is what put
+  // them in reach of a Node run at all.
   mutate: [
     'src/features/*/domain.ts',
+    'src/features/*/labels.ts',
+    'src/features/*/pickerOptions.ts',
+    'src/features/*/setupForm.ts',
+    'src/db/sessionTransitions.ts',
     'src/lib/backupFile.ts',
     'src/lib/installPlatform.ts',
     'src/lib/reportFailure.ts',
+    'src/state/confirmation.ts',
     'src/state/pwa.ts',
   ],
 

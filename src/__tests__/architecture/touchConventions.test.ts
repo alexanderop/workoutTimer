@@ -137,6 +137,38 @@ export function hoverOnlyControls(source: string): string[] {
  */
 const HOVER_ONLY_ALLOWED: Record<string, string> = {}
 
+// --- C9: sized by the viewport, not by the browser's claim about it -------
+
+/**
+ * `dvh`/`svh`/`lvh` (and their `vw` siblings) are the browser's *claim* about
+ * the viewport, and Android Chrome in an installed PWA can include the
+ * status-bar and gesture-bar bands in that claim while the window excludes
+ * them. An `h-dvh` shell then outgrows the screen by roughly the tab bar's
+ * height — which is exactly how the bottom navigation once vanished on
+ * hardware while every CI browser rendered it perfectly. The height:100%
+ * chain (html/body/#app) resolves to the viewport the document actually got;
+ * fixed-position elements get the same truth from a bare percentage.
+ *
+ * Comments are stripped first so prose *about* the units (the comments that
+ * explain this very rule) cannot trip the scan.
+ */
+const VIEWPORT_CLAIM_UNIT = /\d(?:d|s|l)v[hw]\b|-(?:d|s|l)v[hw]\b/g
+
+function stripComments(source: string): string {
+  return (
+    source
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      // `[^:]` rather than `\s`: a line comment may start immediately after
+      // code (`value();// h-dvh`), but `https://` must not read as one.
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  )
+}
+
+export function viewportClaimUses(source: string): string[] {
+  return [...stripComments(source).matchAll(VIEWPORT_CLAIM_UNIT)].map((match) => match[0])
+}
+
 // --- the rules ------------------------------------------------------------
 
 describe('C6 — environment values are clamped, never read raw', () => {
@@ -196,6 +228,20 @@ describe('C8 — the reduced-motion guard exists', () => {
   })
 })
 
+describe('C9 — sized by the viewport, not by the browser’s claim about it', () => {
+  it.each(SOURCE_FILES.map((file) => [file.id, file] as const))(
+    '%s sizes nothing with a dynamic-viewport unit',
+    (_id, file) => {
+      const uses = viewportClaimUses(file.source)
+
+      expect(
+        uses,
+        `${file.id} sizes with ${uses.join(', ')}. dvh/svh/lvh are the browser's claim about the viewport, and installed PWAs on Android can be handed a claim that includes system-bar bands the window never gets — an h-dvh shell then pushes the tab bar below the visible screen. Size against the real viewport instead: the height:100% chain for in-flow elements, a bare percentage for fixed ones. docs/touch-conventions.md`,
+      ).toEqual([])
+    },
+  )
+})
+
 // --- the rules catch what they claim to catch -----------------------------
 
 describe('the checks reject the conventions written the wrong way', () => {
@@ -253,5 +299,44 @@ describe('the checks reject the conventions written the wrong way', () => {
   it('ignores a component, whose base owns the press', () => {
     const composed = `<template><Button class="hover:bg-white/10" @click="go">x</Button></template>`
     expect(hoverOnlyControls(composed)).toHaveLength(0)
+  })
+
+  it.each(['dvh', 'svh', 'lvh', 'dvw', 'svw', 'lvw'])(
+    'rejects a %s-sized utility — h-dvh being the exact pre-fix shell',
+    (unit) => {
+      expect(viewportClaimUses(`<div class="flex h-${unit} flex-col" />`)).toEqual([`-${unit}`])
+    },
+  )
+
+  it.each(['dvh', 'svh', 'lvh', 'dvw', 'svw', 'lvw'])(
+    'rejects 100%s inside an arbitrary value and inside raw CSS',
+    (unit) => {
+      expect(viewportClaimUses(`'max-h-[calc(100${unit}-var(--keyboard-inset,0px))]'`)).toEqual([
+        `0${unit}`,
+      ])
+      expect(viewportClaimUses(`.shell { min-height: 100${unit} }`)).toEqual([`0${unit}`])
+    },
+  )
+
+  it('accepts the same shell sized by the height chain', () => {
+    expect(viewportClaimUses('<div class="flex h-full min-h-full flex-col" />')).toEqual([])
+  })
+
+  it('does not read prose about the units as a violation', () => {
+    const documented = `<!-- h-full, not h-dvh: 100dvh over-reports. -->\n<div class="h-full" /> /* was 100dvh */ // old h-dvh root`
+    expect(viewportClaimUses(documented)).toEqual([])
+  })
+
+  it('strips a line comment that starts immediately after code', () => {
+    expect(viewportClaimUses('resize();// the old h-dvh shell, 100dvh tall')).toEqual([])
+  })
+
+  it('does not read the // of a URL as a comment', () => {
+    const url = `const docs = 'https://example.com/dvh' // prose: h-dvh was 100dvh\nconst height = '100dvh'`
+    expect(viewportClaimUses(url)).toEqual(['0dvh'])
+  })
+
+  it('leaves plain vh alone — desktop-scoped uses are legitimate', () => {
+    expect(viewportClaimUses(`'sm:max-h-[calc(100vh-4rem)]'`)).toEqual([])
   })
 })

@@ -7,7 +7,8 @@ import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import { activeSessionAtom, homeLoadFailedAtom, recentPresetsAtom } from '@/features/timer/atoms'
 import ModeCard from '@/features/timer/components/ModeCard.vue'
-import { formatDuration } from '@/features/timer/domain'
+import { TIMER_MODES } from '@/features/timer/domain'
+import { configSummary, modeDescription, modeName } from '@/features/timer/labels'
 import { RouteNames } from '@/router'
 import type { TimerConfig, TimerMode } from '@/db'
 
@@ -18,48 +19,9 @@ const loadFailed = useAtomValue(() => homeLoadFailedAtom)
 const activeSession = useAtomValue(() => activeSessionAtom)
 const recentPresets = useAtomValue(() => recentPresetsAtom)
 
-const modes: ReadonlyArray<TimerMode> = ['amrap', 'forTime', 'emom', 'tabata']
-
-function modeName(mode: TimerMode): string {
-  switch (mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.name')
-    case 'forTime':
-      return t('timer.modes.forTime.name')
-    case 'emom':
-      return t('timer.modes.emom.name')
-    case 'tabata':
-      return t('timer.modes.tabata.name')
-  }
-}
-
-function modeDescription(mode: TimerMode): string {
-  switch (mode) {
-    case 'amrap':
-      return t('timer.modes.amrap.description')
-    case 'forTime':
-      return t('timer.modes.forTime.description')
-    case 'emom':
-      return t('timer.modes.emom.description')
-    case 'tabata':
-      return t('timer.modes.tabata.description')
-  }
-}
-
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs === undefined
-        ? modeDescription('forTime')
-        : formatDuration(config.timeCapMs)
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
+const name = (mode: TimerMode): string => modeName(mode, t)
+const description = (mode: TimerMode): string => modeDescription(mode, t)
+const summary = (config: TimerConfig): string => configSummary(config, t)
 
 function openMode(mode: TimerMode): void {
   void router.push({ name: RouteNames.timerSetup, params: { mode } })
@@ -100,11 +62,11 @@ function openMode(mode: TimerMode): void {
       <section class="flex flex-col gap-3" aria-labelledby="timer-modes-heading">
         <h2 id="timer-modes-heading" class="sr-only">{{ t('timer.title') }}</h2>
         <ModeCard
-          v-for="mode in modes"
+          v-for="mode in TIMER_MODES"
           :key="mode"
           :mode="mode"
-          :title="modeName(mode)"
-          :description="modeDescription(mode)"
+          :title="name(mode)"
+          :description="description(mode)"
           @select="openMode(mode)"
         />
       </section>
@@ -143,9 +105,7 @@ function openMode(mode: TimerMode): void {
         >
           <span>
             <span class="block font-semibold">{{ preset.name }}</span>
-            <span class="block text-sm text-muted-foreground">{{
-              configSummary(preset.config)
-            }}</span>
+            <span class="block text-sm text-muted-foreground">{{ summary(preset.config) }}</span>
           </span>
           <span class="size-3 rounded-full bg-[var(--mode-color)]" aria-hidden="true" />
         </button>

@@ -8,7 +8,7 @@ import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
 import { createPreset, deletePreset, presetMutation } from '@/db'
 import { sortedPresetsAtom } from '@/features/timer/atoms'
-import { formatDuration } from '@/features/timer/domain'
+import { configSummary } from '@/features/timer/labels'
 import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
 import { armedConfirmationAtom, requestConfirmationIn } from '@/state/confirmation'
@@ -26,20 +26,7 @@ const presets = useAtomValue(() => sortedPresetsAtom)
 const loadFailed = useAtomValue(() => presetsLoadFailedAtom)
 const failed = reportFailure('change preset', t('presets.actionFailed'))
 
-function configSummary(config: TimerConfig): string {
-  switch (config.mode) {
-    case 'amrap':
-      return formatDuration(config.durationMs)
-    case 'forTime':
-      return config.timeCapMs
-        ? formatDuration(config.timeCapMs)
-        : t('timer.modes.forTime.description')
-    case 'emom':
-      return `${config.rounds} × ${formatDuration(config.intervalMs)}`
-    case 'tabata':
-      return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
-  }
-}
+const summary = (config: TimerConfig): string => configSummary(config, t)
 
 function usePreset(preset: TimerPreset): void {
   void router.push({
@@ -100,7 +87,7 @@ function remove(preset: TimerPreset): Promise<unknown> {
           <span class="mt-1 size-3 rounded-full bg-[var(--mode-color)]" aria-hidden="true" />
           <div class="min-w-0 flex-1">
             <h2 class="font-bold">{{ preset.name }}</h2>
-            <p class="mt-1 text-sm text-muted-foreground">{{ configSummary(preset.config) }}</p>
+            <p class="mt-1 text-sm text-muted-foreground">{{ summary(preset.config) }}</p>
             <p v-if="preset.workoutNotes" class="mt-2 line-clamp-2 text-sm">
               {{ preset.workoutNotes }}
             </p>
