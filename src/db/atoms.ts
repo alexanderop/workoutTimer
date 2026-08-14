@@ -6,7 +6,19 @@ export const SESSIONS_KEY = 'sessions'
 export const PRESETS_KEY = 'presets'
 export const SETTINGS_KEY = 'timer-settings'
 
-export const dbRuntime = Atom.runtime(dbLayer)
+/**
+ * The layer stack behind every read and write atom, built once per registry.
+ *
+ * `keepAlive` because the Dexie connection's lifetime is a decision, not an
+ * accident of mount ordering. Without it the runtime atom is disposed as soon
+ * as no db-backed atom is subscribed — one tick with nothing mounted closes the
+ * database and the next screen reopens it. Today every screen happens to read
+ * a table, and a route change unmounts and remounts within the same tick, so
+ * that gap never opens; the moment one screen stops reading, it would. Held
+ * open until `registry.dispose()`, which is what `renderApp` calls per browser
+ * test — so the connection still goes with the test rather than the page.
+ */
+export const dbRuntime = Atom.runtime(dbLayer).pipe(Atom.keepAlive)
 
 /**
  * A write edge into the database. Programs must already have `never` in the

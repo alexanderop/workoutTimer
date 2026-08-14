@@ -1,19 +1,20 @@
 <script setup lang="ts">
+import { useAtomValue } from '@effect/atom-vue'
 import type { DialogContentEmits, DialogContentProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
 import { X } from '@lucide/vue'
 import { reactiveOmit } from '@vueuse/core'
 import { DialogClose, DialogContent, DialogPortal, useForwardPropsEmits } from 'reka-ui'
 import { useI18n } from 'vue-i18n'
-import { useTouchDevice } from '@/composables/useTouchDevice'
 import { cn } from '@/lib/utils'
+import { touchDeviceAtom } from '@/state/browser'
 import DialogOverlay from './DialogOverlay.vue'
 
 /**
  * Keyboard-aware dialog content: a bottom sheet on small viewports, a
  * centered dialog from `sm:` up. Mobile-first is the product here, so this
  * is *the* dialog content — there is no separate desktop variant to pick
- * between. Pairs with useKeyboardInset() (App.vue), which keeps
+ * between. Pairs with keyboardInsetEffectAtom (App.vue), which keeps
  * `--keyboard-inset` up to date so the sheet sits above the on-screen
  * keyboard instead of underneath it.
  *
@@ -45,7 +46,7 @@ defineSlots<{
 const delegatedProps = reactiveOmit(props, 'class', 'showCloseButton')
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 
-const { isTouchDevice } = useTouchDevice()
+const isTouchDevice = useAtomValue(() => touchDeviceAtom)
 
 // On touch devices reka-ui's autofocus would focus the first input and pop
 // the on-screen keyboard while the sheet is still animating in, racing the

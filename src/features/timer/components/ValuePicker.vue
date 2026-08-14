@@ -1,31 +1,36 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { useAtom } from '@effect/atom-vue'
+import { pickerCustomOpenAtom } from '@/features/timer/atoms'
 import type { PickerOption } from '@/features/timer/pickerOptions'
 
-defineProps<{
+const props = defineProps<{
   id: string
   label: string
+  modelValue: number | undefined
   options: ReadonlyArray<PickerOption>
   emptyLabel?: string
   customLabel: string
 }>()
 
-const model = defineModel<number | undefined>({ required: true })
-const customOpen = ref(false)
+// Explicit prop + emit rather than `defineModel` — see TimePicker.vue.
+const emit = defineEmits<{ 'update:modelValue': [number | undefined] }>()
+
+const [customOpen, setCustomOpen] = useAtom(() => pickerCustomOpenAtom(props.id))
 
 function choose(value: number | undefined): void {
-  model.value = value
-  customOpen.value = false
+  emit('update:modelValue', value)
+  setCustomOpen(false)
 }
 
 function openCustom(): void {
-  customOpen.value = !customOpen.value
-  if (customOpen.value && model.value === undefined) model.value = 1
+  const next = !customOpen.value
+  setCustomOpen(next)
+  if (next && props.modelValue === undefined) emit('update:modelValue', 1)
 }
 
 function updateValue(event: Event): void {
   const value = Number((event.currentTarget as HTMLInputElement).value)
-  model.value = Math.min(999, Math.max(1, Math.trunc(value || 1)))
+  emit('update:modelValue', Math.min(999, Math.max(1, Math.trunc(value || 1))))
 }
 </script>
 
@@ -41,11 +46,11 @@ function updateValue(event: Event): void {
         type="button"
         class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
         :class="
-          model === undefined
+          modelValue === undefined
             ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
             : 'bg-background'
         "
-        :aria-pressed="model === undefined"
+        :aria-pressed="modelValue === undefined"
         @click="choose(undefined)"
       >
         {{ emptyLabel }}
@@ -56,11 +61,11 @@ function updateValue(event: Event): void {
         type="button"
         class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
         :class="
-          model === option.value
+          modelValue === option.value
             ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
             : 'bg-background'
         "
-        :aria-pressed="model === option.value"
+        :aria-pressed="modelValue === option.value"
         @click="choose(option.value)"
       >
         {{ option.label }}
@@ -90,7 +95,7 @@ function updateValue(event: Event): void {
         inputmode="numeric"
         min="1"
         max="999"
-        :value="model ?? 1"
+        :value="modelValue ?? 1"
         @input="updateValue"
       />
     </label>

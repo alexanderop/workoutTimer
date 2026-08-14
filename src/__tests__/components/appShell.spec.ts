@@ -1,4 +1,5 @@
 import type { Router } from 'vue-router'
+import { AtomRegistry, registryKey } from '@effect/atom-vue'
 import { NotebookPen, Settings } from '@lucide/vue'
 import { page } from 'vitest/browser'
 import { render } from 'vitest-browser-vue'
@@ -7,6 +8,7 @@ import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
 import { i18n } from '@/i18n'
+import { connectRoute } from '@/state/route'
 import type { NavItem } from '@/types/navigation'
 import { it as base } from '../fixtures'
 
@@ -39,6 +41,11 @@ const it = base.extend('renderShell', async ({}, { onCleanup }) => {
     await router.push(initialPath)
     await router.isReady()
 
+    // The shell reads the route from an atom, not from `useRoute()`, so a
+    // harness that mounts it has to run the same bridge main.ts does.
+    const registry = AtomRegistry.make()
+    connectRoute(router, registry)
+
     mounted = render(AppShell, {
       props: { items },
       slots: {
@@ -47,7 +54,10 @@ const it = base.extend('renderShell', async ({}, { onCleanup }) => {
           ? { 'center-action': () => h('button', { type: 'button' }, 'center') }
           : {}),
       },
-      global: { plugins: [i18n, router] },
+      global: {
+        plugins: [i18n, router],
+        provide: { [registryKey as symbol]: registry },
+      },
     })
 
     return { router }

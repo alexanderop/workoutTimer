@@ -38,7 +38,19 @@ export default {
   //     not boot.
   //   - src/db/generateId.ts, src/lib/observability.ts — a crypto.randomUUID
   //     wrapper and a DEV-only gate. Equivalent mutants by construction.
-  mutate: ['src/features/*/domain.ts', 'src/lib/backupFile.ts', 'src/lib/installPlatform.ts'],
+  //
+  // The last two entries are what the composable removal bought: `reportFailure`
+  // used to be a composable that reached for the toast store itself, and the
+  // banner arbitration used to be reachable only by rendering two banners. Both
+  // are now pure enough for this tier — a function taking `showToast` as a
+  // parameter, and a value atom over two value atoms.
+  mutate: [
+    'src/features/*/domain.ts',
+    'src/lib/backupFile.ts',
+    'src/lib/installPlatform.ts',
+    'src/lib/reportFailure.ts',
+    'src/state/pwa.ts',
+  ],
 
   // Reuse the previous run's verdicts for unchanged code+tests. The report
   // lives in reports/, which is gitignored — CI gets a cold run.

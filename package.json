@@ -65,8 +65,6 @@
     "@stryker-mutator/api": "catalog:testing",
     "@stryker-mutator/core": "catalog:testing",
     "@stryker-mutator/vitest-runner": "catalog:testing",
-    "@testing-library/user-event": "^14.6.3",
-    "@testing-library/vue": "^8.1.0",
     "@tsconfig/node22": "catalog:build",
     "@types/node": "catalog:build",
     "@vite-pwa/assets-generator": "catalog:build",

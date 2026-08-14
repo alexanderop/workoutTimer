@@ -1,31 +1,23 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomValue } from '@effect/atom-vue'
+import { useAtomValue } from '@effect/atom-vue'
 import { Bookmark, Play } from '@lucide/vue'
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
+import { activeSessionAtom, homeLoadFailedAtom, recentPresetsAtom } from '@/features/timer/atoms'
 import ModeCard from '@/features/timer/components/ModeCard.vue'
-import { formatDuration, sortPresets } from '@/features/timer/domain'
+import { formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
-import { presetsAtom, sessionsAtom } from '@/stores/timerData'
 import type { TimerConfig, TimerMode } from '@/db'
 
 const { t } = useI18n()
 const router = useRouter()
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const presetsResult = useAtomValue(() => presetsAtom)
 
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const presets = computed(() => AsyncResult.getOrElse(presetsResult.value, () => []))
-const loadFailed = computed(
-  () => AsyncResult.isFailure(sessionsResult.value) || AsyncResult.isFailure(presetsResult.value),
-)
-const activeSession = computed(() =>
-  sessions.value.find((session) => ['countdown', 'running', 'paused'].includes(session.status)),
-)
-const recentPresets = computed(() => sortPresets(presets.value).slice(0, 4))
+const loadFailed = useAtomValue(() => homeLoadFailedAtom)
+const activeSession = useAtomValue(() => activeSessionAtom)
+const recentPresets = useAtomValue(() => recentPresetsAtom)
+
 const modes: ReadonlyArray<TimerMode> = ['amrap', 'forTime', 'emom', 'tabata']
 
 function modeName(mode: TimerMode): string {

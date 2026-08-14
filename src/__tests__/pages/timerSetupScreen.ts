@@ -25,4 +25,15 @@ export class TimerSetupScreen {
   readonly expectTimeShortcut = vi.defineHelper(async (label: string): Promise<void> => {
     await expect.element(page.getByRole('button', { name: label, exact: true })).toBeVisible()
   })
+
+  /** Which shortcut the form is currently on, as the chips report it. */
+  readonly expectTimeSelected = vi.defineHelper(async (label: string): Promise<void> => {
+    await expect
+      .element(page.getByRole('button', { name: label, exact: true }))
+      .toHaveAttribute('aria-pressed', 'true')
+  })
+
+  readonly expectPresetName = vi.defineHelper(async (name: string): Promise<void> => {
+    await expect.element(page.getByLabelText('Preset name')).toHaveValue(name)
+  })
 }

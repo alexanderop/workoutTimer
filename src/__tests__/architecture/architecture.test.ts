@@ -4,8 +4,8 @@
  *
  * 1. No circular dependencies inside any layer.
  * 2. Features never import from other features.
- * 3. Shared layers (components, composables, stores, db, lib, types) never
- *    depend on features or views.
+ * 3. Shared layers (components, state, db, lib, types) never depend on
+ *    features or views.
  * 4. The database is only reached through its public surface (src/db/index)
  *    — nobody imports the repositories directly.
  *
@@ -28,10 +28,10 @@ const FEATURES = readdirSync(new URL('../../features/', import.meta.url), {
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
 
-const SHARED_FOLDERS = ['components', 'composables', 'stores', 'db', 'lib', 'types'] as const
+const SHARED_FOLDERS = ['components', 'state', 'db', 'lib', 'types'] as const
 
 describe('circular dependencies', () => {
-  for (const folder of ['features', 'components', 'composables', 'stores', 'db'] as const) {
+  for (const folder of ['features', 'components', 'state', 'db'] as const) {
     it(`${folder} should be free of cycles`, async () => {
       const rule = projectFiles().inFolder(`src/${folder}/**`).should().haveNoCycles()
       await expect(rule).toPassAsync()
@@ -74,7 +74,7 @@ describe('layer dependencies', () => {
 })
 
 describe('db encapsulation', () => {
-  for (const folder of ['features', 'components', 'composables', 'stores'] as const) {
+  for (const folder of ['features', 'components', 'state'] as const) {
     it(`${folder} should not import db repositories directly`, async () => {
       const rule = projectFiles()
         .inFolder(`src/${folder}/**`)

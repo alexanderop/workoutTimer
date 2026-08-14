@@ -1,8 +1,8 @@
 import { Effect } from 'effect'
 import { test } from 'vitest'
 import { nextTick } from 'vue'
-import { resetThemeState, useTheme } from '@/composables/useTheme'
-import { createSession, runDb, updateTimerSettings } from '@/db'
+import { resetThemeState, setColorScheme } from '@/state/theme'
+import { createPreset, createSession, runDb, updateTimerSettings } from '@/db'
 import { resetAppState } from './helpers/reset'
 import { AppScreen } from './pages/appScreen'
 import { TimerScreen } from './pages/timerScreen'
@@ -41,6 +41,22 @@ export const it = test
     onCleanup(() => timer.close())
     return timer
   })
+  // A saved preset opened for editing, cold, through the URL the presets list
+  // links to. The preset exists on disk before the screen mounts, so the form
+  // has to seed itself from a row that arrives after its first render.
+  .extend('presetSetup', async ({}, { onCleanup }) => {
+    await prepareTimer()
+    const preset = await runDb(
+      createPreset({
+        name: 'Twenty minute grind',
+        config: { mode: 'amrap', durationMs: 1_200_000 },
+        workoutNotes: '',
+      }).pipe(Effect.orDie),
+    )
+    const timer = await TimerScreen.open(`/timer/amrap?preset=${preset.id}`)
+    onCleanup(() => timer.close())
+    return { preset, timer }
+  })
   .extend('recoverableTimer', async ({}, { onCleanup }) => {
     await prepareTimer()
     const session = await runDb(
@@ -58,18 +74,15 @@ export const it = test
   .extend('presets', async ({}, { onCleanup }) => openScreen('/presets', onCleanup))
   .extend('settings', async ({}, { onCleanup }) => openScreen('/settings', onCleanup))
   .extend('theme', async ({}, { onCleanup }) => {
-    const { isDark } = useTheme()
-    onCleanup(async () => {
-      resetThemeState()
-      await nextTick()
-    })
+    onCleanup(() => resetThemeState())
     return {
-      // Through the real mechanism, not a hand-toggled class: whatever
-      // useTheme writes to the document is what the screenshot captures.
-      // useDark applies the `.dark` class from a `flush: 'post'` watcher,
-      // hence the tick.
+      // Through the real mechanism, not a hand-toggled class: the preference
+      // goes to storage and the app's atoms follow, so whatever useTheme
+      // writes to the document is what the screenshot captures. A fixture has
+      // no component, hence the registry-free `setColorScheme` rather than
+      // `useTheme()`. The tick lets the re-render land before the screenshot.
       async dark(): Promise<void> {
-        isDark.value = true
+        setColorScheme('dark')
         await nextTick()
       },
     }

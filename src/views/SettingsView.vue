@@ -1,20 +1,15 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Download, Smartphone, Upload } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed, ref } from 'vue'
+import { useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageLayout from '@/components/PageLayout.vue'
 import PwaInstallDialog from '@/components/PwaInstallDialog.vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { useInstallPrompt } from '@/composables/useInstallPrompt'
-import { useLocale } from '@/composables/useLocale'
-import { useReportFailure } from '@/composables/useReportFailure'
-import { useTheme } from '@/composables/useTheme'
 import {
-  DEFAULT_TIMER_SETTINGS,
   exportData,
   importData,
   restoreMutation,
@@ -23,25 +18,29 @@ import {
   type TimerSettings,
   updateTimerSettings,
 } from '@/db'
-import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
+import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
 import type { SupportedLocale } from '@/i18n'
 import { downloadBackup, readBackupFile } from '@/lib/backupFile'
-import { timerSettingsAtom } from '@/stores/timerData'
-import { useToastStore } from '@/stores/toast'
+import { failureReporter } from '@/lib/reportFailure'
+import { SUPPORTED_LOCALES } from '@/i18n'
+import { canInstallAtom, installDialogOpenAtom, isInstalledAtom } from '@/state/install'
+import { localeAtom } from '@/state/locale'
+import { isDarkAtom } from '@/state/theme'
+import { timerSettingsValueAtom } from '@/state/timerData'
+import { showToastAtom } from '@/state/toast'
 
 const { t } = useI18n()
-const { isDark } = useTheme()
-const { locale, setLocale, supportedLocales } = useLocale()
-const { canInstall, isInstalled } = useInstallPrompt()
-const toast = useToastStore()
-const installDialogOpen = ref(false)
+const [isDark, setDark] = useAtom(() => isDarkAtom)
+const [locale, setLocale] = useAtom(() => localeAtom)
+const supportedLocales = SUPPORTED_LOCALES
+const canInstall = useAtomValue(() => canInstallAtom)
+const isInstalled = useAtomValue(() => isInstalledAtom)
+const showToast = useAtomSet(() => showToastAtom)
+const [installDialogOpen, setInstallDialogOpen] = useAtom(() => installDialogOpenAtom)
 const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
 const runRestoreMutation = useAtomSet(() => restoreMutation, { mode: 'promise' })
-const reportFailure = useReportFailure('settings')
-const settingsResult = useAtomValue(() => timerSettingsAtom)
-const settings = computed(() =>
-  AsyncResult.getOrElse(settingsResult.value, () => DEFAULT_TIMER_SETTINGS),
-)
+const reportFailure = failureReporter('settings', showToast)
+const settings = useAtomValue(() => timerSettingsValueAtom)
 
 function localeName(code: SupportedLocale): string {
   return t('settings.language.nativeName', {}, { locale: code })
@@ -92,7 +91,9 @@ function handleExport(): Promise<void> {
   )
 }
 
-const fileInput = ref<HTMLInputElement | null>(null)
+// A DOM handle, not application state — `useTemplateRef` is the one `Ref` this
+// codebase still creates on purpose.
+const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 
 async function handleImportFile(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
@@ -104,7 +105,7 @@ async function handleImportFile(event: Event): Promise<void> {
   await runRestoreMutation(
     readBackupFile(file).pipe(
       Effect.flatMap(importData),
-      Effect.tap(() => Effect.sync(() => toast.showToast(t('settings.data.importSuccess')))),
+      Effect.tap(() => Effect.sync(() => showToast(t('settings.data.importSuccess')))),
       Effect.catchTags({
         'Db.BackupInvalidError': reportFailure('import backup', t('settings.data.invalidBackup')),
         'BackupFile.BackupFileError': failed,
@@ -122,7 +123,7 @@ async function handleImportFile(event: Event): Promise<void> {
         <h2 class="text-section-title font-semibold">{{ t('settings.appearance.title') }}</h2>
         <div class="flex min-h-touch-target items-center justify-between rounded-xl border p-4">
           <Label for="dark-mode-switch">{{ t('settings.appearance.darkMode') }}</Label>
-          <Switch id="dark-mode-switch" v-model="isDark" />
+          <Switch id="dark-mode-switch" :model-value="isDark" @update:model-value="setDark" />
         </div>
       </section>
 
@@ -246,7 +247,7 @@ async function handleImportFile(event: Event): Promise<void> {
               {{ t('pwa.install.settings.description') }}
             </p>
             <div>
-              <Button variant="outline" @click="installDialogOpen = true">
+              <Button variant="outline" @click="setInstallDialogOpen(true)">
                 <Smartphone />
                 {{ t('pwa.install.settings.action') }}
               </Button>
@@ -279,6 +280,6 @@ async function handleImportFile(event: Event): Promise<void> {
       </section>
     </div>
 
-    <PwaInstallDialog v-model:open="installDialogOpen" />
+    <PwaInstallDialog :open="installDialogOpen" @update:open="setInstallDialogOpen" />
   </PageLayout>
 </template>

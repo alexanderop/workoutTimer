@@ -1,24 +1,31 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
-import { useInstallPrompt } from '@/composables/useInstallPrompt'
-import { usePwaUpdate } from '@/composables/usePwaUpdate'
+import {
+  dismissInstallHintAtom,
+  installDialogOpenAtom,
+  installDialogRequestedAtom,
+  installPromptEffectAtom,
+} from '@/state/install'
+import { bannerVisibleAtom } from '@/state/pwa'
 
 const InstallDialog = defineAsyncComponent(() => import('./PwaInstallDialog.vue'))
 
 const { t } = useI18n()
-const { hintVisible, dismissHint } = useInstallPrompt()
-const { needRefresh } = usePwaUpdate()
-const dialogOpen = ref(false)
-const dialogRequested = ref(false)
-
-// Both banners occupy the same space. An available update takes priority.
-const bannerVisible = computed(() => hintVisible.value && !needRefresh.value)
+// The shell always renders this component, so subscribing here is what puts
+// the `beforeinstallprompt` / `appinstalled` listeners up for the app's life.
+useAtomValue(() => installPromptEffectAtom)
+const dismissHint = useAtomSet(() => dismissInstallHintAtom)
+const bannerVisible = useAtomValue(() => bannerVisibleAtom)
+const dialogRequested = useAtomValue(() => installDialogRequestedAtom)
+const [dialogOpen, setDialogOpen] = useAtom(() => installDialogOpenAtom)
+const setDialogRequested = useAtomSet(() => installDialogRequestedAtom)
 
 function openDialog(): void {
-  dialogRequested.value = true
-  dialogOpen.value = true
+  setDialogRequested(true)
+  setDialogOpen(true)
 }
 </script>
 
@@ -33,7 +40,7 @@ function openDialog(): void {
         <p class="text-sm text-muted-foreground">{{ t('pwa.install.banner.body') }}</p>
       </div>
       <div class="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" @click="dismissHint">
+        <Button variant="ghost" size="sm" @click="dismissHint()">
           {{ t('pwa.install.banner.later') }}
         </Button>
         <Button size="sm" @click="openDialog">
@@ -43,5 +50,5 @@ function openDialog(): void {
     </div>
   </div>
 
-  <InstallDialog v-if="dialogRequested" v-model:open="dialogOpen" />
+  <InstallDialog v-if="dialogRequested" :open="dialogOpen" @update:open="setDialogOpen" />
 </template>

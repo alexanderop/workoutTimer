@@ -1,19 +1,14 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { injectRegistry, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Pause, Play, Plus, Volume2, VolumeX, X } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useTimestamp } from '@vueuse/core'
+import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import { useArmConfirmation } from '@/composables/useArmConfirmation'
-import { useReportFailure } from '@/composables/useReportFailure'
 import {
   addSessionRound,
-  DEFAULT_TIMER_SETTINGS,
   finishSession,
-  markSessionRunning,
   pauseSession,
   resumeSession,
   sessionMutation,
@@ -21,44 +16,44 @@ import {
   type FinishReason,
   updateTimerSettings,
 } from '@/db'
+import { currentSessionAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
-import { deriveTimer, formatDuration, SECOND_MS } from '@/features/timer/domain'
-import { emitTimerCue, unlockTimerAudio } from '@/features/timer/useTimerFeedback'
-import { useWakeLock } from '@/features/timer/useWakeLock'
+import { formatDuration, SECOND_MS } from '@/features/timer/domain'
+import { timerCueAtom, timerRunDriverAtom } from '@/features/timer/runDriver'
+import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
+import { wakeLockEffectAtom } from '@/features/timer/wakeLock'
+import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
-import { sessionsAtom, timerSettingsAtom } from '@/stores/timerData'
+import { armedConfirmationAtom, requestConfirmationIn } from '@/state/confirmation'
+import { timerSettingsValueAtom } from '@/state/timerData'
+import { showToastAtom } from '@/state/toast'
+import type { TimerMode } from '@/db'
+import type { RouteLocationRaw } from 'vue-router'
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
 const runSettingsMutation = useAtomSet(() => settingsMutation, { mode: 'promise' })
-const reportFailure = useReportFailure('timer-run')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const settingsResult = useAtomValue(() => timerSettingsAtom)
-const now = useTimestamp({ interval: 100 })
+const registry = injectRegistry()
+const showToast = useAtomSet(() => showToastAtom)
+const reportFailure = failureReporter('timer-run', showToast)
 
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
-const settings = computed(() =>
-  AsyncResult.getOrElse(settingsResult.value, () => DEFAULT_TIMER_SETTINGS),
-)
-const derived = computed(() => (session.value ? deriveTimer(session.value, now.value) : undefined))
-const mode = computed(() => session.value?.config.mode ?? 'amrap')
-const displayTime = computed(() =>
+const session = useAtomValue(() => currentSessionAtom)
+const settings = useAtomValue(() => timerSettingsValueAtom)
+const derived = useAtomValue(() => runDerivedTimerAtom)
+
+// Subscribing is what starts them: the transition machine, the audio cues, and
+// the wake lock all live in atoms and run only while this screen is mounted.
+useAtomValue(() => timerRunDriverAtom)
+useAtomValue(() => timerCueAtom)
+useAtomValue(() => wakeLockEffectAtom)
+
+const mode = (): TimerMode => session.value?.config.mode ?? 'amrap'
+const displayTime = (): string =>
   derived.value
     ? formatDuration(derived.value.primaryMs, derived.value.primaryMs <= 10 * SECOND_MS)
-    : '00:00',
-)
-const canCaptureRound = computed(() => ['amrap', 'forTime'].includes(mode.value))
-const keepAwake = computed(
-  () =>
-    settings.value.keepAwake &&
-    session.value !== undefined &&
-    ['countdown', 'running', 'paused'].includes(session.value.status),
-)
-
-useWakeLock(keepAwake)
+    : '00:00'
+const canCaptureRound = (): boolean => ['amrap', 'forTime'].includes(mode())
 
 /**
  * An AudioContext may only be created from a user gesture, and this screen is
@@ -79,67 +74,37 @@ onMounted(() => {
   })
 })
 
-const transitionPending = ref(false)
-const actionConfirmation = useArmConfirmation<'finish' | 'cancel'>()
-const finishArmed = computed(() => actionConfirmation.isArmed('finish'))
-const cancelArmed = computed(() => actionConfirmation.isArmed('cancel'))
+// Read as well as write: the Finish and Cancel labels change while armed,
+// and the subscription is what gives the 3 s expiry a registry to write to.
+const armedKey = useAtomValue(() => armedConfirmationAtom('timer-run'))
 
 const failed = reportFailure('update timer', t('timer.run.saveFailed'))
 
-function persistCompletion(id: string, reason: FinishReason): Promise<boolean> {
+/**
+ * End the workout and go where that leaves the user — with the navigation
+ * composed *into* the program rather than gated on the awaited promise.
+ *
+ * `mode: 'promise'` resolves the mutation atom's single `AsyncResult` slot, not
+ * this call: `sessionMutation` is built `concurrent: true` (`src/db/atoms.ts`)
+ * and shared with the run driver, so two writes in flight settle together, on
+ * the value of whichever fiber started first. Reading a `true`/`false` back out
+ * of it meant a Finish tap landing while the driver retried `markSessionRunning`
+ * saw the driver's value, concluded the write had failed, and stayed on the
+ * screen with the workout already finished on disk. A `tap` inside the program
+ * cannot be about anyone else's call.
+ */
+function persistCompletion(
+  id: string,
+  reason: FinishReason,
+  destination: RouteLocationRaw,
+): Promise<unknown> {
   return runMutation(
     finishSession(id, reason).pipe(
-      Effect.as(true),
-      Effect.catchTag('Db.DatabaseError', (error) => failed(error).pipe(Effect.as(false))),
-    ),
-  ).then((saved) => saved === true)
-}
-
-watch([session, now], async ([current, currentNow]) => {
-  if (!current || transitionPending.value) return
-  if (current.status === 'countdown' && currentNow >= current.startedAt) {
-    transitionPending.value = true
-    await runMutation(
-      markSessionRunning(current.id).pipe(Effect.catchTag('Db.DatabaseError', failed)),
-    )
-    transitionPending.value = false
-    return
-  }
-  const state = deriveTimer(current, currentNow)
-  if (!state.isComplete || ['completed', 'cancelled'].includes(current.status)) return
-  transitionPending.value = true
-  const reason = current.config.mode === 'forTime' ? 'timeCap' : 'endpoint'
-  const saved = await runMutation(
-    finishSession(current.id, reason).pipe(
-      Effect.tap(() => Effect.sync(() => emitTimerCue(settings.value, 'complete'))),
-      Effect.as(true),
-      Effect.catchTag('Db.DatabaseError', (error) => failed(error).pipe(Effect.as(false))),
+      Effect.tap(() => Effect.sync(() => void router.replace(destination))),
+      Effect.catchTag('Db.DatabaseError', failed),
     ),
   )
-  if (saved) {
-    await router.replace({ name: RouteNames.timerResult, params: { id: current.id } })
-  }
-  transitionPending.value = false
-})
-
-let previousPhase: string | undefined
-let previousCountdownSecond: number | undefined
-watch(
-  derived,
-  (state) => {
-    if (!state || state.phase === 'finished') return
-    if (previousPhase !== undefined && previousPhase !== state.phase) {
-      emitTimerCue(settings.value, 'phase')
-    }
-    previousPhase = state.phase
-    const second = Math.ceil(state.primaryMs / SECOND_MS)
-    if (second <= 3 && second > 0 && second !== previousCountdownSecond) {
-      emitTimerCue(settings.value, 'countdown', String(second))
-    }
-    previousCountdownSecond = second
-  },
-  { immediate: true },
-)
+}
 
 function phaseLabel(): string {
   if (session.value?.status === 'paused') return t('timer.run.paused')
@@ -154,7 +119,7 @@ function phaseLabel(): string {
 }
 
 function modeName(): string {
-  switch (mode.value) {
+  switch (mode()) {
     case 'amrap':
       return t('timer.modes.amrap.name')
     case 'forTime':
@@ -199,25 +164,18 @@ async function addRound(): Promise<void> {
 async function finish(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!actionConfirmation.requestConfirmation('finish')) return
-  transitionPending.value = true
-  const saved = await persistCompletion(current.id, 'manual')
-  if (saved) {
-    await router.replace({ name: RouteNames.timerResult, params: { id: current.id } })
-  }
-  transitionPending.value = false
+  if (!requestConfirmationIn(registry, 'timer-run', 'finish')) return
+  await persistCompletion(current.id, 'manual', {
+    name: RouteNames.timerResult,
+    params: { id: current.id },
+  })
 }
 
 async function cancel(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!actionConfirmation.requestConfirmation('cancel')) return
-  transitionPending.value = true
-  const saved = await persistCompletion(current.id, 'cancelled')
-  if (saved) {
-    await router.replace({ name: RouteNames.timer })
-  }
-  transitionPending.value = false
+  if (!requestConfirmationIn(registry, 'timer-run', 'cancel')) return
+  await persistCompletion(current.id, 'cancelled', { name: RouteNames.timer })
 }
 
 function toggleSound(): Promise<unknown> {
@@ -234,7 +192,7 @@ function toggleSound(): Promise<unknown> {
 
 <template>
   <div
-    :data-mode="mode"
+    :data-mode="mode()"
     class="flex h-full min-h-dvh flex-col bg-neutral-950 text-white safe-area-bottom"
   >
     <header class="flex items-center justify-between gap-3 p-4">
@@ -242,7 +200,7 @@ function toggleSound(): Promise<unknown> {
         variant="ghost"
         size="icon"
         class="text-white hover:bg-white/10 hover:text-white"
-        :aria-label="cancelArmed ? t('timer.run.cancelConfirm') : t('timer.run.cancel')"
+        :aria-label="armedKey === 'cancel' ? t('timer.run.cancelConfirm') : t('timer.run.cancel')"
         @click="cancel"
       >
         <X />
@@ -282,7 +240,7 @@ function toggleSound(): Promise<unknown> {
         <p
           class="mt-2 text-[clamp(3.5rem,18vw,7rem)] leading-none font-bold tracking-tight tabular-nums"
         >
-          {{ displayTime }}
+          {{ displayTime() }}
         </p>
       </TimerRing>
 
@@ -297,7 +255,7 @@ function toggleSound(): Promise<unknown> {
           {{ session.status === 'paused' ? t('timer.run.resume') : t('timer.run.pause') }}
         </Button>
         <Button
-          v-if="canCaptureRound"
+          v-if="canCaptureRound()"
           class="h-14 bg-[var(--mode-color)] text-base text-[var(--mode-foreground)]"
           :disabled="derived.phase === 'countdown'"
           @click="addRound"
@@ -311,17 +269,17 @@ function toggleSound(): Promise<unknown> {
           class="h-14 border-white/30 bg-transparent text-base text-white hover:bg-white/10 hover:text-white"
           @click="finish"
         >
-          {{ finishArmed ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
+          {{ armedKey === 'finish' ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
         </Button>
       </div>
 
       <Button
-        v-if="canCaptureRound"
+        v-if="canCaptureRound()"
         variant="ghost"
         class="text-white/70 hover:bg-white/10 hover:text-white"
         @click="finish"
       >
-        {{ finishArmed ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
+        {{ armedKey === 'finish' ? t('timer.run.finishConfirm') : t('timer.run.finish') }}
       </Button>
     </main>
   </div>

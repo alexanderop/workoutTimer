@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { injectRegistry, useAtomValue } from '@effect/atom-vue'
 import { Share, SquarePlus } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
@@ -11,20 +12,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { useInstallPrompt } from '@/composables/useInstallPrompt'
+import { canPromptDirectlyAtom, installPlatform, promptInstallIn } from '@/state/install'
 
-const open = defineModel<boolean>('open', { required: true })
+// Explicit prop + emit rather than `defineModel`: the macro compiles to a
+// writable `ref`, and the model's value belongs to the caller's atom.
+defineProps<{ open: boolean }>()
+const emit = defineEmits<{ 'update:open': [boolean] }>()
+
 const { t } = useI18n()
-const { canPromptDirectly, platform, promptInstall } = useInstallPrompt()
+const registry = injectRegistry()
+const canPromptDirectly = useAtomValue(() => canPromptDirectlyAtom)
 
 async function handleInstall(): Promise<void> {
-  const outcome = await promptInstall()
-  if (outcome === 'accepted') open.value = false
+  const outcome = await promptInstallIn(registry)
+  if (outcome === 'accepted') emit('update:open', false)
 }
 </script>
 
 <template>
-  <Dialog v-model:open="open">
+  <Dialog :open="open" @update:open="emit('update:open', $event)">
     <DialogContent>
       <DialogHeader>
         <DialogTitle>{{ t('pwa.install.dialog.title') }}</DialogTitle>
@@ -36,7 +42,7 @@ async function handleInstall(): Promise<void> {
         <Button @click="handleInstall">{{ t('pwa.install.dialog.action') }}</Button>
       </div>
 
-      <div v-else-if="platform === 'ios'" class="flex flex-col gap-3">
+      <div v-else-if="installPlatform === 'ios'" class="flex flex-col gap-3">
         <p class="text-sm text-muted-foreground">{{ t('pwa.install.dialog.ios.intro') }}</p>
         <ol class="flex list-decimal flex-col gap-2 pl-5 text-sm">
           <li class="flex items-center gap-2">
@@ -54,7 +60,7 @@ async function handleInstall(): Promise<void> {
         </p>
       </div>
 
-      <div v-else-if="platform === 'android'" class="flex flex-col gap-3">
+      <div v-else-if="installPlatform === 'android'" class="flex flex-col gap-3">
         <p class="text-sm text-muted-foreground">{{ t('pwa.install.dialog.android.intro') }}</p>
         <ol class="flex list-decimal flex-col gap-2 pl-5 text-sm">
           <li>{{ t('pwa.install.dialog.android.menu') }}</li>

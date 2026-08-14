@@ -1,35 +1,30 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { injectRegistry, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Effect } from 'effect'
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
-import { useArmConfirmation } from '@/composables/useArmConfirmation'
-import { useReportFailure } from '@/composables/useReportFailure'
 import { deleteSession, sessionMutation } from '@/db'
-import { deriveTimer, formatDuration } from '@/features/timer/domain'
+import { currentSessionAtom, currentSessionResultAtom } from '@/features/timer/atoms'
+import { formatDuration } from '@/features/timer/domain'
+import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
-import { useToastStore } from '@/stores/toast'
+import { armedConfirmationAtom, requestConfirmationIn } from '@/state/confirmation'
+import { showToastAtom } from '@/state/toast'
 import type { TimerConfig } from '@/db'
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
-const toast = useToastStore()
+const registry = injectRegistry()
+const showToast = useAtomSet(() => showToastAtom)
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
-const reportFailure = useReportFailure('session-detail')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
-const result = computed(() => {
-  const current = session.value
-  return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
-})
-const deleteConfirmation = useArmConfirmation<'delete'>()
-const deleteArmed = computed(() => deleteConfirmation.isArmed('delete'))
+const reportFailure = failureReporter('session-detail', showToast)
+const session = useAtomValue(() => currentSessionAtom)
+const result = useAtomValue(() => currentSessionResultAtom)
+// Read as well as write: the label says "really delete?" while armed, and the
+// subscription is what gives the 3 s expiry a registry to write back to.
+const armedKey = useAtomValue(() => armedConfirmationAtom('session-detail'))
 
 function modeName(): string {
   switch (session.value?.config.mode) {
@@ -64,7 +59,7 @@ function configSummary(config: TimerConfig): string {
 async function remove(): Promise<void> {
   const current = session.value
   if (!current) return
-  if (!deleteConfirmation.requestConfirmation('delete')) return
+  if (!requestConfirmationIn(registry, 'session-detail', 'delete')) return
   let deleted = false
   await runMutation(
     deleteSession(current.id).pipe(
@@ -80,7 +75,7 @@ async function remove(): Promise<void> {
     ),
   )
   if (deleted) {
-    toast.showToast(t('history.deleted'))
+    showToast(t('history.deleted'))
     await router.replace({ name: RouteNames.history })
   }
 }
@@ -143,7 +138,7 @@ async function remove(): Promise<void> {
       </section>
 
       <Button variant="destructive" @click="remove">
-        {{ deleteArmed ? t('history.deleteConfirm') : t('history.delete') }}
+        {{ armedKey === 'delete' ? t('history.deleteConfirm') : t('history.delete') }}
       </Button>
     </div>
     <div v-else class="grid min-h-64 place-items-center p-6">

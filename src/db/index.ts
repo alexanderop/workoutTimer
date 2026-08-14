@@ -13,6 +13,7 @@ export { exportData, importData } from './backup'
 export { DEFAULT_TIMER_SETTINGS, isPresetDraft } from './converters'
 export type {
   FinishReason,
+  NewSession,
   PresetDraft,
   SessionStatus,
   TimerConfig,
@@ -22,6 +23,10 @@ export type {
   WorkoutSession,
 } from './converters'
 export { DatabaseError } from './errors'
+// The services a program handed to a mutation atom may require. Exported so a
+// module outside src/db can *name* that contract — src/features/timer/runDriver.ts
+// composes such a program — without reaching into src/db/layer.ts.
+export type { DbServices } from './layer'
 export {
   addSessionRound,
   createPreset,

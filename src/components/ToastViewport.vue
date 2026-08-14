@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { useToastStore } from '@/stores/toast'
+import { useAtomValue } from '@effect/atom-vue'
+import { toastExpiryEffectAtom, toastsAtom } from '@/state/toast'
 
 /**
  * Global toast viewport. Mount once in App.vue.
  *
- * Renders confirmation messages pushed via `useToastStore().showToast()`.
+ * Renders confirmation messages pushed by writing `showToastAtom`.
  * Deliberately minimal and self-contained — no toast library.
  */
-const toastStore = useToastStore()
+const toasts = useAtomValue(() => toastsAtom)
+// Subscribing is what arms the auto-dismiss timers, and unmounting is what
+// cancels them — see the comment on the atom.
+useAtomValue(() => toastExpiryEffectAtom)
 </script>
 
 <template>
@@ -25,7 +29,7 @@ const toastStore = useToastStore()
         leave-to-class="opacity-0 translate-y-2"
       >
         <div
-          v-for="toast in toastStore.toasts"
+          v-for="toast in toasts"
           :key="toast.id"
           class="pointer-events-auto max-w-[calc(100vw-2rem)] truncate rounded-full bg-foreground px-4 py-2.5 text-sm font-medium text-background shadow-lg"
         >

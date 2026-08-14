@@ -46,6 +46,16 @@ handful that matter. So the scope is written out by hand, and the rule for
 editing it is: **a file belongs in `mutate` when the unit tier owns its logic
 end to end.**
 
+That rule is why the scope grew when the composable layer went away.
+`src/lib/reportFailure.ts` used to be `useReportFailure`, a composable that
+reached for the toast store itself, so the only way to check that a failed save
+says anything to the user was to render a screen and break its database; taking
+`showToast` as a parameter made it a pure function the unit tier owns.
+`src/state/pwa.ts` is the same story from the other end — the banner arbitration
+was reachable only by standing up two banners in a browser, and as a value atom
+over two value atoms it is four assertions in Node. Neither was a testing
+improvement first; both fell out of putting the logic where it belonged.
+
 Three things are deliberately outside it:
 
 - `src/db/repositories/**` — half of `notes.ts` is the Dexie-backed layer,
@@ -141,7 +151,7 @@ A survivor is a question, not a verdict. Work through it in this order:
    the survivor is a scope bug — fix `mutate`, not the test.
 3. **Otherwise it is a missing assertion.** Write the test that kills it.
 
-The scope sits at **100%** — 58 mutants, all killed, nothing uncovered. It did
+The scope sits at **100%** — 284 mutants, all killed, nothing uncovered. It did
 not start there. The first run scored 86.89% with eight survivors, and each one
 resolved to a different step of the list above, which makes them the worked
 examples:

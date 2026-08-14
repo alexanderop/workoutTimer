@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, useSlots } from 'vue'
+import { useAtomValue } from '@effect/atom-vue'
+import { useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { hideNavigationAtom, routeNameAtom } from '@/state/route'
 import type { NavItem } from '@/types/navigation'
 
 /**
@@ -22,21 +24,27 @@ defineSlots<{
 }>()
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 const slots = useSlots()
 
-const hideNavigation = computed(() => route.meta.hideNav === true)
-const hasCenterAction = computed(() => slots['center-action'] !== undefined)
+const hideNavigation = useAtomValue(() => hideNavigationAtom)
+const activeRouteName = useAtomValue(() => routeNameAtom)
+
+// The tab split is a function of the props and the slots, neither of which is
+// state — a plain function called from the template re-runs on every render
+// and needs no memo.
+const hasCenterAction = (): boolean => slots['center-action'] !== undefined
+const splitIndex = (): number => Math.ceil(items.length / 2)
 
 // With a center action the tabs split around it; without one they form a
 // plain tab bar and the right half stays empty.
-const splitIndex = computed(() => Math.ceil(items.length / 2))
-const leftItems = computed(() => (hasCenterAction.value ? items.slice(0, splitIndex.value) : items))
-const rightItems = computed(() => (hasCenterAction.value ? items.slice(splitIndex.value) : []))
+const leftItems = (): ReadonlyArray<NavItem> =>
+  hasCenterAction() ? items.slice(0, splitIndex()) : items
+const rightItems = (): ReadonlyArray<NavItem> =>
+  hasCenterAction() ? items.slice(splitIndex()) : []
 
 function isActive(routeName: string): boolean {
-  return route.name === routeName
+  return activeRouteName.value === routeName
 }
 
 function navigate(routeName: string): void {
@@ -78,7 +86,7 @@ function navigate(routeName: string): void {
     >
       <div class="flex justify-around">
         <button
-          v-for="item in leftItems"
+          v-for="item in leftItems()"
           :key="item.routeName"
           type="button"
           class="flex min-h-touch-target flex-1 flex-col items-center justify-center px-2 py-3 select-none touch-manipulation transition-[color,scale] duration-100 active:scale-90"
@@ -97,7 +105,7 @@ function navigate(routeName: string): void {
         <slot name="center-action" />
 
         <button
-          v-for="item in rightItems"
+          v-for="item in rightItems()"
           :key="item.routeName"
           type="button"
           class="flex min-h-touch-target flex-1 flex-col items-center justify-center px-2 py-3 select-none touch-manipulation transition-[color,scale] duration-100 active:scale-90"

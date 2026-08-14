@@ -15,19 +15,42 @@ import { defineConfig } from 'vitest/config'
  * really is compiled and handed to jsdom's cascade, the same `@` alias, the
  * same components. Where a spec still cannot see the truth, it is not because
  * the setup was starved.
+ *
+ * Two include globs. `src/__tests__/jsdom/` holds specs that only make sense
+ * here. `src/__tests__/paired/` is shared source, read by this project and by
+ * the browser projects both — a behaviour that exists in each environment and
+ * answers differently is stated once, with the divergence asserted, rather
+ * than copied into two files that drift.
  */
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('src', import.meta.url)),
-    },
+    alias: [
+      {
+        find: '@',
+        replacement: fileURLToPath(new URL('src', import.meta.url)),
+      },
+      // Specs under `src/__tests__/paired/` are read by this project and by
+      // the browser projects, so they import `vitest/browser` statically. That
+      // module throws on evaluation outside browser mode; the stub lets the
+      // import resolve here and fails only if a jsdom test actually uses it.
+      // Anchored so `vitest/browser/*` subpaths are left alone.
+      {
+        find: /^vitest\/browser$/,
+        replacement: fileURLToPath(
+          new URL('src/__tests__/helpers/browserContextStub.ts', import.meta.url),
+        ),
+      },
+    ],
   },
   test: {
     name: 'jsdom',
     root: fileURLToPath(new URL('./', import.meta.url)),
-    include: ['src/__tests__/jsdom/**/*.spec.ts'],
+    include: ['src/__tests__/jsdom/**/*.spec.ts', 'src/__tests__/paired/**/*.spec.ts'],
     environment: 'jsdom',
+    // Read by `src/__tests__/helpers/env.ts`. The paired specs branch on it
+    // instead of existing twice.
+    provide: { env: 'jsdom' as const },
     // Give jsdom its best shot: without this, Vitest skips CSS entirely and
     // every computed-style result below could be dismissed as a setup mistake.
     css: true,

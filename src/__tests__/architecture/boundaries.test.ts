@@ -61,8 +61,7 @@ describe('feature isolation', () => {
 describe('shared layers', () => {
   it.each([
     ['src/components/AppShell.vue', sfc(`import { x } from '@/features/timer/domain'\nvoid x`)],
-    ['src/composables/useThing.ts', `export { x } from '@/features/timer/domain'\n`],
-    ['src/stores/thing.ts', `export { x } from '@/features/timer/domain'\n`],
+    ['src/state/thing.ts', `export { x } from '@/features/timer/domain'\n`],
     ['src/lib/thing.ts', `export { x } from '@/features/timer/domain'\n`],
     ['src/db/thing.ts', `export { x } from '@/features/timer/domain'\n`],
   ])('rejects %s depending on a feature', async (filePath, code) => {
@@ -82,8 +81,7 @@ describe('db encapsulation', () => {
   it.each([
     'src/features/timer/domain.ts',
     'src/components/AppShell.vue',
-    'src/composables/useThing.ts',
-    'src/stores/thing.ts',
+    'src/state/thing.ts',
     'src/views/SettingsView.vue',
   ])('rejects %s reaching past @/db', async (filePath) => {
     const importLine = `import { listSessions } from '@/db/repositories/workouts'\nvoid listSessions`
@@ -109,7 +107,7 @@ describe('db encapsulation', () => {
 
   it('lets the migration spec reach the schema directly', async () => {
     const rules = await lint(
-      'src/__tests__/db/migration.spec.ts',
+      'src/__tests__/unit/db/migrations.spec.ts',
       `export { db } from '@/db/schema'\n`,
     )
     expect(rules).not.toContain(RULE)
@@ -174,16 +172,66 @@ describe('ui encapsulation', () => {
   it('keeps a primitive out of app state', async () => {
     const rules = await lint(
       'src/components/ui/dialog/DialogContent.vue',
-      sfc(`import { useToastStore } from '@/stores/toast'\nvoid useToastStore`),
+      sfc(`import { toastsAtom } from '@/state/toast'\nvoid toastsAtom`),
     )
     expect(rules).toContain(RULE)
   })
 
-  it('still lets a primitive use a composable', async () => {
+  /**
+   * The one re-include in NO_APP_STATE, and the reason it is asserted rather
+   * than assumed: gitignore's parent-directory rule silently kills a `!`
+   * pattern under a `**` exclusion, so this test is what says the exception is
+   * still live. A coarse pointer is the browser's state, not the app's.
+   */
+  it('still lets a primitive read browser capabilities', async () => {
     const rules = await lint(
       'src/components/ui/dialog/DialogContent.vue',
-      sfc(`import { useTouchDevice } from '@/composables/useTouchDevice'\nvoid useTouchDevice`),
+      sfc(`import { touchDeviceAtom } from '@/state/browser'\nvoid touchDeviceAtom`),
     )
     expect(rules).not.toContain(RULE)
+  })
+})
+
+/**
+ * The composable ban, which is a syntax rule rather than an import one — so it
+ * needs its own rule id here, and its own deliberate violation.
+ *
+ * `src/__tests__/architecture/atomPlacement.test.ts` asserts the same thing by
+ * reading the real tree. This is the other half of the pair: that the
+ * enforcement actually fires, on a `.vue` file as well as a `.ts` one.
+ */
+describe('no composable layer', () => {
+  const SYNTAX = 'no-restricted-syntax'
+
+  it.each([
+    ['src/state/theme.ts', 'export function useTheme() {\n  return {}\n}\n'],
+    ['src/state/theme.ts', 'export const useTheme = () => ({})\n'],
+    ['src/features/timer/wakeLock.ts', 'export function useWakeLock(): void {}\n'],
+  ])('rejects a composable exported from %s', async (filePath, code) => {
+    expect(await lint(filePath, code)).toContain(SYNTAX)
+  })
+
+  it('rejects one inside a component too', async () => {
+    const rules = await lint(
+      'src/components/AppShell.vue',
+      sfc('export function useNav() {\n  return {}\n}'),
+    )
+    expect(rules).toContain(SYNTAX)
+  })
+
+  it('leaves the UI substrate alone', async () => {
+    const rules = await lint(
+      'src/components/ui/dialog/DialogContent.vue',
+      sfc('export function useForwarded() {\n  return {}\n}'),
+    )
+    expect(rules).not.toContain(SYNTAX)
+  })
+
+  it('does not flag a local function that merely starts with "use"', async () => {
+    const rules = await lint(
+      'src/views/PresetsView.vue',
+      sfc('function usePreset(id: string): void {\n  void id\n}\nusePreset("x")'),
+    )
+    expect(rules).not.toContain(SYNTAX)
   })
 })

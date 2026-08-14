@@ -34,13 +34,24 @@ It costs one more Chromium boot. It earns that back as the reusable home for eve
 
 Work down this list and stop at the first match:
 
-1. **Pure function, no DOM, no IndexedDB?** → `unit` (`src/__tests__/unit/`). This tier runs in the pre-commit hook, so it must stay in the hundreds of milliseconds. Extract logic out of components into plain `.ts` modules (see `src/features/notes/domain.ts`) precisely so it can live here.
-2. **Needs a rendered component, the router, or the database?** → `default` (`src/__tests__/<area>/`). Browser mode means real CSS, real events, real browser APIs — no jsdom approximations. IndexedDB is replaced by fake-indexeddb per test file for speed and isolation.
+1. **Pure function, or an atom that is a *value*?** → `unit` (`src/__tests__/unit/`). This tier runs in the pre-commit hook, so it must stay in a couple of seconds. Extract logic out of components into plain `.ts` modules (`src/features/timer/domain.ts`) precisely so it can live here — and note the second half: **a `xxxAtom` is a value, and a value is testable in Node**. `src/__tests__/unit/harness.ts` is the whole apparatus (a registry, and something subscribed), and three things this tier can reach that look like they need a browser:
+   - **The route.** `connectRoute(router, registry)` against a `createMemoryHistory` router needs no DOM (`unit/state/route.spec.ts`).
+   - **The database.** The browser tier replaces the page's IndexedDB with `fake-indexeddb` anyway, so a spec that only reads and writes rows was paying for a Chromium boot and then not using it. `import 'fake-indexeddb/auto'` at the top of the file, and Dexie, the repositories, the db read atoms and the invalidation rule are all in Node (`unit/db/`, `unit/state/timerData.spec.ts`). What tests the *real* store is e2e.
+   - **Timers.** `vi.useFakeTimers()` plus a subscribed atom is how the toast window, the install-hint delay and the confirmation window are pinned — seed with real timers first, since the db seeding above is real async I/O.
+2. **Needs a rendered component, resolved CSS, real input, or a platform API?** → `default` (`src/__tests__/<area>/`). Browser mode means real CSS, real events, real browser APIs — no jsdom approximations. This is where a `xxxEffectAtom` belongs: `visualViewport`, `matchMedia`, the `.dark` class on `<html>`, the wake lock, `localStorage`'s cross-tab `storage` event. If the only thing an assertion touches is atom values, it is in the wrong tier.
 3. **Does the behavior only exist under a coarse pointer or touch?** → `touch` (`src/__tests__/touch/`). Touch-target sizing, `pointer-fine:` collapses, anything gated on `hover: none`. `matchMedia` is read-only from inside the page, so the condition has to come from the browser context — no other tier can fake it. Note this is *not* the a11y tier's job: axe's `target-size` rule uses the WCAG 2.2 AA floor of 24×24, while ours is the 44px HIG one, so a 40px control satisfies axe and fails us.
 4. **Asserting on accessibility?** → `a11y` (`src/__tests__/a11y/`). Axe sweeps whole rendered screens; per-control a11y (labels, roles) belongs in the `default` specs that exercise the control. Rules axe classifies as page-level (landmark structure, `region`, `page-has-heading-one`) are skipped when the sweep is scoped to a container, so `assertNoPageLevelViolations` runs them against the document instead. `html-has-lang` and `document-title` are not among them — in this tier they would grade the Vitest runner's page, so the shipped index.html is checked in e2e.
 5. **Asserting nothing changed visually?** → `visual` (`src/__tests__/visual/`).
 6. **Asserting an import boundary or dependency rule?** → `arch` (`src/__tests__/architecture/`). Two things live there: ArchUnitTS rules over the real module graph, and `boundaries.test.ts`, which feeds ESLint deliberate violations. The second exists because ArchUnitTS does not parse `.vue` files and because "the codebase has no violations" also passes when nothing is being enforced — the actual `.vue` coverage comes from `no-restricted-imports` in `eslint.config.ts`.
-7. **Proving a user journey against what actually ships (service worker, real IndexedDB, production bundle)?** → e2e (`test/e2e/`, Gherkin + playwright-bdd). Keep these few and load-bearing — the offline-reload scenario is the canonical example: it cuts the network before reloading, so it fails unless the service worker precached the shell.
+7. **Proving a user journey against what actually ships (service worker, real IndexedDB, production bundle)?** → e2e (`test/e2e/`, Gherkin + playwright-bdd). Keep these few and load-bearing: e2e asserts only what exists in the *shipped artifact* — the offline-reload scenario is the canonical example, cutting the network before reloading so it fails unless the service worker precached the shell. Anything provable with a fresh registry or a mounted component is not an e2e test.
+
+One tier is not in that list because it never gates anything: `jsdom`
+(`src/__tests__/jsdom/`) exists to be wrong on purpose, and
+[docs/jsdom-vs-browser.md](jsdom-vs-browser.md) is what it is for. Its shared
+half does gate, though — `src/__tests__/paired/` is included by both `jsdom` and
+`default`, so a spec there runs in a real Chromium like any other browser spec
+*and* records what a simulated DOM answers. Put a test there when you want both
+answers on the record; step 2 above is still the default for everything else.
 
 ## Test quality bar
 
@@ -59,7 +70,7 @@ Work down this list and stop at the first match:
 Reach for one when the thing you want to say is true of *every* input rather than at a boundary, and you can state it without reimplementing the code under test. Three shapes cover most cases:
 
 - **Round-trip** — what one direction emits, the other accepts. A converter's output must decode as a stored row again, because it lands in IndexedDB and in the user's next backup.
-- **Invariant** — the operation preserves something. `sortSessions` and `sortPresets` are reorderings: same rows out as in, the caller's array untouched, plus the ordering rule between every pair of neighbours (`src/__tests__/unit/timer/domain.spec.ts`).
+- **Invariant** — the operation preserves something. `sortSessions` and `sortPresets` are reorderings: same rows out as in, the caller's array untouched, plus the ordering rule between every pair of neighbours (`src/__tests__/unit/features/timer/domain.spec.ts`).
 - **Agreement** — two paths that claim the same rule stay in step. `isTimerConfig` must accept exactly the configs `TimerConfigSchema` accepts; when they diverge, the setup form offers a Start button for a workout the repository will refuse to store.
 
 Where a schema owns the shape, generate from the schema rather than hand-writing an arbitrary: `Schema.toArbitrary(WorkoutSessionSchema)` cannot drift from the validator the repository decodes rows with. That makes the property a test of the schema as well as of the code — which is the point, and worth being ready for. `it.prop` types a `Schema` as an arbitrary directly, but rejects one at runtime in `4.0.0-beta.105`; convert explicitly until that lands.
@@ -89,7 +100,7 @@ Screenshot baselines live in `__screenshots__/` and are **platform-specific** (f
 
 ## Where the gates run
 
-- **Every commit** (husky, ~15 s): lint-staged, type-check, `test:unit`, knip.
+- **Every commit** (husky, ~15 s): lint-staged, type-check, `test:unit`, knip. The unit tier is ~2.5 s of that; the db-backed specs are what it buys, and they are still an order of magnitude cheaper than the browser tier they came from.
 - **While working / before pushing** (`pnpm check`, ~8 s): lint, formatting, types, knip, `test:unit` and `test:arch`, run concurrently and reported together — every gate that needs no browser. Then the browser tiers your change touches. Formatting on commit only reaches staged files, so the `format:check` inside `pnpm check` is what catches the rest.
 - **CI on every PR**: everything, with the browser tier sharded, plus the mutation score as its own job (`.github/workflows/ci.yml`).
 

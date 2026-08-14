@@ -67,6 +67,10 @@ const sharedTestConfig = {
   // Required for ArchUnitTS custom matchers
   globals: true,
   setupFiles: ['./src/__tests__/setup.ts'],
+  // Read by `src/__tests__/helpers/env.ts`. Specs under `src/__tests__/paired/`
+  // are included by these projects and by `jsdom`, and branch on this rather
+  // than existing as two near-identical files (docs/jsdom-vs-browser.md).
+  provide: { env: 'browser' as const },
 }
 
 const coverageConfig = {

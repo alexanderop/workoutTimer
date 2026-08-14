@@ -1,33 +1,29 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomValue } from '@effect/atom-vue'
+import { useAtom, useAtomValue } from '@effect/atom-vue'
 import { ChevronRight } from '@lucide/vue'
-import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
-import { deriveTimer, formatDuration, sortSessions } from '@/features/timer/domain'
+import {
+  HISTORY_FILTERS,
+  historyFilterAtom,
+  historySessionsAtom,
+  type HistoryFilter,
+} from '@/features/timer/atoms'
+import { deriveTimer, formatDuration } from '@/features/timer/domain'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
+import { sessionsLoadFailedAtom } from '@/state/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
-
-type Filter = 'all' | 'completed' | 'cancelled'
 
 const { t, locale } = useI18n()
 const router = useRouter()
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const filter = ref<Filter>('all')
-const sessions = computed(() =>
-  sortSessions(AsyncResult.getOrElse(sessionsResult.value, () => [])).filter(
-    (session) =>
-      ['completed', 'cancelled'].includes(session.status) &&
-      (filter.value === 'all' || session.status === filter.value),
-  ),
-)
-const loadFailed = computed(() => AsyncResult.isFailure(sessionsResult.value))
-const filters: ReadonlyArray<Filter> = ['all', 'completed', 'cancelled']
 
-function filterLabel(value: Filter): string {
+const [filter, setFilter] = useAtom(() => historyFilterAtom)
+const sessions = useAtomValue(() => historySessionsAtom)
+const loadFailed = useAtomValue(() => sessionsLoadFailedAtom)
+
+function filterLabel(value: HistoryFilter): string {
   return value === 'all'
     ? t('history.all')
     : value === 'completed'
@@ -71,11 +67,11 @@ function formatDate(timestamp: number): string {
     <div class="mx-auto flex w-full max-w-lg flex-col gap-section p-4">
       <div class="flex gap-2 overflow-x-auto" role="group" :aria-label="t('history.title')">
         <Button
-          v-for="item in filters"
+          v-for="item in HISTORY_FILTERS"
           :key="item"
           size="sm"
           :variant="filter === item ? 'default' : 'outline'"
-          @click="filter = item"
+          @click="setFilter(item)"
         >
           {{ filterLabel(item) }}
         </Button>

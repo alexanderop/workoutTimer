@@ -1,46 +1,43 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { useAtom, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Check } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useReportFailure } from '@/composables/useReportFailure'
 import { sessionMutation, updateSessionNotes } from '@/db'
-import { deriveTimer, formatDuration } from '@/features/timer/domain'
+import {
+  currentSessionAtom,
+  currentSessionResultAtom,
+  resultNotesAtom,
+} from '@/features/timer/atoms'
+import { formatDuration } from '@/features/timer/domain'
+import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
-import { sessionsAtom } from '@/stores/timerData'
+import { pendingAtom } from '@/state/pending'
+import { routeParamAtom } from '@/state/route'
+import { showToastAtom } from '@/state/toast'
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 const runMutation = useAtomSet(() => sessionMutation, { mode: 'promise' })
-const reportFailure = useReportFailure('timer-result')
-const sessionsResult = useAtomValue(() => sessionsAtom)
-const sessions = computed(() => AsyncResult.getOrElse(sessionsResult.value, () => []))
-const session = computed(() => sessions.value.find((item) => item.id === String(route.params.id)))
-const result = computed(() => {
-  const current = session.value
-  return current ? deriveTimer(current, current.finishedAt ?? Date.now()) : undefined
-})
-const notes = ref('')
-const isSaving = ref(false)
+const showToast = useAtomSet(() => showToastAtom)
+const reportFailure = failureReporter('timer-result', showToast)
 
-watch(
-  session,
-  (current) => {
-    notes.value = current?.notes ?? ''
-  },
-  { immediate: true },
-)
+const session = useAtomValue(() => currentSessionAtom)
+const result = useAtomValue(() => currentSessionResultAtom)
+const sessionId = useAtomValue(() => routeParamAtom('id'))
+// The atom-returning callback is re-evaluated when `sessionId` changes, so
+// navigating between two results swaps the draft rather than carrying it over.
+const [notes, setNotes] = useAtom(() => resultNotesAtom(sessionId.value ?? ''))
+const [isSaving, setSaving] = useAtom(() => pendingAtom('timer-result.save'))
 
 async function save(): Promise<void> {
   const current = session.value
   if (!current || isSaving.value) return
-  isSaving.value = true
+  setSaving(true)
   let saved = false
   await runMutation(
     updateSessionNotes(current.id, notes.value).pipe(
@@ -53,11 +50,7 @@ async function save(): Promise<void> {
         'Db.DatabaseError',
         reportFailure('save result notes', t('timer.result.saveFailed')),
       ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          isSaving.value = false
-        }),
-      ),
+      Effect.ensuring(Effect.sync(() => setSaving(false))),
     ),
   )
   if (saved) {
@@ -102,9 +95,10 @@ async function save(): Promise<void> {
         <Label for="result-notes" class="text-white">{{ t('timer.result.notes') }}</Label>
         <Textarea
           id="result-notes"
-          v-model="notes"
+          :model-value="notes"
           class="border-white/20 bg-white/8 text-white placeholder:text-white/45"
           :placeholder="t('timer.result.notesPlaceholder')"
+          @update:model-value="setNotes"
         />
       </div>
 

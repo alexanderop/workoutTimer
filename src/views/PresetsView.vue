@@ -1,29 +1,29 @@
 <script setup lang="ts">
-import { AsyncResult, useAtomSet, useAtomValue } from '@effect/atom-vue'
+import { injectRegistry, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Copy, Pencil, Play, Trash2 } from '@lucide/vue'
 import { Effect } from 'effect'
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
-import { useArmConfirmation } from '@/composables/useArmConfirmation'
-import { useReportFailure } from '@/composables/useReportFailure'
 import { createPreset, deletePreset, presetMutation } from '@/db'
-import { formatDuration, sortPresets } from '@/features/timer/domain'
+import { sortedPresetsAtom } from '@/features/timer/atoms'
+import { formatDuration } from '@/features/timer/domain'
+import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
-import { presetsAtom } from '@/stores/timerData'
-import { useToastStore } from '@/stores/toast'
+import { armedConfirmationAtom, requestConfirmationIn } from '@/state/confirmation'
+import { presetsLoadFailedAtom } from '@/state/timerData'
+import { showToastAtom } from '@/state/toast'
 import type { TimerConfig, TimerPreset } from '@/db'
 
 const { t } = useI18n()
 const router = useRouter()
-const toast = useToastStore()
-const reportFailure = useReportFailure('presets')
+const registry = injectRegistry()
+const showToast = useAtomSet(() => showToastAtom)
+const reportFailure = failureReporter('presets', showToast)
 const runMutation = useAtomSet(() => presetMutation, { mode: 'promise' })
-const presetsResult = useAtomValue(() => presetsAtom)
-const presets = computed(() => sortPresets(AsyncResult.getOrElse(presetsResult.value, () => [])))
-const loadFailed = computed(() => AsyncResult.isFailure(presetsResult.value))
+const presets = useAtomValue(() => sortedPresetsAtom)
+const loadFailed = useAtomValue(() => presetsLoadFailedAtom)
 const failed = reportFailure('change preset', t('presets.actionFailed'))
 
 function configSummary(config: TimerConfig): string {
@@ -56,20 +56,21 @@ function duplicate(preset: TimerPreset): Promise<unknown> {
       config: preset.config,
       workoutNotes: preset.workoutNotes,
     }).pipe(
-      Effect.tap(() => Effect.sync(() => toast.showToast(t('presets.duplicated')))),
+      Effect.tap(() => Effect.sync(() => showToast(t('presets.duplicated')))),
       Effect.catchTags({ 'Db.DatabaseError': failed, 'Db.WorkoutInvalidError': failed }),
     ),
   )
 }
 
-const presetDeleteConfirmation = useArmConfirmation<string>()
-const armedPresetId = presetDeleteConfirmation.armedKey
+// Reading the atom is both what the button label needs and what keeps the
+// confirmation mounted, so its 3 s expiry has a registry to write back to.
+const armedPresetId = useAtomValue(() => armedConfirmationAtom('presets'))
 
 function remove(preset: TimerPreset): Promise<unknown> {
-  if (!presetDeleteConfirmation.requestConfirmation(preset.id)) return Promise.resolve()
+  if (!requestConfirmationIn(registry, 'presets', preset.id)) return Promise.resolve()
   return runMutation(
     deletePreset(preset.id).pipe(
-      Effect.tap(() => Effect.sync(() => toast.showToast(t('presets.deleted')))),
+      Effect.tap(() => Effect.sync(() => showToast(t('presets.deleted')))),
       Effect.catchTag('Db.DatabaseError', failed),
     ),
   )

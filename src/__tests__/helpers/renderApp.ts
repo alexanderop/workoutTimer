@@ -4,6 +4,7 @@ import { createMemoryHistory } from 'vue-router'
 import App from '@/App.vue'
 import { i18n } from '@/i18n'
 import { createAppRouter } from '@/router'
+import { connectRoute } from '@/state/route'
 
 /**
  * Mounts the full app (shell, router, i18n) the way main.ts does, but with
@@ -17,11 +18,17 @@ export async function renderApp(initialPath = '/') {
   await router.push(initialPath)
   await router.isReady()
 
+  // Same wiring as main.ts: the route reaches components as an atom, never as
+  // `useRoute()`. Registered after the initial push, which `connectRoute`
+  // covers by seeding from `currentRoute`.
+  const registry = AtomRegistry.make()
+  const disconnectRoute = connectRoute(router, registry)
+
   const screen = render(App, {
     global: {
       plugins: [i18n, router],
       provide: {
-        [registryKey as symbol]: AtomRegistry.make(),
+        [registryKey as symbol]: registry,
       },
     },
   })
@@ -32,6 +39,15 @@ export async function renderApp(initialPath = '/') {
     router,
     // unmount() removes the DOM synchronously but is typed Promise-returning;
     // hand the promise to callers so fixture cleanup can await it.
-    cleanup: (): Promise<void> => screen.unmount(),
+    //
+    // Disposing the registry is what unwinds the `keepAlive` atoms — every
+    // finalizer runs, so the `storage`, `matchMedia`, `visibilitychange` and
+    // `beforeinstallprompt` listeners in src/state/browser.ts go with the
+    // test rather than accumulating on the one page all of them share.
+    cleanup: async (): Promise<void> => {
+      await screen.unmount()
+      disconnectRoute()
+      registry.dispose()
+    },
   }
 }

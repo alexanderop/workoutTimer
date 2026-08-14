@@ -20,7 +20,7 @@ This starter follows the [Ink & Switch local-first ideals](https://www.inkandswi
 
 ### One public surface
 
-All storage access goes through `src/db/index.ts`. Views, features, and composables import repositories from there — never Dexie directly. This is enforced by the ESLint boundary rules and the architecture tests, and it is what keeps the storage engine swappable (e.g. for a future sync engine).
+All storage access goes through `src/db/index.ts`. Views, features, and state modules import repositories from there — never Dexie directly. This is enforced by the ESLint boundary rules and the architecture tests, and it is what keeps the storage engine swappable (e.g. for a future sync engine).
 
 ### Schema changes are a migration plus a tolerant read path — always both
 
@@ -41,7 +41,7 @@ Why both? Because the migration only sees rows that were in the database at upgr
 
 The same schema does triple duty: Dexie's table typing, that read-path decode, and backup validation in `src/db/backup.ts`. One definition means a field added to a session cannot reach disk while quietly disappearing from every export.
 
-The paths that exist are tested: the decode rules in the unit tier (`src/__tests__/unit/db/converters.spec.ts`), repository CRUD and the rejected-row path in `src/__tests__/db/workouts.spec.ts`, the backup round-trip in `src/__tests__/db/backup.spec.ts`, and each `upgrade()` in `src/__tests__/db/migrations.spec.ts` — a version bump lands its migration spec in the same commit.
+The paths that exist are tested, all of them in the Node tier over `fake-indexeddb`: the decode rules in `src/__tests__/unit/db/converters.spec.ts`, repository CRUD and the rejected-row path in `workouts.spec.ts`, the backup round-trip in `backupRoundTrip.spec.ts`, and each `upgrade()` in `migrations.spec.ts` — a version bump lands its migration spec in the same commit.
 
 ### Persistent storage is requested at boot
 

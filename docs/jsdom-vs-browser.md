@@ -14,12 +14,20 @@ why it isn't.
 You can run both sides:
 
 ```bash
-pnpm test:jsdom   # 70 tests, all green, all of them lying
-pnpm test         # the same behaviours in a real Chromium
+pnpm test:jsdom   # 74 pass, 9 skip — what a simulated DOM sees
+pnpm test         # the same files in a real Chromium, answering differently
 ```
 
-The jsdom tier is not a gate and never fails the build. It exists to be read
-next to its counterpart.
+Those are not two suites. Every spec under `src/__tests__/paired/` is a single
+file included by both projects, so one source is read by two runners and each
+records its own answer. Where they diverge, the expectations are keyed off the
+environment and both answers sit in the same `expected` table, a few lines
+apart. Where only a browser can answer, the test is `browserOnly` and the jsdom
+run skips it — that is what the 9 are.
+
+The jsdom project is not a gate and never fails the build; the browser projects
+that read the same files are. See [Adding to this tier](#adding-to-this-tier)
+for which shape a new spec wants.
 
 ## Two bugs I shipped on purpose
 
@@ -47,8 +55,12 @@ On iOS this presents as a keyboard that won't open:
 
 | | jsdom tier | browser tier |
 | --- | --- | --- |
-| Bug 1 | ✅ 70/70 pass | ❌ `the "default" button is 32px on a touch device` |
-| Bug 2 | ✅ 70/70 pass | ❌ `expected 'none' to be 'text'` |
+| Bug 1 | ✅ 74 pass, 0 fail | ❌ `the "default" button is 32px on a touch device` |
+| Bug 2 | ✅ 74 pass, 0 fail | ❌ `expected 'none' to be 'text'` |
+
+Both rows come from the *same spec files*. The jsdom column is not a weaker
+suite that missed something; it is the identical source, run by a runner that
+cannot see what the assertion is about.
 
 Both bugs are visible to a user in the first second of use. Neither is visible
 to a test suite that doesn't have a browser in it.
@@ -238,7 +250,7 @@ expect(getComputedStyle(field).userSelect).toBe('text')
 // ❌ expected 'none' to be 'text'
 ```
 
-📄 `src/__tests__/jsdom/cascade.spec.ts` · `textSelection.spec.ts` ↔
+📄 `src/__tests__/paired/cascade.spec.ts` · `textSelection.spec.ts` — read by both, plus
 `components/textSelection.spec.ts`
 
 ### Example 2: the cascade that ranks wrongly
@@ -285,7 +297,7 @@ expect(getComputedStyle(paragraph).color).toBe('rgb(255, 0, 0)')  // red
 importance collapses to source order, every targeted override becomes
 order-dependent.
 
-📄 `src/__tests__/jsdom/cascadeOrigin.spec.ts` ↔ `components/cascadeOrigin.spec.ts`
+📄 `src/__tests__/paired/cascadeOrigin.spec.ts` — read by `jsdom` and `default`
 
 ### Example 3: the media query you can't fake
 
@@ -436,7 +448,7 @@ Every race — focus restored too early, a double-click reopening mid-close, a
 `v-if` unmounting under an active transition — lives in a window jsdom doesn't
 have.
 
-📄 `src/__tests__/jsdom/transitions.spec.ts` ↔
+📄 `src/__tests__/paired/transitions.spec.ts` — read by both, plus
 `components/ui/dialog/dialogContent.spec.ts`
 
 ---
@@ -484,7 +496,8 @@ expect(
 Same API you already know, and a real number, because a real browser laid it
 out.
 
-📄 `src/__tests__/jsdom/touchTargets.spec.ts` ↔ `touch/touchTargets.spec.ts`
+📄 `src/__tests__/paired/touchTargets.spec.ts` — read by both; the 44px floor
+itself is `src/__tests__/touch/touchTargets.spec.ts`, which needs a coarse pointer
 
 ### Example 6: the loop that never runs
 
@@ -524,7 +537,7 @@ expect(containers.length, 'no scroll container found — the query is wrong')
 That guard is the only line in the file that fails under jsdom. Every assertion
 it was protecting passes vacuously.
 
-📄 `src/__tests__/jsdom/scrollContainers.spec.ts` ↔
+📄 `src/__tests__/paired/scrollContainers.spec.ts` — read by both, plus
 `components/scrollContainers.spec.ts`
 
 ### Example 7: the scroll lock that always works
@@ -568,7 +581,7 @@ on macOS with overlay scrollbars — the real value is `0`, the branch is skippe
 
 Only a real browser can report a `0` there.
 
-📄 `src/__tests__/jsdom/bodyScrollLock.spec.ts`
+📄 `src/__tests__/paired/bodyScrollLock.spec.ts` — read by `jsdom` and `default`
 
 ---
 
@@ -620,7 +633,7 @@ const containerBox = container.getBoundingClientRect()
 expect(rowBox.top >= containerBox.top && rowBox.bottom <= containerBox.bottom).toBe(true)
 ```
 
-📄 `src/__tests__/jsdom/scrolling.spec.ts` ↔ `components/scrolling.spec.ts`
+📄 `src/__tests__/paired/scrolling.spec.ts` — read by `jsdom` and `default`
 
 ### Example 9: the text nobody can read
 
@@ -662,7 +675,7 @@ expect(container.innerText).not.toContain('Hidden') // browser only
 expect(container.innerText).toBe('Round 1\nRound 2')  // <br> became a newline
 ```
 
-📄 `src/__tests__/jsdom/renderedText.spec.ts` ↔ `components/renderedText.spec.ts`
+📄 `src/__tests__/paired/renderedText.spec.ts` — read by `jsdom` and `default`
 
 ## Part 3 — no layout means no hit-testing
 
@@ -748,7 +761,7 @@ expect(getComputedStyle(getByRole('button', { name: 'Export' })).display)
 So `getByRole(...)` succeeds, `toBeVisible()` agrees, and the test goes on to
 click a button the user cannot see.
 
-📄 `src/__tests__/jsdom/hitTesting.spec.ts`
+📄 `src/__tests__/paired/hitTesting.spec.ts` — read by `jsdom` and `default`
 
 ### Example 11: focus that lands anywhere
 
@@ -804,7 +817,7 @@ That's a good illustration of the standing rule for this document: nothing goes
 in that I haven't measured in this repo, and "a jsdom limitation everyone knows
 about" is exactly the kind of claim that gets stale.
 
-📄 `src/__tests__/jsdom/focusAndInert.spec.ts`
+📄 `src/__tests__/paired/focusAndInert.spec.ts` — read by `jsdom` and `default`
 
 ---
 
@@ -869,7 +882,12 @@ An assertion on message text passes without describing anything, and the half of
 validation users actually experience — being taken to the offending field — is
 absent.
 
-📄 `src/__tests__/jsdom/interaction.spec.ts` ↔ `components/interaction.spec.ts`
+This example is one file rather than a pair. Every code block above comes from
+the same source, read once by each runner: the `.click()` assertions are shared,
+the pointer sequence is `browserOnly`, and the validation expectations are keyed
+off `env` so both answers sit three lines apart.
+
+📄 `src/__tests__/paired/interaction.spec.ts` — read by `jsdom` and `default`
 
 ## Part 4 — no paint, so no pixels to inspect
 
@@ -913,7 +931,8 @@ expect(results.incomplete.map((v) => v.id)).toContain('color-contrast')
 you only read `violations` — and every standard helper, ours included, only
 reads `violations`. In a real browser the same rule runs, and fails.
 
-📄 `src/__tests__/jsdom/a11y.spec.ts` ↔ `a11y/a11y.spec.ts`
+📄 `src/__tests__/paired/a11y.spec.ts` — read by both; the sweep over real
+screens is `src/__tests__/a11y/a11y.spec.ts`
 
 ---
 
@@ -1026,7 +1045,8 @@ import { Blob as NodeBlob } from 'node:buffer'
 expect(new Blob(['x'])).not.toBeInstanceOf(NodeBlob)  // two classes, one name
 ```
 
-📄 `src/__tests__/jsdom/download.spec.ts` ↔ `lib/download.spec.ts`
+📄 `src/__tests__/paired/download.spec.ts` · `blobStorage.spec.ts` — read by both;
+the download gate is `src/__tests__/lib/download.spec.ts`
 
 ### Example 15: the stub that becomes the thing under test
 
@@ -1080,7 +1100,7 @@ The question you actually care about — *did the selected option end up visible
 The stub quietly converted a behaviour test into a call-signature test, and by
 the time anyone rereads it, the comment explaining why is three years old.
 
-📄 `src/__tests__/jsdom/platformApis.spec.ts`
+📄 `src/__tests__/paired/platformApis.spec.ts` — read by `jsdom` and `default`
 
 ---
 
@@ -1224,10 +1244,36 @@ a green one.**
 
 ## Adding to this tier
 
-Keep every spec paired with a browser counterpart and named after it, keep them
-green, and end each file at the point where the blindness is proven rather than
-asserting the browser's answer and failing. A red test here gets "fixed" by
-someone eventually. A green one that documents what it cannot see survives.
+Keep every spec green, and end it at the point where the blindness is proven
+rather than asserting the browser's answer and failing. A red test here gets
+"fixed" by someone eventually. A green one that documents what it cannot see
+survives.
+
+Everything here lives in `src/__tests__/paired/` now. A behaviour stated once
+cannot drift, and the reader sees both answers without diffing two files.
+
+| Shape | How |
+| --- | --- |
+| Both environments answer, and **differ** | Key expectations off `env` and assert both. This is the default and it is most of the tier |
+| Both answer, and **agree** | Assert it plainly. This is what stops a contrast being read as a jsdom bug — `.click()` firing one event, `inert` not blocking a programmatic click |
+| Only a browser *can* answer | `browserOnly` |
+| Only jsdom has anything to say | `jsdomOnly`. Almost always the realm problem, which a browser has no counterpart for |
+
+`env`, `browserOnly` and `jsdomOnly` come from `src/__tests__/helpers/env.ts`,
+backed by a per-project `test.provide`. `src/__tests__/jsdom/` still exists for a
+spec that genuinely has no browser side, but nothing is in it.
+
+Three constraints, each of which costs an afternoon to rediscover:
+
+- **`@testing-library/vue` cannot be imported here.** It reads `process` at
+  import time, which does not exist in the browser tier. Mount with `createApp`
+  and clean up in `afterEach`; the existing files show the shape.
+- **`vitest/browser` throws on import outside browser mode**, so the jsdom
+  project aliases it to `helpers/browserContextStub.ts`. Importing is free;
+  using any of it from a jsdom test throws by name.
+- **Teardown written for jsdom can be destructive in a browser.** `delete
+  Element.prototype.scrollIntoView` is a no-op where the method never existed
+  and removes a real one where it did. Capture the descriptor and restore it.
 
 ## Sources
 

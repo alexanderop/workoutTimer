@@ -32,7 +32,7 @@ the rest of this document describes.
 | Layer | Owns | Never |
 | --- | --- | --- |
 | Reka UI | Focus traps, ARIA wiring, escape/outside-click, `data-state`, portals | Renders no styling of its own |
-| `src/components/ui/*` | Markup, Tailwind classes, `data-slot`, variants | Reads the database, stores, or a feature |
+| `src/components/ui/*` | Markup, Tailwind classes, `data-slot`, variants | Reads the database, app state, or a feature |
 | Features and views | Composition — which parts, in what tree, with what data | Imports `reka-ui` or `class-variance-authority` |
 
 The layer boundary is enforced, not just described. See [Enforcement](#enforcement).
@@ -194,7 +194,8 @@ imports, including in `.vue` files:
   `src/components/ui/**`.
 - App code imports a primitive from its barrel (`@/components/ui/dialog`),
   never from the file inside it.
-- A primitive may not import `@/db`, `@/stores/*`, or any feature — primitives
+- A primitive may not import `@/db`, any feature, or anything under `@/state/`
+  other than `@/state/browser` (browser capabilities are not app state) — primitives
   stay presentational.
 - `shadcn-vue` and `radix-vue` are banned everywhere: we copy the pattern
   rather than depend on it.
@@ -308,7 +309,7 @@ upstream file:
   separate drawer. It mounts its own `DialogPortal` and `DialogOverlay` —
   forgetting the overlay is a silent accessibility regression, not a visible
   one — and it is keyboard-aware via `--keyboard-inset` (see
-  `useKeyboardInset`).
+  `keyboardInsetEffectAtom`).
 - **`defineModel` for state a component owns; forwarding for state a reka
   part owns.** Upstream uses `useVModel` from VueUse for Vue 3.3 compatibility;
   this project pins 3.5 and uses `defineModel` (see [the index](index.md)). But `Switch`

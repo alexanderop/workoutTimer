@@ -79,7 +79,7 @@ Two corollaries:
 
 An unhonored affordance is worse than no affordance: the user tries it, gets nothing, and stops trusting the rest of the screen.
 
-`DialogContent`'s grabber pill is currently **a visual grip, not a gesture** — a decorative `<div>` with no pointer handlers. That is a deliberate, documented state, and the comment beside it says so rather than promising a swipe. Wiring it for real means migrating to `reka-ui`'s `Drawer` (`DrawerRoot`, `DrawerHandle`, `DrawerSwipeArea`, snap points, velocity dismissal — all already in `node_modules`), which is an API migration rather than a CSS change. Keep `useKeyboardInset` when that happens: feeding `--keyboard-inset` into the drawer's max-height is better than what the reference implementations do, and it is ours.
+`DialogContent`'s grabber pill is currently **a visual grip, not a gesture** — a decorative `<div>` with no pointer handlers. That is a deliberate, documented state, and the comment beside it says so rather than promising a swipe. Wiring it for real means migrating to `reka-ui`'s `Drawer` (`DrawerRoot`, `DrawerHandle`, `DrawerSwipeArea`, snap points, velocity dismissal — all already in `node_modules`), which is an API migration rather than a CSS change. Keep `keyboardInsetEffectAtom` when that happens: feeding `--keyboard-inset` into the drawer's max-height is better than what the reference implementations do, and it is ours.
 
 ## Reduced motion is global, not opt-in
 

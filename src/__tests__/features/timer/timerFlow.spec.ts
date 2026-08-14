@@ -53,6 +53,21 @@ describe('workout timer flow', () => {
     ])
   })
 
+  /**
+   * The other half of the seeding rule: the form has to *start* from the
+   * preset. Its row arrives from IndexedDB after the screen has already
+   * rendered, so a form that only reads the presets list once shows the mode
+   * default forever — and one that remembers "already seeded" outside the
+   * registry shows it from the second test onwards, since every render gets a
+   * fresh registry while the atoms are memoized per key at module scope.
+   */
+  it('opens an existing preset on its saved values', async ({ presetSetup }) => {
+    const { timer } = presetSetup
+
+    await timer.setup.expectPresetName('Twenty minute grind')
+    await timer.setup.expectTimeSelected('20 min')
+  })
+
   it('offers 15-second shortcuts and accepts a custom raw time', async ({ amrapSetup: timer }) => {
     await timer.setup.expectTimeShortcut('15 sec')
     await timer.setup.chooseCustomTime('2', '7')

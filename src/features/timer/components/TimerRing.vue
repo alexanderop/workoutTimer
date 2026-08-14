@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
 const { progress } = defineProps<{ progress: number }>()
 
-const dashOffset = computed(() => 100 - Math.min(1, Math.max(0, progress)) * 100)
+// A pure function of one prop — memoizing it would cost more than the two
+// arithmetic operations it saves.
+const dashOffset = (): number => 100 - Math.min(1, Math.max(0, progress)) * 100
 </script>
 
 <template>
@@ -29,7 +29,7 @@ const dashOffset = computed(() => 100 - Math.min(1, Math.max(0, progress)) * 100
         stroke-linecap="round"
         stroke-width="6"
         :stroke-dasharray="100"
-        :stroke-dashoffset="dashOffset"
+        :stroke-dashoffset="dashOffset()"
         class="transition-[stroke-dashoffset] duration-100"
       />
     </svg>

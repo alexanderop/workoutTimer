@@ -1,6 +1,6 @@
 import { describe, expect } from 'vitest'
 import { page } from 'vitest/browser'
-import { INSTALL_HINT_STORAGE_KEY } from '@/composables/useInstallPrompt'
+import { INSTALL_HINT_STORAGE_KEY } from '@/state/install'
 import { it } from '../fixtures'
 import { stubInstallPromptAvailable } from '../helpers/installEvent'
 
