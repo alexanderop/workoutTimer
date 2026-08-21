@@ -1,14 +1,37 @@
-import type { TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/db'
+import type { CircuitBlock, TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/db'
 
 export const SECOND_MS = 1_000
 export const MINUTE_MS = 60 * SECOND_MS
 const HOUR_MS = 60 * MINUTE_MS
+
+/** The schema's cap on circuit length, restated for form values like every bound here. */
+export const MAX_CIRCUIT_BLOCKS = 30
+
+/**
+ * What a freshly added block holds, per kind. The default config below and the
+ * editor's "add block" buttons both read these, so a new block matches what a
+ * new circuit starts from.
+ */
+export const DEFAULT_CIRCUIT_BLOCKS: Readonly<Record<CircuitBlock['kind'], CircuitBlock>> = {
+  work: { label: '', kind: 'work', durationMs: 30 * SECOND_MS },
+  rest: { label: '', kind: 'rest', durationMs: 15 * SECOND_MS },
+}
+
+/** Both block kinds, read off the defaults so the list cannot drift from them. */
+export const CIRCUIT_BLOCK_KINDS = Object.keys(DEFAULT_CIRCUIT_BLOCKS) as ReadonlyArray<
+  CircuitBlock['kind']
+>
 
 export const DEFAULT_CONFIGS: Readonly<Record<TimerMode, TimerConfig>> = {
   amrap: { mode: 'amrap', durationMs: 10 * MINUTE_MS },
   forTime: { mode: 'forTime' },
   emom: { mode: 'emom', intervalMs: MINUTE_MS, rounds: 10 },
   tabata: { mode: 'tabata', workMs: 20 * SECOND_MS, restMs: 10 * SECOND_MS, rounds: 8 },
+  custom: {
+    mode: 'custom',
+    blocks: [DEFAULT_CIRCUIT_BLOCKS.work, DEFAULT_CIRCUIT_BLOCKS.rest],
+    repeat: 3,
+  },
 }
 
 /**
@@ -66,7 +89,19 @@ export function isTimerConfig(config: TimerConfig): boolean {
         config.restMs <= MAX_DURATION_MS &&
         isCount(config.rounds)
       )
+    case 'custom':
+      return (
+        config.blocks.length >= 1 &&
+        config.blocks.length <= MAX_CIRCUIT_BLOCKS &&
+        config.blocks.every((block) => isDuration(block.durationMs)) &&
+        isCount(config.repeat)
+      )
   }
+}
+
+/** One pass through a circuit's blocks, in milliseconds. */
+export function circuitCycleMs(blocks: ReadonlyArray<CircuitBlock>): number {
+  return blocks.reduce((sum, block) => sum + block.durationMs, 0)
 }
 
 export function totalDurationMs(config: TimerConfig): number | undefined {
@@ -79,6 +114,8 @@ export function totalDurationMs(config: TimerConfig): number | undefined {
       return config.intervalMs * config.rounds
     case 'tabata':
       return config.workMs * config.rounds + config.restMs * Math.max(0, config.rounds - 1)
+    case 'custom':
+      return circuitCycleMs(config.blocks) * config.repeat
   }
 }
 
@@ -88,6 +125,13 @@ export type DerivedTimer = {
   readonly elapsedMs: number
   readonly primaryMs: number
   readonly phase: TimerPhase
+  /**
+   * What the current circuit block is called, when it has a name. Only the
+   * custom mode sets it — the run screen shows it in place of the generic
+   * "Work"/"Rest" word, and it lives here because the screen may not switch
+   * on the mode itself (the arch tier's V1 rule).
+   */
+  readonly phaseLabel?: string
   readonly round: number
   /**
    * Rounds actually finished, which is what result screens report: tapped
@@ -118,6 +162,24 @@ function structuralRoundsDone(
   rounds: number,
 ): number {
   return Math.min(rounds, Math.floor((elapsed + restMs) / (workMs + restMs)))
+}
+
+/**
+ * The block `withinCycle` milliseconds into a circuit's pass falls in, and how
+ * far into that block. `undefined` past the end of the pass — the caller has
+ * already ruled that out by handling completion first, so reaching it anyway
+ * (an empty or damaged row) reads as finished rather than as a crash.
+ */
+function circuitPosition(
+  blocks: ReadonlyArray<CircuitBlock>,
+  withinCycle: number,
+): { readonly block: CircuitBlock; readonly phaseElapsed: number } | undefined {
+  let phaseElapsed = withinCycle
+  for (const block of blocks) {
+    if (phaseElapsed < block.durationMs) return { block, phaseElapsed }
+    phaseElapsed -= block.durationMs
+  }
+  return undefined
 }
 
 export function elapsedSessionMs(session: WorkoutSession, now: number): number {
@@ -243,6 +305,43 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         completedRounds,
         totalRounds: session.config.rounds,
         progress: clamp(phaseElapsed / Math.max(1, phaseDuration), 0, 1),
+        isComplete: false,
+      }
+    }
+    case 'custom': {
+      const cycle = circuitCycleMs(session.config.blocks)
+      const total = totalDurationMs(session.config) ?? 0
+      const cappedElapsed = Math.min(elapsed, total)
+      const roundIndex = Math.floor(elapsed / Math.max(1, cycle))
+      // A repeat counts once its whole pass ends, so the boundary is the cycle.
+      const completedRounds = Math.min(session.config.repeat, roundIndex)
+      const complete = completedInStorage || elapsed >= total
+      const position = complete
+        ? undefined
+        : circuitPosition(session.config.blocks, elapsed - roundIndex * cycle)
+      if (position === undefined) {
+        return {
+          elapsedMs: cappedElapsed,
+          primaryMs: 0,
+          phase: 'finished',
+          round: session.config.repeat,
+          completedRounds,
+          totalRounds: session.config.repeat,
+          progress: 1,
+          isComplete: true,
+        }
+      }
+
+      const { block, phaseElapsed } = position
+      return {
+        elapsedMs: cappedElapsed,
+        primaryMs: Math.max(0, block.durationMs - phaseElapsed),
+        phase: block.kind,
+        phaseLabel: block.label === '' ? undefined : block.label,
+        round: Math.min(session.config.repeat, roundIndex + 1),
+        completedRounds,
+        totalRounds: session.config.repeat,
+        progress: clamp(phaseElapsed / Math.max(1, block.durationMs), 0, 1),
         isComplete: false,
       }
     }

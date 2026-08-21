@@ -109,6 +109,9 @@ function persistCompletion(
 
 function phaseLabel(): string {
   if (session.value?.status === 'paused') return t('timer.run.paused')
+  // A named circuit block says what to do; the generic word is the fallback.
+  const blockLabel = derived.value?.phaseLabel
+  if (blockLabel !== undefined) return blockLabel
   switch (derived.value?.phase) {
     case 'countdown':
       return t('timer.run.countdown')

@@ -3,14 +3,19 @@ import { describe, expect, it } from '@effect/vitest'
 import { Schema } from 'effect'
 import { DEFAULT_CONFIGS, isTimerConfig, TIMER_MODES } from '@/features/timer/domain'
 import {
+  appendCircuitBlock,
   applyConfigToDraft,
   BASE_DRAFT,
   durationOptions,
+  moveCircuitBlock,
+  removeCircuitBlock,
   roundOptions,
   setupConfigAtom,
   setupDraftAtom,
   setupKey,
   toTimerConfig,
+  updateCircuitBlock,
+  type CircuitBlockDraft,
   type TimerSetupDraft,
 } from '@/features/timer/setupForm'
 import { TimerConfigSchema } from '@/db/converters'
@@ -147,6 +152,11 @@ describe('toTimerConfig', () => {
     rounds: 12,
     workSeconds: 30,
     restSeconds: 15,
+    blocks: [
+      { label: 'Burpees', kind: 'work', durationSeconds: 40 },
+      { label: '', kind: 'rest', durationSeconds: 20 },
+    ],
+    repeat: 4,
     workoutNotes: '',
     presetName: '',
   }
@@ -164,6 +174,14 @@ describe('toTimerConfig', () => {
       workMs: 30_000,
       restMs: 15_000,
       rounds: 12,
+    })
+    expect(toTimerConfig('custom', base)).toEqual({
+      mode: 'custom',
+      blocks: [
+        { label: 'Burpees', kind: 'work', durationMs: 40_000 },
+        { label: '', kind: 'rest', durationMs: 20_000 },
+      ],
+      repeat: 4,
     })
   })
 
@@ -216,6 +234,48 @@ describe('the draft, as a property', () => {
     const twice = applyConfigToDraft(once, toTimerConfig(mode, once))
 
     expect(toTimerConfig(mode, twice)).toEqual(toTimerConfig(mode, once))
+  })
+})
+
+describe('circuit block edits', () => {
+  const blocks: ReadonlyArray<CircuitBlockDraft> = [
+    { label: 'A', kind: 'work', durationSeconds: 30 },
+    { label: 'B', kind: 'rest', durationSeconds: 15 },
+  ]
+
+  it('appends a block of the asked-for kind with its default duration', () => {
+    const next = appendCircuitBlock(blocks, 'work')
+
+    expect(next).toHaveLength(3)
+    expect(next[2]).toEqual({ label: '', kind: 'work', durationSeconds: 30 })
+    expect(appendCircuitBlock(blocks, 'rest')[2]).toEqual({
+      label: '',
+      kind: 'rest',
+      durationSeconds: 15,
+    })
+  })
+
+  it('refuses to grow past the schema cap', () => {
+    const full = Array.from({ length: 30 }, () => blocks[0]!)
+
+    expect(appendCircuitBlock(full, 'work')).toBe(full)
+  })
+
+  it('patches one block and leaves the others alone', () => {
+    const next = updateCircuitBlock(blocks, 1, { durationSeconds: 45 })
+
+    expect(next[1]).toEqual({ label: 'B', kind: 'rest', durationSeconds: 45 })
+    expect(next[0]).toBe(blocks[0])
+    expect(blocks[1]?.durationSeconds).toBe(15)
+  })
+
+  it('removes by index and reorders by one step, ignoring the impossible', () => {
+    expect(removeCircuitBlock(blocks, 0).map((block) => block.label)).toEqual(['B'])
+    expect(moveCircuitBlock(blocks, 1, -1).map((block) => block.label)).toEqual(['B', 'A'])
+    expect(moveCircuitBlock(blocks, 0, 1).map((block) => block.label)).toEqual(['B', 'A'])
+    expect(moveCircuitBlock(blocks, 0, -1)).toBe(blocks)
+    expect(moveCircuitBlock(blocks, 1, 1)).toBe(blocks)
+    expect(moveCircuitBlock(blocks, 5, -1)).toBe(blocks)
   })
 })
 

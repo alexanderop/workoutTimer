@@ -22,6 +22,7 @@ export {
   START_COUNTDOWN_OPTIONS,
 } from './converters'
 export type {
+  CircuitBlock,
   FinishReason,
   NewSession,
   PresetDraft,

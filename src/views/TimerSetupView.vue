@@ -16,6 +16,7 @@ import {
   workoutStartMutation,
 } from '@/db'
 import { hasActiveSessionAtom } from '@/features/timer/atoms'
+import CircuitBlockEditor from '@/features/timer/components/CircuitBlockEditor.vue'
 import TimePicker from '@/features/timer/components/TimePicker.vue'
 import ValuePicker from '@/features/timer/components/ValuePicker.vue'
 import {
@@ -190,7 +191,7 @@ async function savePreset(): Promise<void> {
             @update:model-value="edit('rounds', $event ?? 1)"
           />
         </div>
-        <div v-else class="grid gap-4 sm:grid-cols-3">
+        <div v-else-if="routeMode === 'tabata'" class="grid gap-4 sm:grid-cols-3">
           <TimePicker
             id="work"
             :model-value="draft.workSeconds"
@@ -224,6 +225,13 @@ async function savePreset(): Promise<void> {
             @update:model-value="edit('rounds', $event ?? 1)"
           />
         </div>
+        <CircuitBlockEditor
+          v-else
+          :blocks="draft.blocks"
+          :repeat="draft.repeat"
+          @update:blocks="edit('blocks', $event)"
+          @update:repeat="edit('repeat', $event)"
+        />
       </section>
 
       <div class="flex flex-col gap-2">

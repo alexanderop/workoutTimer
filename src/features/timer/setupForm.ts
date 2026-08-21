@@ -1,8 +1,10 @@
 import { Atom } from '@effect/atom-vue'
 import { isPresetDraft } from '@/db'
 import {
+  DEFAULT_CIRCUIT_BLOCKS,
   DEFAULT_CONFIGS,
   isTimerConfig,
+  MAX_CIRCUIT_BLOCKS,
   parseTimerMode,
   SECOND_MS,
   TIMER_MODES,
@@ -42,6 +44,13 @@ const ROUND_VALUES = countValues(20)
  * changes the answer — unless the user has typed, in which case the edit atom
  * is what the draft reads and the arrival is invisible.
  */
+/** One circuit block as the editor binds it — seconds, because the inputs are. */
+export interface CircuitBlockDraft {
+  readonly label: string
+  readonly kind: 'work' | 'rest'
+  readonly durationSeconds: number
+}
+
 export interface TimerSetupDraft {
   readonly durationSeconds: number
   readonly timeCapSeconds: number | undefined
@@ -50,6 +59,8 @@ export interface TimerSetupDraft {
   readonly rounds: number
   readonly workSeconds: number
   readonly restSeconds: number
+  readonly blocks: ReadonlyArray<CircuitBlockDraft>
+  readonly repeat: number
   readonly workoutNotes: string
   readonly presetName: string
 }
@@ -63,6 +74,8 @@ const NOTHING_SET: TimerSetupDraft = {
   rounds: 0,
   workSeconds: 0,
   restSeconds: 0,
+  blocks: [],
+  repeat: 0,
   workoutNotes: '',
   presetName: '',
 }
@@ -125,6 +138,16 @@ export function applyConfigToDraft(draft: TimerSetupDraft, config: TimerConfig):
         workSeconds: config.workMs / SECOND_MS,
         restSeconds: config.restMs / SECOND_MS,
         rounds: config.rounds,
+      }
+    case 'custom':
+      return {
+        ...draft,
+        blocks: config.blocks.map((block) => ({
+          label: block.label,
+          kind: block.kind,
+          durationSeconds: block.durationMs / SECOND_MS,
+        })),
+        repeat: config.repeat,
       }
   }
 }
@@ -235,7 +258,63 @@ export function toTimerConfig(mode: TimerMode, draft: TimerSetupDraft): TimerCon
         restMs: Math.round(draft.restSeconds * SECOND_MS),
         rounds: Math.round(draft.rounds),
       }
+    case 'custom':
+      return {
+        mode: 'custom',
+        blocks: draft.blocks.map((block) => ({
+          label: block.label,
+          kind: block.kind,
+          durationMs: Math.round(block.durationSeconds * SECOND_MS),
+        })),
+        repeat: Math.round(draft.repeat),
+      }
   }
+}
+
+/**
+ * Block-list edits, as pure functions over the draft's array. The editor emits
+ * a whole new list per gesture — an edit is a replacement, like every other
+ * draft field. Out-of-range indices return the list unchanged: a tap that
+ * raced a removal is a no-op, not a crash.
+ */
+export function appendCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  kind: CircuitBlockDraft['kind'],
+): ReadonlyArray<CircuitBlockDraft> {
+  if (blocks.length >= MAX_CIRCUIT_BLOCKS) return blocks
+  const template = DEFAULT_CIRCUIT_BLOCKS[kind]
+  return [
+    ...blocks,
+    { label: template.label, kind, durationSeconds: template.durationMs / SECOND_MS },
+  ]
+}
+
+export function updateCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  index: number,
+  patch: Partial<CircuitBlockDraft>,
+): ReadonlyArray<CircuitBlockDraft> {
+  return blocks.map((block, at) => (at === index ? { ...block, ...patch } : block))
+}
+
+export function removeCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  index: number,
+): ReadonlyArray<CircuitBlockDraft> {
+  return blocks.filter((_, at) => at !== index)
+}
+
+/** An adjacent swap, so the lookups are the bounds check. */
+export function moveCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  from: number,
+  offset: -1 | 1,
+): ReadonlyArray<CircuitBlockDraft> {
+  const to = from + offset
+  const moved: CircuitBlockDraft | undefined = blocks[from]
+  const displaced: CircuitBlockDraft | undefined = blocks[to]
+  if (moved === undefined || displaced === undefined) return blocks
+  return blocks.map((block, at) => (at === from ? displaced : at === to ? moved : block))
 }
 
 export const setupConfigAtom = Atom.family((key: string) =>

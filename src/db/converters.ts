@@ -71,6 +71,30 @@ const TabataConfigSchema = Schema.Struct({
 })
 
 /**
+ * One step of a custom circuit: what to do, for how long, under what name.
+ * The label may be empty — the run screen then falls back to the kind's own
+ * word — but it is always present, so a block is one shape, not two.
+ */
+const CircuitBlockSchema = Schema.Struct({
+  label: Schema.String,
+  kind: Schema.Literals(['work', 'rest'] as const),
+  durationMs: Duration,
+})
+
+export type CircuitBlock = typeof CircuitBlockSchema.Type
+
+/**
+ * A user-built sequence of blocks, repeated whole. The length cap bounds the
+ * per-tick block walk in `deriveTimer` and keeps the editor usable on a phone;
+ * like every other bound here, `isTimerConfig` restates it for form values.
+ */
+const CustomConfigSchema = Schema.Struct({
+  mode: Schema.Literal('custom'),
+  blocks: Schema.Array(CircuitBlockSchema).check(Schema.isMinLength(1), Schema.isMaxLength(30)),
+  repeat: Count,
+})
+
+/**
  * Exported because `isTimerConfig` in the timer domain restates these bounds by
  * hand — it has to, since it grades a form's in-progress value rather than a
  * decoded row. Two statements of one rule drift, so the unit tier holds them
@@ -81,6 +105,7 @@ export const TimerConfigSchema = Schema.Union([
   ForTimeConfigSchema,
   EmomConfigSchema,
   TabataConfigSchema,
+  CustomConfigSchema,
 ])
 
 /** A union, so this is a `type` — the `interface … extends` idiom below only fits structs. */

@@ -80,6 +80,7 @@
   --mode-for-time: oklch(0.62 0.2 270);
   --mode-emom: oklch(0.62 0.25 305);
   --mode-tabata: oklch(0.68 0.16 170);
+  --mode-custom: oklch(0.7 0.15 230);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -128,6 +129,11 @@
 [data-mode='tabata'] {
   --mode-color: var(--mode-tabata);
   --mode-foreground: oklch(0.14 0.03 170);
+}
+
+[data-mode='custom'] {
+  --mode-color: var(--mode-custom);
+  --mode-foreground: oklch(0.14 0.03 230);
 }
 
 @layer base {
