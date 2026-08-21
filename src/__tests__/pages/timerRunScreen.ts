@@ -20,14 +20,12 @@ export class TimerRunScreen {
     await page.getByRole('button', { name: 'Tap again to finish' }).click()
   }
 
-  readonly expectRunning = vi.defineHelper(async (): Promise<void> => {
-    await expect.element(page.getByText('Work', { exact: true })).toBeVisible()
-  })
-
   /** The ring's phase line — a circuit shows the current block's own name. */
   readonly expectPhase = vi.defineHelper(async (label: string): Promise<void> => {
     await expect.element(page.getByText(label, { exact: true })).toBeVisible()
   })
+
+  readonly expectRunning = vi.defineHelper((): Promise<void> => this.expectPhase('Work'))
 
   readonly expectRounds = vi.defineHelper(async (count: number): Promise<void> => {
     await expect.element(page.getByText(`${count} rounds`)).toBeVisible()

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAtom } from '@effect/atom-vue'
 import { pickerCustomOpenAtom } from '@/features/timer/atoms'
+import { chipClass } from '@/features/timer/components/chip'
 import type { PickerOption } from '@/features/timer/pickerOptions'
 
 const props = defineProps<{
@@ -44,12 +45,7 @@ function updateValue(event: Event): void {
       <button
         v-if="emptyLabel"
         type="button"
-        class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
-        :class="
-          modelValue === undefined
-            ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
-            : 'bg-background'
-        "
+        :class="[chipClass(modelValue === undefined), 'snap-center']"
         :aria-pressed="modelValue === undefined"
         @click="choose(undefined)"
       >
@@ -59,12 +55,7 @@ function updateValue(event: Event): void {
         v-for="option in options"
         :key="option.value"
         type="button"
-        class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
-        :class="
-          modelValue === option.value
-            ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
-            : 'bg-background'
-        "
+        :class="[chipClass(modelValue === option.value), 'snap-center']"
         :aria-pressed="modelValue === option.value"
         @click="choose(option.value)"
       >

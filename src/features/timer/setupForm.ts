@@ -304,18 +304,17 @@ export function removeCircuitBlock(
   return blocks.filter((_, at) => at !== index)
 }
 
+/** An adjacent swap, so the lookups are the bounds check. */
 export function moveCircuitBlock(
   blocks: ReadonlyArray<CircuitBlockDraft>,
   from: number,
   offset: -1 | 1,
 ): ReadonlyArray<CircuitBlockDraft> {
   const to = from + offset
-  if (from < 0 || from >= blocks.length || to < 0 || to >= blocks.length) return blocks
-  const next = [...blocks]
-  const [moved] = next.splice(from, 1)
-  if (moved === undefined) return blocks
-  next.splice(to, 0, moved)
-  return next
+  const moved: CircuitBlockDraft | undefined = blocks[from]
+  const displaced: CircuitBlockDraft | undefined = blocks[to]
+  if (moved === undefined || displaced === undefined) return blocks
+  return blocks.map((block, at) => (at === from ? displaced : at === to ? moved : block))
 }
 
 export const setupConfigAtom = Atom.family((key: string) =>

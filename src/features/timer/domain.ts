@@ -17,6 +17,11 @@ export const DEFAULT_CIRCUIT_BLOCKS: Readonly<Record<CircuitBlock['kind'], Circu
   rest: { label: '', kind: 'rest', durationMs: 15 * SECOND_MS },
 }
 
+/** Both block kinds, read off the defaults so the list cannot drift from them. */
+export const CIRCUIT_BLOCK_KINDS = Object.keys(DEFAULT_CIRCUIT_BLOCKS) as ReadonlyArray<
+  CircuitBlock['kind']
+>
+
 export const DEFAULT_CONFIGS: Readonly<Record<TimerMode, TimerConfig>> = {
   amrap: { mode: 'amrap', durationMs: 10 * MINUTE_MS },
   forTime: { mode: 'forTime' },
@@ -65,14 +70,6 @@ function isCount(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 1 && value <= 999
 }
 
-function isCircuitBlock(block: CircuitBlock): boolean {
-  return (
-    typeof block.label === 'string' &&
-    (block.kind === 'work' || block.kind === 'rest') &&
-    isDuration(block.durationMs)
-  )
-}
-
 export function isTimerConfig(config: TimerConfig): boolean {
   switch (config.mode) {
     case 'amrap':
@@ -94,10 +91,9 @@ export function isTimerConfig(config: TimerConfig): boolean {
       )
     case 'custom':
       return (
-        Array.isArray(config.blocks) &&
         config.blocks.length >= 1 &&
         config.blocks.length <= MAX_CIRCUIT_BLOCKS &&
-        config.blocks.every(isCircuitBlock) &&
+        config.blocks.every((block) => isDuration(block.durationMs)) &&
         isCount(config.repeat)
       )
   }
@@ -314,15 +310,12 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
     }
     case 'custom': {
       const cycle = circuitCycleMs(session.config.blocks)
-      const total = cycle * session.config.repeat
+      const total = totalDurationMs(session.config) ?? 0
       const cappedElapsed = Math.min(elapsed, total)
-      // A repeat counts once its whole pass ends, so the boundary is the cycle.
-      const completedRounds = Math.min(
-        session.config.repeat,
-        Math.floor(elapsed / Math.max(1, cycle)),
-      )
-      const complete = completedInStorage || elapsed >= total
       const roundIndex = Math.floor(elapsed / Math.max(1, cycle))
+      // A repeat counts once its whole pass ends, so the boundary is the cycle.
+      const completedRounds = Math.min(session.config.repeat, roundIndex)
+      const complete = completedInStorage || elapsed >= total
       const position = complete
         ? undefined
         : circuitPosition(session.config.blocks, elapsed - roundIndex * cycle)
@@ -344,7 +337,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         elapsedMs: cappedElapsed,
         primaryMs: Math.max(0, block.durationMs - phaseElapsed),
         phase: block.kind,
-        ...(block.label === '' ? {} : { phaseLabel: block.label }),
+        phaseLabel: block.label === '' ? undefined : block.label,
         round: Math.min(session.config.repeat, roundIndex + 1),
         completedRounds,
         totalRounds: session.config.repeat,
