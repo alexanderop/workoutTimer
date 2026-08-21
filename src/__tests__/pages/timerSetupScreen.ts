@@ -18,6 +18,26 @@ export class TimerSetupScreen {
     await page.getByLabelText('Seconds').fill(seconds)
   }
 
+  /** Circuit blocks are named by position; `index` is 1-based like the labels. */
+  async nameBlock(index: number, name: string): Promise<void> {
+    await page.getByLabelText(`Block ${index} — Name`).fill(name)
+  }
+
+  async setBlockDuration(index: number, minutes: string, seconds: string): Promise<void> {
+    await page
+      .getByLabelText('Minutes')
+      .nth(index - 1)
+      .fill(minutes)
+    await page
+      .getByLabelText('Seconds')
+      .nth(index - 1)
+      .fill(seconds)
+  }
+
+  async addWorkBlock(): Promise<void> {
+    await page.getByRole('button', { name: 'Add work block' }).click()
+  }
+
   async start(): Promise<void> {
     await page.getByRole('button', { name: 'Start', exact: true }).click()
   }
