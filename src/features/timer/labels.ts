@@ -1,4 +1,4 @@
-import { formatDuration } from './domain'
+import { circuitCycleMs, formatDuration } from './domain'
 import type { TimerConfig, TimerMode } from '@/db'
 
 /**
@@ -58,6 +58,8 @@ export function configSummary(config: TimerConfig, t: Translate): string {
       return `${config.rounds} × ${formatDuration(config.intervalMs)}`
     case 'tabata':
       return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
+    case 'custom':
+      return `${config.repeat} × ${formatDuration(circuitCycleMs(config.blocks))}`
   }
 }
 

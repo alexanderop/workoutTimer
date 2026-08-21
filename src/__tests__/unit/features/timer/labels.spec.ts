@@ -35,12 +35,14 @@ describe('timer labels', () => {
       'For Time',
       'EMOM',
       'Tabata',
+      'Circuit',
     ])
     expect(TIMER_MODES.map((mode) => modeDescription(mode, translate))).toEqual([
       'As many rounds as possible',
       'Finish the work as fast as you can',
       'Start work on every interval',
       'Alternate focused work and rest',
+      'Build your own sequence of blocks',
     ])
   })
 
@@ -65,6 +67,17 @@ describe('timer labels', () => {
     expect(summarise({ mode: 'tabata', workMs: 20_000, restMs: 10_000, rounds: 8 })).toBe(
       '8 × 00:20 / 00:10',
     )
+    // A circuit reads as repeats × one pass through the blocks.
+    expect(
+      summarise({
+        mode: 'custom',
+        blocks: [
+          { label: '', kind: 'work', durationMs: 30_000 },
+          { label: '', kind: 'rest', durationMs: 15_000 },
+        ],
+        repeat: 3,
+      }),
+    ).toBe('3 × 00:45')
   })
 
   /**

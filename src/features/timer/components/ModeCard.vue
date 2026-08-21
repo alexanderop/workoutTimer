@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, Gauge, Repeat2, TimerReset } from '@lucide/vue'
+import { Activity, Gauge, Layers, Repeat2, TimerReset } from '@lucide/vue'
 import type { Component } from 'vue'
 import type { TimerMode } from '@/db'
 
@@ -16,6 +16,7 @@ const icons: Readonly<Record<TimerMode, Component>> = {
   forTime: Gauge,
   emom: TimerReset,
   tabata: Activity,
+  custom: Layers,
 }
 </script>
 

@@ -51,6 +51,14 @@ describe('timer domain', () => {
       forTime: { mode: 'forTime' },
       emom: { mode: 'emom', intervalMs: 60_000, rounds: 10 },
       tabata: { mode: 'tabata', workMs: 20_000, restMs: 10_000, rounds: 8 },
+      custom: {
+        mode: 'custom',
+        blocks: [
+          { label: '', kind: 'work', durationMs: 30_000 },
+          { label: '', kind: 'rest', durationMs: 15_000 },
+        ],
+        repeat: 3,
+      },
     })
     expect(Object.values(DEFAULT_CONFIGS).every(isTimerConfig)).toBe(true)
   })
@@ -78,6 +86,26 @@ describe('timer domain', () => {
     )
   })
 
+  it('validates a circuit block by block, and its length against the cap', () => {
+    const work = { label: 'Burpees', kind: 'work', durationMs: 30_000 } as const
+    const circuit = (patch: Partial<Extract<TimerConfig, { mode: 'custom' }>>): TimerConfig => ({
+      mode: 'custom',
+      blocks: [work],
+      repeat: 3,
+      ...patch,
+    })
+
+    expect(isTimerConfig(circuit({}))).toBe(true)
+    expect(isTimerConfig(circuit({ blocks: [] }))).toBe(false)
+    expect(isTimerConfig(circuit({ blocks: Array.from({ length: 30 }, () => work) }))).toBe(true)
+    expect(isTimerConfig(circuit({ blocks: Array.from({ length: 31 }, () => work) }))).toBe(false)
+    expect(isTimerConfig(circuit({ blocks: [{ ...work, durationMs: 999 }] }))).toBe(false)
+    expect(isTimerConfig(circuit({ blocks: [{ ...work, durationMs: 30_000.5 }] }))).toBe(false)
+    expect(isTimerConfig(circuit({ repeat: 0 }))).toBe(false)
+    expect(isTimerConfig(circuit({ repeat: 1_000 }))).toBe(false)
+    expect(isTimerConfig(circuit({ repeat: 2.5 }))).toBe(false)
+  })
+
   it('calculates the endpoint for every mode', () => {
     expect(totalDurationMs({ mode: 'amrap', durationMs: 10_000 })).toBe(10_000)
     expect(totalDurationMs({ mode: 'forTime' })).toBeUndefined()
@@ -89,6 +117,16 @@ describe('timer domain', () => {
     expect(totalDurationMs({ mode: 'tabata', workMs: 20_000, restMs: 10_000, rounds: 3 })).toBe(
       80_000,
     )
+    expect(
+      totalDurationMs({
+        mode: 'custom',
+        blocks: [
+          { label: '', kind: 'work', durationMs: 30_000 },
+          { label: '', kind: 'rest', durationMs: 15_000 },
+        ],
+        repeat: 4,
+      }),
+    ).toBe(180_000)
   })
 
   it('derives the pre-start countdown without consuming workout time', () => {
@@ -295,6 +333,88 @@ describe('timer domain', () => {
     })
   })
 
+  it('walks a circuit block by block and repeats the whole sequence', () => {
+    const circuit = session({
+      mode: 'custom',
+      blocks: [
+        { label: 'Burpees', kind: 'work', durationMs: 30_000 },
+        { label: '', kind: 'rest', durationMs: 15_000 },
+        { label: 'Squats', kind: 'work', durationMs: 20_000 },
+      ],
+      repeat: 2,
+    })
+
+    // 10 s in: still in the first block, with its name on the phase.
+    expect(deriveTimer(circuit, 11_000)).toEqual({
+      elapsedMs: 10_000,
+      primaryMs: 20_000,
+      phase: 'work',
+      phaseLabel: 'Burpees',
+      round: 1,
+      completedRounds: 0,
+      totalRounds: 2,
+      progress: 10_000 / 30_000,
+      isComplete: false,
+    })
+    // The unnamed rest block carries no phaseLabel, so the screen falls back
+    // to the generic word.
+    expect(deriveTimer(circuit, 31_000)).toEqual({
+      elapsedMs: 30_000,
+      primaryMs: 15_000,
+      phase: 'rest',
+      round: 1,
+      completedRounds: 0,
+      totalRounds: 2,
+      progress: 0,
+      isComplete: false,
+    })
+    // The exact boundary into the third block belongs to that block.
+    expect(deriveTimer(circuit, 46_000)).toMatchObject({
+      phase: 'work',
+      phaseLabel: 'Squats',
+      primaryMs: 20_000,
+      round: 1,
+    })
+    // 65 s is one full pass: the sequence starts over and the round advances.
+    expect(deriveTimer(circuit, 66_000)).toMatchObject({
+      phase: 'work',
+      phaseLabel: 'Burpees',
+      round: 2,
+      completedRounds: 1,
+      primaryMs: 30_000,
+    })
+    // Both passes done, at the exact endpoint.
+    expect(deriveTimer(circuit, 131_000)).toEqual({
+      elapsedMs: 130_000,
+      primaryMs: 0,
+      phase: 'finished',
+      round: 2,
+      completedRounds: 2,
+      totalRounds: 2,
+      progress: 1,
+      isComplete: true,
+    })
+  })
+
+  it('reports finished passes for a circuit cancelled mid-sequence', () => {
+    const cancelled = session(
+      {
+        mode: 'custom',
+        blocks: [{ label: '', kind: 'work', durationMs: 30_000 }],
+        repeat: 5,
+      },
+      { status: 'cancelled', finishedAt: 76_000 },
+    )
+
+    // 75 s elapsed is two whole 30 s passes; the third was underway.
+    expect(deriveTimer(cancelled, 100_000)).toMatchObject({
+      phase: 'finished',
+      completedRounds: 2,
+      round: 5,
+      isComplete: true,
+    })
+  })
+
   it('counts structural rounds from elapsed time, not tapped splits', () => {
     // The bug this pins: a stored-final Tabata has an empty splits array, so
     // result screens reading `session.rounds.length` showed 0. 4 × 4:00 work
@@ -371,7 +491,7 @@ describe('timer domain', () => {
  */
 describe('timer vocabulary', () => {
   it('lists every mode, in the order the home screen offers them', () => {
-    expect(TIMER_MODES).toEqual(['amrap', 'forTime', 'emom', 'tabata'])
+    expect(TIMER_MODES).toEqual(['amrap', 'forTime', 'emom', 'tabata', 'custom'])
   })
 
   /**
@@ -573,6 +693,21 @@ describe('timer domain, as properties', () => {
       workMs: nearMissNumber,
       restMs: nearMissNumber,
       rounds: nearMissNumber,
+    }),
+    // Blocks perturbed one level down as well: the top-level `oneFieldOff`
+    // only replaces the whole array, so the per-block bounds need their own
+    // near-misses.
+    FastCheck.record({
+      mode: FastCheck.constant('custom' as const),
+      blocks: FastCheck.array(
+        FastCheck.record({
+          label: FastCheck.constant(''),
+          kind: FastCheck.constantFrom('work' as const, 'rest' as const),
+          durationMs: nearMissNumber,
+        }),
+        { maxLength: 4 },
+      ),
+      repeat: nearMissNumber,
     }),
   )
 
