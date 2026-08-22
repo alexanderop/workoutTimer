@@ -106,11 +106,17 @@ export const setupKeyAtom = Atom.make((get) =>
   setupKey({ mode: get(setupModeAtom), presetId: get(setupPresetIdAtom) }),
 )
 
+/**
+ * The key read back apart. `parseTimerMode` rather than a cast: a family key
+ * is a string by the time it comes back, and the modes have a list that
+ * answers this — the fallback is unreachable through `setupKeyAtom`, and is
+ * the same fallback a hand-typed `/timer/nonsense` already gets.
+ */
 const parseKey = (key: string): TimerSetupTarget => {
   const separator = key.indexOf(':')
   const presetId = key.slice(separator + 1)
   return {
-    mode: key.slice(0, separator) as TimerMode,
+    mode: parseTimerMode(key.slice(0, separator)) ?? 'amrap',
     presetId: presetId === '' ? undefined : presetId,
   }
 }
