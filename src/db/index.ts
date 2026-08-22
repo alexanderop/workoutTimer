@@ -39,22 +39,20 @@ export { DatabaseError } from './errors'
 // module outside src/db can *name* that contract — src/features/timer/runDriver.ts
 // composes such a program — without reaching into src/db/layer.ts.
 export type { DbServices } from './layer'
+// One repository per aggregate — the same division the mutation atoms above
+// already make. Callers name the operation, never the service behind it.
+export { createPreset, deletePreset, listPresets, updatePreset } from './repositories/presets'
 export {
   addSessionRound,
-  createPreset,
   createSession,
-  deletePreset,
   deleteSession,
   finishSession,
-  getTimerSettings,
-  listPresets,
   listSessions,
   markSessionRunning,
   pauseSession,
   resumeSession,
-  updatePreset,
   updateSessionNotes,
-  updateTimerSettings,
-} from './repositories/workouts'
+} from './repositories/sessions'
+export { getTimerSettings, updateTimerSettings } from './repositories/settings'
 export { runDb } from './runtime'
 export { resetDatabase } from './schema'

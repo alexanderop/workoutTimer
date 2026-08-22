@@ -16,7 +16,7 @@ import {
   updateTimerSettings,
 } from '@/db'
 
-describe('workouts repository', () => {
+describe('the repositories, through the operations the app calls', () => {
   beforeEach(resetDatabase)
 
   it('creates a recoverable active session', async () => {
