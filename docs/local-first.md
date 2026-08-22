@@ -37,7 +37,7 @@ Why both? Because the migration only sees rows that were in the database at upgr
 
 > Never trust the shape of stored data; trust the decode.
 
-"Never trust" is meant literally: a table's TypeScript type is a claim, not a check. IndexedDB rows outlive app versions, get restored with a profile, and are editable from devtools, so `WorkoutsRepo.listSessions` decodes every row against the schema and fails with a `DatabaseError` when one does not match. One bad row fails the whole read on purpose — the schema accepts every shape this app has ever written, so a row that misses it is damaged rather than old, and silently dropping it would show a short history the user might then export over their last good backup.
+"Never trust" is meant literally: a table's TypeScript type is a claim, not a check. IndexedDB rows outlive app versions, get restored with a profile, and are editable from devtools, so `SessionsRepo.listSessions` decodes every row against the schema and fails with a `DatabaseError` when one does not match. One bad row fails the whole read on purpose — the schema accepts every shape this app has ever written, so a row that misses it is damaged rather than old, and silently dropping it would show a short history the user might then export over their last good backup.
 
 The same schema does triple duty: Dexie's table typing, that read-path decode, and backup validation in `src/db/backup.ts`. One definition means a field added to a session cannot reach disk while quietly disappearing from every export.
 
