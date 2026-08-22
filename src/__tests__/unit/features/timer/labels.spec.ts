@@ -12,24 +12,17 @@ import {
 import en from '@/i18n/messages/en'
 import type { TimerConfig } from '@/db'
 import type { DerivedTimer } from '@/features/timer/domain'
+import { messageAt } from '../../../helpers/messageAt'
 
 /**
  * The real English catalogue, walked by key. Using it rather than a stub is
  * what makes these tests catch a key that does not exist — the thing five
  * hand-written `switch (mode)` blocks could get wrong one mode at a time.
  */
-const translate: Translate = (key, named) => {
-  const message = key
-    .split('.')
-    .reduce<unknown>(
-      (node, segment) => (node as Record<string, unknown> | undefined)?.[segment],
-      en,
-    )
-
-  if (typeof message !== 'string') throw new Error(`no message at ${key}`)
-
-  return message.replace(/\{(\w+)\}/g, (_, name: string) => String(named?.[name] ?? `{${name}}`))
-}
+const translate: Translate = (key, named) =>
+  messageAt(en, key).replace(/\{(\w+)\}/g, (_, name: string) =>
+    String(named?.[name] ?? `{${name}}`),
+  )
 
 describe('timer labels', () => {
   it('names and describes every mode from the catalogue', () => {

@@ -1,5 +1,5 @@
 import { Atom } from '@effect/atom-vue'
-import type { Effect } from 'effect'
+import { Effect } from 'effect'
 import { dbLayer, type DbServices } from './layer'
 
 export const SESSIONS_KEY = 'sessions'
@@ -33,9 +33,14 @@ export const dbRuntime = Atom.runtime(dbLayer).pipe(Atom.keepAlive)
  * to re-read presets, which re-ran the setup screen's "load preset into the
  * form" watcher and wiped whatever the user had just typed. Invalidating only
  * what a write actually changed keeps that class of bug from existing.
+ *
+ * The edge resolves to `void`: a program may succeed with anything, but a
+ * caller's answer is the invalidated read atom, never the write's own return
+ * value. `Effect.asVoid` says so in the type rather than leaking `unknown` out
+ * to every `@click` handler that awaits one.
  */
 const mutationAtom = (reactivityKeys: ReadonlyArray<string>) =>
-  dbRuntime.fn((program: Effect.Effect<unknown, never, DbServices>) => program, {
+  dbRuntime.fn((program: Effect.Effect<unknown, never, DbServices>) => Effect.asVoid(program), {
     reactivityKeys,
     concurrent: true,
   })

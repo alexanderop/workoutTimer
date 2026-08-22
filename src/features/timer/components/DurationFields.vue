@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { controlValue } from '@/lib/formControl'
+
 /**
  * A minutes/seconds pair reporting one total in seconds — how a human types a
  * duration, in one place. TimePicker's custom panel and every circuit block
@@ -30,12 +32,12 @@ function updateTotal(nextMinutes: number, nextSeconds: number): void {
 }
 
 function updateMinutes(event: Event): void {
-  const value = Number((event.currentTarget as HTMLInputElement).value)
+  const value = Number(controlValue(event))
   updateTotal(Number.isFinite(value) ? Math.max(0, value) : 0, seconds())
 }
 
 function updateSeconds(event: Event): void {
-  const value = Number((event.currentTarget as HTMLInputElement).value)
+  const value = Number(controlValue(event))
   updateTotal(minutes(), Number.isFinite(value) ? Math.min(59, Math.max(0, value)) : 0)
 }
 

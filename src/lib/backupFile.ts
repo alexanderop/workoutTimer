@@ -74,9 +74,14 @@ export const downloadBackup = (payload: {
 /**
  * Read a user-picked file into a payload. Fails for anything that is not
  * readable JSON; whether the JSON is actually a backup is `importData`'s call.
+ *
+ * `Schema.Json` — not `unknown` — is what a successful `JSON.parse` proves:
+ * the bytes were syntactically JSON. That is the whole contract this side of
+ * the boundary can offer, and stating it lets `decodeBackup` declare that it
+ * narrows JSON to a backup rather than anything to a backup.
  */
-export const readBackupFile = (file: File): Effect.Effect<unknown, BackupFileError> =>
+export const readBackupFile = (file: File): Effect.Effect<Schema.Json, BackupFileError> =>
   Effect.tryPromise({
-    try: async (): Promise<unknown> => JSON.parse(await file.text()),
+    try: async (): Promise<Schema.Json> => JSON.parse(await file.text()),
     catch: (cause) => new BackupFileError({ operation: 'read backup file', cause }),
   })

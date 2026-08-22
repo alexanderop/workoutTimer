@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
+import type { HTMLAttributes, VNode } from 'vue'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<{
@@ -7,7 +7,7 @@ const props = defineProps<{
 }>()
 
 defineSlots<{
-  default: () => unknown
+  default: () => VNode[]
 }>()
 </script>
 

@@ -1,6 +1,7 @@
 import { AsyncResult, Atom } from '@effect/atom-vue'
 import { Effect } from 'effect'
 import {
+  type DatabaseError,
   dbRuntime,
   DEFAULT_TIMER_SETTINGS,
   getTimerSettings,
@@ -14,12 +15,19 @@ import {
   type WorkoutSession,
 } from '@/db'
 
-const reportReadFailure = (boundary: string, operation: string) =>
-  Effect.tapError((error: unknown) =>
-    Effect.logError(error).pipe(
-      Effect.annotateLogs({ boundary, operation, failure: 'Db.DatabaseError' }),
-    ),
-  )
+/**
+ * Log a read that failed, then re-fail. Written data-first so the error type
+ * comes from the effect being piped into rather than from an annotation —
+ * every read edge below fails with `DatabaseError` and nothing else.
+ */
+const reportReadFailure =
+  (boundary: string, operation: string) =>
+  <A, R>(self: Effect.Effect<A, DatabaseError, R>): Effect.Effect<A, DatabaseError, R> =>
+    Effect.tapError(self, (error) =>
+      Effect.logError(error).pipe(
+        Effect.annotateLogs({ boundary, operation, failure: 'Db.DatabaseError' }),
+      ),
+    )
 
 const sessionsAtom = dbRuntime
   .atom(listSessions.pipe(reportReadFailure('sessions', 'load sessions')))

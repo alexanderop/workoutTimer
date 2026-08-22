@@ -1,5 +1,6 @@
 import { Atom, type AtomRegistry } from '@effect/atom-vue'
 import type { RouteLocationNormalizedGeneric, Router } from 'vue-router'
+import { RouteNames, type RouteName } from '@/router/routeNames'
 
 /**
  * The current route, as an atom.
@@ -20,7 +21,7 @@ import type { RouteLocationNormalizedGeneric, Router } from 'vue-router'
  * app's.
  */
 export interface RouteSnapshot {
-  readonly name: string | undefined
+  readonly name: RouteName | undefined
   readonly params: Readonly<Record<string, string>>
   readonly query: Readonly<Record<string, string>>
   readonly hideNav: boolean
@@ -75,21 +76,36 @@ export const navigationAtom: Atom.Writable<NavigationRequest | undefined> = Atom
  * first value: no route in this app declares one, and carrying the union into
  * every consumer would buy nothing.
  */
+const firstValue = (value: string | null | ReadonlyArray<string | null>): string | undefined =>
+  (Array.isArray(value) ? value[0] : value) ?? undefined
+
+/** Every name the route table declares, as a list to match a location against. */
+const ROUTE_NAMES: ReadonlyArray<RouteName> = Object.values(RouteNames)
+
+/**
+ * vue-router names a location with a `string | symbol | undefined`; this app
+ * names its routes in `RouteNames`. Matching against that list is what turns
+ * the router's word into one of ours — a name this build does not declare
+ * (a stale service worker's route table, a hand-typed URL) is no name at all.
+ */
+const toRouteName = (name: RouteLocationNormalizedGeneric['name']): RouteName | undefined =>
+  ROUTE_NAMES.find((known) => known === name)
+
 function toRouteSnapshot(location: RouteLocationNormalizedGeneric): RouteSnapshot {
   const params: Record<string, string> = {}
   for (const [key, value] of Object.entries(location.params)) {
-    const first = Array.isArray(value) ? value[0] : value
-    if (typeof first === 'string') params[key] = first
+    const first = firstValue(value)
+    if (first !== undefined) params[key] = first
   }
 
   const query: Record<string, string> = {}
   for (const [key, value] of Object.entries(location.query)) {
-    const first = Array.isArray(value) ? value[0] : value
-    if (typeof first === 'string') query[key] = first
+    const first = firstValue(value)
+    if (first !== undefined) query[key] = first
   }
 
   return {
-    name: typeof location.name === 'string' ? location.name : undefined,
+    name: toRouteName(location.name),
     params,
     query,
     hideNav: location.meta.hideNav === true,

@@ -183,12 +183,22 @@ const NO_COMPOSABLES =
 type Boundary = { group: string[]; message: string; importNames?: string[] }
 type RestrictImports = ['error', { patterns: Boundary[] }]
 
-const boundary = (name: string, files: string[], ignores: string[], patterns: Boundary[]) => ({
-  name: `app/boundaries/${name}`,
-  files,
-  ...(ignores.length > 0 ? { ignores } : {}),
-  rules: { 'no-restricted-imports': ['error', { patterns }] as RestrictImports },
-})
+// The return type is what makes the tuple a tuple — written inline it would
+// widen to an array of its member types, which is not what the rule takes.
+const restrictImports = (patterns: Boundary[]): RestrictImports => ['error', { patterns }]
+
+const boundary = (name: string, files: string[], ignores: string[], patterns: Boundary[]) => {
+  const config = {
+    name: `app/boundaries/${name}`,
+    files,
+    rules: { 'no-restricted-imports': restrictImports(patterns) },
+  }
+
+  // A config with `ignores: []` is not the same as one without the key —
+  // flat config reads an empty array as "ignore nothing extra", so only the
+  // scopes that actually carve something out carry it.
+  return ignores.length > 0 ? { ...config, ignores } : config
+}
 
 /** Applies everywhere outside src/components/ui — see NO_HEADLESS_DIRECT. */
 const CONSUMES_UI = [NO_HEADLESS_DIRECT, NO_UI_INTERNALS, NO_SHADCN, NO_VUE_REACTIVITY]
@@ -249,6 +259,9 @@ export default defineConfigWithVueTs(
       '**/.vitest/**',
       '**/test-results/**',
       '**/playwright-report/**',
+      // Vendored third-party lint rules (docs/index.md → linting). Kept
+      // byte-identical to upstream so a re-vendor is a clean diff.
+      'tools/oxlint/anti-slop/**',
     ],
   },
 

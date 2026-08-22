@@ -36,12 +36,22 @@ const expected = {
   browser: { focusesUnrenderedElements: false, hasInert: true, inertBlocksFocus: true },
 }[env]
 
+/**
+ * Start from nothing focused. `document.activeElement` is typed as the wider
+ * `Element`, which has no `blur` — the `instanceof` is what says this one is
+ * an HTMLElement, and it also covers the `null` the property can be.
+ */
+function blurActiveElement(): void {
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement) focused.blur()
+}
+
 function focusFresh(mutate: (button: HTMLButtonElement) => void): boolean {
   const button = document.createElement('button')
   button.textContent = 'target'
   document.body.append(button)
   mutate(button)
-  ;(document.activeElement as HTMLElement | null)?.blur()
+  blurActiveElement()
   button.focus()
 
   return document.activeElement === button
@@ -83,7 +93,7 @@ describe('inert', () => {
     const button = document.createElement('button')
     background.append(button)
     document.body.append(background)
-    ;(document.activeElement as HTMLElement | null)?.blur()
+    blurActiveElement()
 
     button.focus()
 

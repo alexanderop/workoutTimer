@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useAtomValue } from '@effect/atom-vue'
+import type { VNode } from 'vue'
 import { useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -20,8 +21,8 @@ const { items } = defineProps<{
 }>()
 
 defineSlots<{
-  default: () => unknown
-  'center-action'?: () => unknown
+  default: () => VNode[]
+  'center-action'?: () => VNode[]
 }>()
 
 const { t } = useI18n()

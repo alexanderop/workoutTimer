@@ -93,7 +93,7 @@ describe('toast expiry ownership', () => {
    * Counted against a baseline: the runner has timers of its own, so what this
    * asserts is that *these* atoms left none behind, not that the process did.
    */
-  function pendingTimers(): { since: () => number } {
+  function pendingTimers() {
     const baseline = vi.getTimerCount()
     return { since: () => vi.getTimerCount() - baseline }
   }

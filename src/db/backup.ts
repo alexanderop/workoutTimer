@@ -19,7 +19,9 @@ const BackupSchema = Schema.Struct({
 
 export type BackupPayload = typeof BackupSchema.Type
 
-export const decodeBackup = (payload: unknown): Effect.Effect<BackupPayload, BackupInvalidError> =>
+export const decodeBackup = (
+  payload: Schema.Json,
+): Effect.Effect<BackupPayload, BackupInvalidError> =>
   Schema.decodeUnknownEffect(BackupSchema)(payload).pipe(
     Effect.mapError((error) => new BackupInvalidError({ message: error.message })),
   )
@@ -43,7 +45,7 @@ export const exportData: Effect.Effect<
   })
 }).pipe(Effect.withSpan('Backup.exportData'))
 
-export const importData = Effect.fn('Backup.importData')(function* (payload: unknown) {
+export const importData = Effect.fn('Backup.importData')(function* (payload: Schema.Json) {
   const backup = yield* decodeBackup(payload)
   const sessions = [...backup.sessions]
   const presets = [...backup.presets]

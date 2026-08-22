@@ -5,7 +5,7 @@ import {
   decodeNewSession,
   decodePresetDraft,
   decodeTimerSettings,
-  makeDefaultTimerSettings,
+  defaultTimerSettingsAt,
 } from '@/db/converters'
 
 const v1SettingsRow = {
@@ -20,7 +20,7 @@ const v1SettingsRow = {
 
 describe('workout schemas', () => {
   it('materializes the canonical settings with the repository clock', () => {
-    expect(makeDefaultTimerSettings(42)).toEqual({ ...DEFAULT_TIMER_SETTINGS, updatedAt: 42 })
+    expect(defaultTimerSettingsAt(42)).toEqual({ ...DEFAULT_TIMER_SETTINGS, updatedAt: 42 })
   })
 
   it('rejects an AMRAP without a positive duration', async () => {

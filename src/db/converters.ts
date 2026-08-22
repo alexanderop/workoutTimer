@@ -284,6 +284,7 @@ const parsePresetDraft = Schema.decodeUnknownResult(PresetDraftSchema)
 export const isPresetDraft = (draft: PresetDraft): boolean =>
   Result.isSuccess(parsePresetDraft(draft))
 
-export function makeDefaultTimerSettings(now: number): TimerSettings {
+/** The defaults above, stamped with the clock that is about to persist them. */
+export function defaultTimerSettingsAt(now: number): TimerSettings {
   return { ...DEFAULT_TIMER_SETTINGS, updatedAt: now }
 }

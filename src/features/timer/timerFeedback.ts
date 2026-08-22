@@ -3,7 +3,7 @@ import type { TimerSettings } from '@/db'
 let audioContext: AudioContext | undefined
 
 export function unlockTimerAudio(): void {
-  if (typeof AudioContext === 'undefined') return
+  if (!('AudioContext' in globalThis)) return
   audioContext ??= new AudioContext()
   void audioContext.resume()
 }

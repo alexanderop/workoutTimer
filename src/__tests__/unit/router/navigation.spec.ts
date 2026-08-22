@@ -1,23 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import en from '@/i18n/messages/en'
 import { navItems } from '@/router/navigation'
+import { messageAt } from '../../helpers/messageAt'
 
 /**
  * The real English catalogue, walked by key — the same trick the timer's label
  * spec uses, and for the same reason: a tab whose `labelKey` does not exist
  * would render an empty string in the app and pass against a stub.
  */
-const translate = (key: string): string => {
-  const message = key
-    .split('.')
-    .reduce<unknown>(
-      (node, segment) => (node as Record<string, unknown> | undefined)?.[segment],
-      en,
-    )
-
-  if (typeof message !== 'string') throw new Error(`no message at ${key}`)
-  return message
-}
+const translate = (key: string): string => messageAt(en, key)
 
 describe('bottom navigation', () => {
   it('translates every tab from the catalogue', () => {

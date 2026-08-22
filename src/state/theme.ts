@@ -9,10 +9,16 @@ import { applyThemeColor } from '@/lib/themeColor'
  */
 export const COLOR_SCHEME_STORAGE_KEY = 'vueuse-color-scheme'
 
-export type ColorScheme = 'auto' | 'light' | 'dark'
+/**
+ * The three schemes, spelled once. The type is read off the list — a scheme
+ * added here is a scheme the persisted value is matched against, with no
+ * second copy of the union to keep in step.
+ */
+const COLOR_SCHEMES = ['auto', 'light', 'dark'] as const
+
+export type ColorScheme = (typeof COLOR_SCHEMES)[number]
 
 const DEFAULT_COLOR_SCHEME: ColorScheme = 'auto'
-const COLOR_SCHEMES: ReadonlyArray<string> = ['auto', 'light', 'dark']
 
 /**
  * The persisted preference: `'auto'` follows the OS, the other two override
@@ -23,7 +29,7 @@ const COLOR_SCHEMES: ReadonlyArray<string> = ['auto', 'light', 'dark']
 const colorSchemeAtom = localStorageAtom<ColorScheme>({
   key: COLOR_SCHEME_STORAGE_KEY,
   defaultValue: DEFAULT_COLOR_SCHEME,
-  decode: (raw) => (COLOR_SCHEMES.includes(raw) ? (raw as ColorScheme) : DEFAULT_COLOR_SCHEME),
+  decode: (raw) => COLOR_SCHEMES.find((scheme) => scheme === raw) ?? DEFAULT_COLOR_SCHEME,
   encode: (value) => value,
 })
 

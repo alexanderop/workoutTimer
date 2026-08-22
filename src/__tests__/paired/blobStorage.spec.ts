@@ -1,3 +1,4 @@
+import type { Blob as NodeBlob } from 'node:buffer'
 import { afterEach, describe, expect, it } from 'vitest'
 import { env, jsdomOnly } from '@/__tests__/helpers/env'
 
@@ -32,7 +33,22 @@ const expected = {
   browser: { blobSurvives: true },
 }[env]
 
-async function roundTrip(value: unknown): Promise<unknown> {
+/**
+ * What this file hands the store, and what the store hands back.
+ *
+ * There is no type for "a structured-cloneable value" — that is a runtime
+ * rule, and the point of this file is to put values from both sides of it
+ * through `put`. So the type is written the other way round: the shapes these
+ * tests actually store and then assert on. The empty record is a member
+ * because that is what a `Blob` that did not survive comes back as, and the
+ * function is one because a value `put` must *refuse* is the contrast that
+ * makes the rest meaningful. Node's own `Blob` is a member for the same
+ * reason it appears below: it is a second, identically named class, and
+ * telling the two apart is what one of these tests is for.
+ */
+type StoredValue = Blob | NodeBlob | Record<string, string | number> | (() => string)
+
+async function roundTrip(value: StoredValue): Promise<StoredValue | undefined> {
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1)
     request.onupgradeneeded = () => request.result.createObjectStore(STORE)
@@ -41,7 +57,7 @@ async function roundTrip(value: unknown): Promise<unknown> {
   })
 
   try {
-    return await new Promise<unknown>((resolve, reject) => {
+    return await new Promise<StoredValue | undefined>((resolve, reject) => {
       const write = database.transaction(STORE, 'readwrite')
       write.objectStore(STORE).put(value, 'entry')
       write.onerror = () => reject(write.error)
@@ -75,12 +91,14 @@ describe('a stored Blob', () => {
     ).toBe(expected.blobSurvives)
 
     if (expected.blobSurvives) {
+      // SAFETY: the `instanceof Blob` assertion directly above is what
+      // establishes this, on the branch where it held.
       const blob = stored as Blob
       expect(blob.type).toBe('application/json')
       expect(await blob.text()).toBe('backup contents')
     } else {
       expect(stored).toEqual({})
-      expect(Object.keys(stored as object)).toEqual([])
+      expect(Object.keys(stored ?? {})).toEqual([])
     }
   })
 
@@ -93,6 +111,10 @@ describe('a stored Blob', () => {
     // test has nothing to say.
     const stored = await roundTrip(new NodeBlob(['backup contents']))
 
+    // SAFETY: what came back is a clone of a Node `Blob`, and `size` is the
+    // property this test reads to show it survived. The optional shape is
+    // deliberate — a value that did not survive has no `size`, and that is a
+    // failed assertion rather than a thrown one.
     expect((stored as { size?: number })?.size).toBe(15)
   })
 })

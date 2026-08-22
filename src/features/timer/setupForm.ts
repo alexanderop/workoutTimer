@@ -225,6 +225,8 @@ export const setupDraftAtom = Atom.family((key: string) =>
   ),
 )
 
+type ForTimeConfig = Extract<TimerConfig, { mode: 'forTime' }>
+
 /**
  * The form read back as the config for one mode. The other modes' fields are
  * ignored, so what the user set for Tabata does not leak into the AMRAP they
@@ -241,16 +243,19 @@ export function toTimerConfig(mode: TimerMode, draft: TimerSetupDraft): TimerCon
   switch (mode) {
     case 'amrap':
       return { mode: 'amrap', durationMs: Math.round(draft.durationSeconds * SECOND_MS) }
-    case 'forTime':
-      return {
-        mode: 'forTime',
-        ...(draft.timeCapSeconds === undefined || draft.timeCapSeconds === 0
-          ? {}
-          : { timeCapMs: Math.round(draft.timeCapSeconds * SECOND_MS) }),
-        ...(draft.targetRounds === undefined || draft.targetRounds === 0
-          ? {}
-          : { targetRounds: Math.round(draft.targetRounds) }),
-      }
+    case 'forTime': {
+      // Both fields are `optionalKey` in the schema, so "not set" is the key
+      // being absent — never present with an `undefined` value. Each one is
+      // added to the config only once it has a value to add.
+      const capped: ForTimeConfig =
+        draft.timeCapSeconds === undefined || draft.timeCapSeconds === 0
+          ? { mode: 'forTime' }
+          : { mode: 'forTime', timeCapMs: Math.round(draft.timeCapSeconds * SECOND_MS) }
+
+      return draft.targetRounds === undefined || draft.targetRounds === 0
+        ? capped
+        : { ...capped, targetRounds: Math.round(draft.targetRounds) }
+    }
     case 'emom':
       return {
         mode: 'emom',

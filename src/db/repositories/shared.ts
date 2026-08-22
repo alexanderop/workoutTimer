@@ -27,10 +27,14 @@ export const invalid = (message: string): WorkoutInvalidError =>
  * A stored row, decoded. A row that does not match is a `DatabaseError`
  * naming the decode that failed, not a `WorkoutInvalidError`: nobody handed
  * this in, it was already on disk.
+ *
+ * `Stored` is whatever the decoder accepts, the same way `validateDraft`
+ * below takes its `In` from its own decoder — this wrapper only re-tags the
+ * failure, so it has no opinion of its own about the input.
  */
 export const decodeRow =
-  <A, E>(operation: string, decode: (stored: unknown) => Effect.Effect<A, E>) =>
-  (stored: unknown): Effect.Effect<A, DatabaseError> =>
+  <Stored, A, E>(operation: string, decode: (stored: Stored) => Effect.Effect<A, E>) =>
+  (stored: Stored): Effect.Effect<A, DatabaseError> =>
     decode(stored).pipe(Effect.mapError((cause) => new DatabaseError({ operation, cause })))
 
 /** A draft the caller handed in, validated. */

@@ -20,17 +20,19 @@ export const MAX_CIRCUIT_BLOCKS = 30
  * editor's "add block" buttons both read these, so a new block matches what a
  * new circuit starts from.
  */
-export const DEFAULT_CIRCUIT_BLOCKS: Readonly<Record<CircuitBlock['kind'], CircuitBlock>> = {
+export const DEFAULT_CIRCUIT_BLOCKS = {
   work: { label: '', kind: 'work', durationMs: 30 * SECOND_MS },
   rest: { label: '', kind: 'rest', durationMs: 15 * SECOND_MS },
-}
+} satisfies Readonly<Record<CircuitBlock['kind'], CircuitBlock>>
 
 /** Both block kinds, read off the defaults so the list cannot drift from them. */
-export const CIRCUIT_BLOCK_KINDS = Object.keys(DEFAULT_CIRCUIT_BLOCKS) as ReadonlyArray<
-  CircuitBlock['kind']
->
+export const CIRCUIT_BLOCK_KINDS =
+  // SAFETY: the `satisfies` above checks DEFAULT_CIRCUIT_BLOCKS has exactly
+  // the `CircuitBlock['kind']` keys, so those are its keys — `Object.keys` is
+  // simply unable to say so.
+  Object.keys(DEFAULT_CIRCUIT_BLOCKS) as ReadonlyArray<CircuitBlock['kind']>
 
-export const DEFAULT_CONFIGS: Readonly<Record<TimerMode, TimerConfig>> = {
+export const DEFAULT_CONFIGS = {
   amrap: { mode: 'amrap', durationMs: 10 * MINUTE_MS },
   forTime: { mode: 'forTime' },
   emom: { mode: 'emom', intervalMs: MINUTE_MS, rounds: 10 },
@@ -40,7 +42,7 @@ export const DEFAULT_CONFIGS: Readonly<Record<TimerMode, TimerConfig>> = {
     blocks: [DEFAULT_CIRCUIT_BLOCKS.work, DEFAULT_CIRCUIT_BLOCKS.rest],
     repeat: 3,
   },
-}
+} satisfies Readonly<Record<TimerMode, TimerConfig>>
 
 /**
  * Every mode, in the order the home screen offers them.
@@ -50,10 +52,13 @@ export const DEFAULT_CONFIGS: Readonly<Record<TimerMode, TimerConfig>> = {
  * this list picks it up for free. Screens used to spell the four names inline,
  * which is how a fifth mode would have shipped invisible.
  */
-export const TIMER_MODES = Object.keys(DEFAULT_CONFIGS) as ReadonlyArray<TimerMode>
+export const TIMER_MODES =
+  // SAFETY: as with CIRCUIT_BLOCK_KINDS — DEFAULT_CONFIGS `satisfies` a record
+  // keyed by `TimerMode`, so those are its keys.
+  Object.keys(DEFAULT_CONFIGS) as ReadonlyArray<TimerMode>
 
 /** A route param is a string from the address bar: `undefined` means "not a mode". */
-export function parseTimerMode(value: unknown): TimerMode | undefined {
+export function parseTimerMode(value: string | undefined): TimerMode | undefined {
   return TIMER_MODES.find((mode) => mode === value)
 }
 

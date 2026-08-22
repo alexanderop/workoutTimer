@@ -81,7 +81,7 @@ function persistCompletion(
   id: string,
   reason: FinishReason,
   destination: RouteLocationRaw,
-): Promise<unknown> {
+): Promise<void> {
   return runMutation(
     finishSession(id, reason).pipe(
       Effect.tap(() => Effect.sync(() => void router.replace(destination))),
@@ -141,7 +141,7 @@ async function cancel(): Promise<void> {
   await persistCompletion(current.id, 'cancelled', { name: RouteNames.timer })
 }
 
-function toggleSound(): Promise<unknown> {
+function toggleSound(): Promise<void> {
   // Turning sound *on* is a gesture, and possibly the first one on this page —
   // take it as the cue to open the AudioContext so the next beep is audible.
   unlockTimerAudio()

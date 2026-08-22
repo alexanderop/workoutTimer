@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DialogRootEmits, DialogRootProps } from 'reka-ui'
 import { DialogRoot, useForwardPropsEmits } from 'reka-ui'
+import type { VNode } from 'vue'
 
 /**
  * The provider. Renders no DOM of its own — it establishes the dialog
@@ -12,7 +13,7 @@ const props = defineProps<DialogRootProps>()
 const emits = defineEmits<DialogRootEmits>()
 
 defineSlots<{
-  default: (props: { open: boolean; close: () => void }) => unknown
+  default: (props: { open: boolean; close: () => void }) => VNode[]
 }>()
 
 const forwarded = useForwardPropsEmits(props, emits)

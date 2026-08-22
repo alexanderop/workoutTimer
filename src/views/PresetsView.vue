@@ -36,7 +36,7 @@ function usePreset(preset: TimerPreset): void {
   })
 }
 
-function duplicate(preset: TimerPreset): Promise<unknown> {
+function duplicate(preset: TimerPreset): Promise<void> {
   return runMutation(
     createPreset({
       name: `${preset.name} ${t('presets.duplicateSuffix')}`,
@@ -53,7 +53,7 @@ function duplicate(preset: TimerPreset): Promise<unknown> {
 // confirmation mounted, so its 3 s expiry has a registry to write back to.
 const armedPresetId = useAtomValue(() => armedConfirmationAtom('presets'))
 
-function remove(preset: TimerPreset): Promise<unknown> {
+function remove(preset: TimerPreset): Promise<void> {
   if (!requestConfirmationIn(registry, 'presets', preset.id)) return Promise.resolve()
   return runMutation(
     deletePreset(preset.id).pipe(

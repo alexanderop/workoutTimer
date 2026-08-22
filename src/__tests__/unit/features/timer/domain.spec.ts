@@ -506,7 +506,7 @@ describe('timer vocabulary', () => {
 
   it('parses a route param into a mode, and nothing else into one', () => {
     expect(TIMER_MODES.map(parseTimerMode)).toEqual([...TIMER_MODES])
-    for (const value of ['', 'AMRAP', 'sprint', undefined, null, 3, ['amrap']]) {
+    for (const value of ['', 'AMRAP', 'sprint', 'amrap ', 'custom/x', undefined]) {
       expect(parseTimerMode(value)).toBeUndefined()
     }
   })
@@ -662,7 +662,14 @@ describe('timer domain, as properties', () => {
     if (fields.length === 0) return FastCheck.constant(config)
 
     return FastCheck.tuple(FastCheck.constantFrom(...fields), nearMissNumber).map(
-      ([field, value]) => ({ ...config, [field]: value }) as TimerConfig,
+      ([field, value]) => {
+        // SAFETY: `field` is one of this config's own keys and the value
+        // replacing it is a number, so the shape is unchanged — it is the
+        // *bound* that is off, which is the one thing `TimerConfig` does not
+        // express and `isTimerConfig` exists to check. A computed key is what
+        // loses the discriminated union here, not the value.
+        return { ...config, [field]: value } as TimerConfig
+      },
     )
   })
 

@@ -2,6 +2,9 @@ import { Effect, Logger } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { failureReporter } from '@/lib/reportFailure'
 
+/** The annotation bag a structured log entry carries, as Effect types it. */
+type LogAnnotations = ReturnType<typeof Logger.formatStructured.log>['annotations']
+
 /**
  * The failure branch six views share, as a pure function.
  *
@@ -55,7 +58,7 @@ describe('failureReporter', () => {
    * `_tag` is what makes a log entry searchable by failure type.
    */
   it('annotates every report with the same keys', async () => {
-    const entries: Array<Record<string, unknown>> = []
+    const entries: Array<LogAnnotations> = []
     const reportFailure = failureReporter('timer-run', () => {})
 
     // `formatStructured` is the shape a log entry has once the fiber's

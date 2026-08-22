@@ -1,9 +1,5 @@
 import { Clock, Context, Effect, Layer } from 'effect'
-import {
-  decodeTimerSettings,
-  decodeTimerSettingsSync,
-  makeDefaultTimerSettings,
-} from '../converters'
+import { decodeTimerSettings, decodeTimerSettingsSync, defaultTimerSettingsAt } from '../converters'
 import type { TimerSettings } from '../converters'
 import type { DatabaseError } from '../errors'
 import { db } from '../schema'
@@ -38,7 +34,7 @@ export class SettingsRepo extends Context.Service<
             db.timerSettings.get(SETTINGS_ROW_ID),
           )
           if (row === undefined) {
-            return makeDefaultTimerSettings(yield* Clock.currentTimeMillis)
+            return defaultTimerSettingsAt(yield* Clock.currentTimeMillis)
           }
           return yield* decodeSettingsRow(row)
         }),
@@ -68,9 +64,7 @@ export class SettingsRepo extends Context.Service<
             db.transaction('rw', db.timerSettings, async () => {
               const stored = await db.timerSettings.get(SETTINGS_ROW_ID)
               const current =
-                stored === undefined
-                  ? makeDefaultTimerSettings(now)
-                  : decodeTimerSettingsSync(stored)
+                stored === undefined ? defaultTimerSettingsAt(now) : decodeTimerSettingsSync(stored)
               const next: TimerSettings = {
                 ...current,
                 ...patch,

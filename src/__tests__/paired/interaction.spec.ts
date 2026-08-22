@@ -28,7 +28,7 @@ import { browserOnly, env } from '@/__tests__/helpers/env'
  */
 const POINTER_SEQUENCE = ['pointerdown', 'mousedown', 'focus', 'pointerup', 'mouseup', 'click']
 
-function recordingButton(): { button: HTMLButtonElement; seen: Array<string> } {
+function recordingButton() {
   const button = document.createElement('button')
   button.textContent = 'Delete workout'
   document.body.append(button)

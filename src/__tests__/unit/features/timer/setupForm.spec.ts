@@ -19,7 +19,7 @@ import {
   type TimerSetupDraft,
 } from '@/features/timer/setupForm'
 import { TimerConfigSchema } from '@/db/converters'
-import type { TimerConfig, TimerMode } from '@/db'
+import type { TimerMode } from '@/db'
 
 /**
  * The setup form used to be nine `ref`s and a seeding `watch` inside a
@@ -262,14 +262,14 @@ describe('the draft, as a property', () => {
   const anyConfig = Schema.toArbitrary(TimerConfigSchema)
 
   it.prop('loads a config into the draft and reads the same one back', [anyConfig], ([config]) => {
-    const draft = applyConfigToDraft(BASE_DRAFT, config as TimerConfig)
+    const draft = applyConfigToDraft(BASE_DRAFT, config)
 
-    expect(toTimerConfig((config as TimerConfig).mode, draft)).toEqual(config)
+    expect(toTimerConfig(config.mode, draft)).toEqual(config)
   })
 
   it.prop('survives a second trip through the draft', [anyConfig], ([config]) => {
-    const once = applyConfigToDraft(BASE_DRAFT, config as TimerConfig)
-    const mode = (config as TimerConfig).mode
+    const once = applyConfigToDraft(BASE_DRAFT, config)
+    const mode = config.mode
     const twice = applyConfigToDraft(once, toTimerConfig(mode, once))
 
     expect(toTimerConfig(mode, twice)).toEqual(toTimerConfig(mode, once))

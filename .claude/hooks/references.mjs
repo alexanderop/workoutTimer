@@ -39,14 +39,17 @@ const readJson = (file) => {
   }
 }
 
-// `"docs": "../docs"` and `"effect": "Effect-TS/effect"` are both legal.
-// A leading . / or ~ means filesystem; anything else is a repository.
-const normalize = (value) =>
-  typeof value !== 'string'
-    ? (value ?? {})
-    : /^[.~/]/.test(value)
-      ? { path: value }
-      : { repository: value }
+// `"docs": "../docs"` and `"effect": "Effect-TS/effect"` are both shorthand for
+// the long form. A leading . / or ~ means filesystem; anything else names a
+// repository. Only something with characters in it is shorthand — a number or
+// a bare `true` in the file is not a reference, and the empty entry it becomes
+// is skipped by the loop that reads `path`/`repository`.
+const shorthandEntry = (value) => {
+  if (!value?.length) return {}
+  return /^[.~/]/.test(value) ? { path: value } : { repository: value }
+}
+
+const normalize = (value) => (value instanceof Object ? value : shorthandEntry(value))
 
 // Accepts owner/repo, host/path, and full git URLs.
 const cloneUrl = (repository) =>

@@ -15,7 +15,7 @@ import { Atom } from '@effect/atom-vue'
  * module that reads them at import time is safe in Node and in jsdom.
  */
 
-const hasWindow = typeof window !== 'undefined'
+const hasWindow = 'window' in globalThis
 
 /**
  * A writable atom backed by a `localStorage` key.
@@ -124,7 +124,7 @@ export const touchDeviceAtom = mediaQueryAtom('(pointer: coarse)')
 
 /** `document.visibilityState === 'visible'`. */
 export const documentVisibleAtom = Atom.make((get) => {
-  if (typeof document === 'undefined') return true
+  if (!('document' in globalThis)) return true
 
   const handle = (): void => get.setSelf(document.visibilityState === 'visible')
   document.addEventListener('visibilitychange', handle)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAtomValue } from '@effect/atom-vue'
 import type { DialogContentEmits, DialogContentProps } from 'reka-ui'
-import type { HTMLAttributes } from 'vue'
+import type { HTMLAttributes, VNode } from 'vue'
 import { X } from '@lucide/vue'
 import { reactiveOmit } from '@vueuse/core'
 import { DialogClose, DialogContent, DialogPortal, useForwardPropsEmits } from 'reka-ui'
@@ -40,7 +40,7 @@ const emits = defineEmits<DialogContentEmits>()
 const { t } = useI18n()
 
 defineSlots<{
-  default: () => unknown
+  default: () => VNode[]
 }>()
 
 const delegatedProps = reactiveOmit(props, 'class', 'showCloseButton')
