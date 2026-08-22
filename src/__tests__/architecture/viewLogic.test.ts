@@ -56,18 +56,62 @@ function stripComments(source: string): string {
   )
 }
 
-// --- V1: the mode switch lives in the timer feature, not in a screen -------
+// --- V1: a screen dispatches on no union of its own ------------------------
 
 /**
- * `switch (something.mode)` / `switch (mode)`. The four-case switch is how a
- * screen turns a `TimerMode` into a label, a summary or a config, and every
- * one of those has a home in `features/timer/`. A fifth mode has to be a
- * compile error in one file, not a silently missing case in five.
+ * Any `switch` in a `.vue` file.
+ *
+ * This began as `switch (something.mode)`, and the narrower rule leaked
+ * exactly the way a narrow rule does: the run screen turned
+ * `DerivedTimer['phase']` into a word with a four-case switch that named no
+ * mode, so nothing stopped it. A `switch` *is* a dispatch table over a union,
+ * and every union this app has belongs to a feature or to `@/db` — so the
+ * table belongs there too, where the unit tier can hold it and the compiler
+ * can make a new member of the union an error.
  */
-const MODE_SWITCH = /switch\s*\([^)]*(?:\bmode|[a-z]Mode)\b[^)]*\)/g
+const ANY_SWITCH = /\bswitch\s*\(/g
 
 export function modeSwitches(source: string): string[] {
-  return [...stripComments(source).matchAll(MODE_SWITCH)].map((match) => match[0])
+  return [...stripComments(source).matchAll(ANY_SWITCH)].map((match) => match[0])
+}
+
+// --- V4: the template does not dispatch on a union either ------------------
+
+/**
+ * A `v-if` / `v-else-if` chain comparing one expression against three or more
+ * string literals — the same dispatch table V1 bans, written where a `switch`
+ * is not spelled `switch`.
+ *
+ * The setup screen offered its five modes this way: four `routeMode === '…'`
+ * branches and a `v-else` for the fifth, which is a `Record<TimerMode,
+ * Component>` with the exhaustiveness check taken out. "The tree is the
+ * variant" is the rule for a flag that changes *what* renders, and a map of
+ * components is how a screen obeys it.
+ *
+ * Three is the threshold rather than two on purpose: two branches over a
+ * platform value (`installPlatform === 'ios'` / `'android'`, each with its own
+ * static instructions) is a pair of alternatives, not a table, and turning it
+ * into a map would cost more than it explains. By the third branch it is a
+ * table.
+ */
+const BRANCH_CONDITION = /v-(?:else-)?if="([^"]*)"/g
+const LITERAL_COMPARISON = /([\w.?![\]$]+)\s*===\s*'([^']*)'/
+
+export function literalDispatchChains(source: string): string[] {
+  const byExpression = new Map<string, Set<string>>()
+
+  for (const [, condition] of stripComments(source).matchAll(BRANCH_CONDITION)) {
+    const comparison = LITERAL_COMPARISON.exec(condition ?? '')
+    if (comparison === null) continue
+    const [, expression, literal] = comparison
+    const literals = byExpression.get(expression ?? '') ?? new Set<string>()
+    literals.add(literal ?? '')
+    byExpression.set(expression ?? '', literals)
+  }
+
+  return [...byExpression]
+    .filter(([, literals]) => literals.size >= 3)
+    .map(([expression, literals]) => `${expression} vs ${[...literals].join(', ')}`)
 }
 
 // --- V2: the vocabulary is imported, not re-spelled ------------------------
@@ -115,37 +159,85 @@ export function asyncResultUses(source: string): string[] {
 
 // --- the rules ------------------------------------------------------------
 
-describe('V1 — no screen re-implements the mode switch', () => {
+describe('V1 — no screen dispatches on a union of its own', () => {
   it('finds .vue files to check', () => {
     expect(VUE_FILES.length).toBeGreaterThan(0)
   })
 
-  it.each(VUE_FILES.map((file) => [file.id, file] as const))(
-    '%s switches on no timer mode',
-    (_id, file) => {
-      const offenders = modeSwitches(file.source)
+  it.each(VUE_FILES.map((file) => [file.id, file] as const))('%s holds no switch', (_id, file) => {
+    const offenders = modeSwitches(file.source)
 
-      expect(
-        offenders,
-        `${file.id} switches on a timer mode. That switch belongs in features/timer — labels.ts for what a mode reads like, domain.ts for what it means, setupForm.ts for what its config holds — where the unit tier can see it and a new mode is a compile error in one place. docs/index.md`,
-      ).toEqual([])
-    },
-  )
+    expect(
+      offenders,
+      `${file.id} switches on a union. That switch belongs in the feature that owns the union — labels.ts for what a mode or a phase reads like, domain.ts for what it means, setupForm.ts for what its config holds — where the unit tier can see it and a new member of the union is a compile error in one place. docs/index.md`,
+    ).toEqual([])
+  })
 
-  it('catches a switch a screen might write', () => {
+  it('catches a switch a screen might write, on a mode or on anything else', () => {
     expect(modeSwitches('switch (config.mode) { case "amrap": }')).toHaveLength(1)
     expect(modeSwitches('switch (mode) {}')).toHaveLength(1)
     expect(modeSwitches('switch (session.value?.config.mode) {}')).toHaveLength(1)
     expect(modeSwitches('switch (routeMode.value) {}')).toHaveLength(1)
+    // The one this rule was widened for: a switch on a phase names no mode.
+    expect(modeSwitches('switch (derived.value?.phase) {}')).toHaveLength(1)
+    expect(modeSwitches('switch (status) {}')).toHaveLength(1)
   })
 
-  it('leaves other switches and prose alone', () => {
-    expect(modeSwitches('switch (status) {}')).toEqual([])
-    // `mode` has to be a whole identifier segment, or every `modelValue` in a
-    // component would read as a mode switch.
-    expect(modeSwitches('switch (modelValue) {}')).toEqual([])
+  it('leaves prose and a word that merely contains "switch" alone', () => {
     expect(modeSwitches('// switch (config.mode) {}')).toEqual([])
     expect(modeSwitches('<!-- switch (mode) {} -->')).toEqual([])
+    expect(modeSwitches('const Switch = 1; useSwitchable(x)')).toEqual([])
+  })
+})
+
+describe('V4 — no template dispatches on a union either', () => {
+  it.each(VUE_FILES.map((file) => [file.id, file] as const))(
+    '%s branches on no union of literals',
+    (_id, file) => {
+      const offenders = literalDispatchChains(file.source)
+
+      expect(
+        offenders,
+        `${file.id} branches on ${offenders.join('; ')}. Three or more branches over one expression is a dispatch table: hold the components in a Record keyed by the union (src/features/timer/components/fields/index.ts) and render the one the map hands you, so a new member of the union is a compile error rather than a branch nobody added.`,
+      ).toEqual([])
+    },
+  )
+
+  it('catches the chain this refactor deleted', () => {
+    expect(
+      literalDispatchChains(`
+        <div v-if="routeMode === 'amrap'" />
+        <div v-else-if="routeMode === 'forTime'" />
+        <div v-else-if="routeMode === 'emom'" />
+        <div v-else-if="routeMode === 'tabata'" />
+      `),
+    ).toHaveLength(1)
+  })
+
+  it('leaves a pair of alternatives and non-literal branches alone', () => {
+    expect(
+      literalDispatchChains(`
+        <div v-if="installPlatform === 'ios'" />
+        <div v-else-if="installPlatform === 'android'" />
+      `),
+    ).toEqual([])
+    expect(
+      literalDispatchChains(`
+        <div v-if="loadFailed" />
+        <div v-else-if="sessions.length === 0" />
+      `),
+    ).toEqual([])
+    // Three branches over three *different* expressions is not a table.
+    expect(
+      literalDispatchChains(`
+        <div v-if="a === 'x'" /><div v-else-if="b === 'y'" /><div v-else-if="c === 'z'" />
+      `),
+    ).toEqual([])
+    expect(
+      literalDispatchChains(
+        `<!-- <div v-if="m === 'a'" /><div v-else-if="m === 'b'" /><div v-else-if="m === 'c'" /> -->`,
+      ),
+    ).toEqual([])
   })
 })
 

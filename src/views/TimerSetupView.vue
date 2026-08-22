@@ -16,15 +16,8 @@ import {
   workoutStartMutation,
 } from '@/db'
 import { hasActiveSessionAtom } from '@/features/timer/atoms'
-import CircuitBlockEditor from '@/features/timer/components/CircuitBlockEditor.vue'
-import TimePicker from '@/features/timer/components/TimePicker.vue'
-import ValuePicker from '@/features/timer/components/ValuePicker.vue'
+import { MODE_FIELDS } from '@/features/timer/components/fields'
 import {
-  durationOptions,
-  intervalOptions,
-  MAX_TIMER_DURATION_SECONDS,
-  restOptions,
-  roundOptions,
   setupConfigAtom,
   setupDraftAtom,
   setupKeyAtom,
@@ -35,7 +28,7 @@ import {
   setupValidPresetAtom,
   type TimerSetupDraft,
 } from '@/features/timer/setupForm'
-import { humanizeSeconds, modeName } from '@/features/timer/labels'
+import { modeName } from '@/features/timer/labels'
 import { unlockTimerAudio } from '@/features/timer/timerFeedback'
 import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router'
@@ -69,12 +62,13 @@ const isValidPreset = useAtomValue(() => setupValidPresetAtom(setupKey.value))
 const [isStarting, setStarting] = useAtom(() => pendingAtom('timer-setup.start'))
 const [isSavingPreset, setSavingPreset] = useAtom(() => pendingAtom('timer-setup.savePreset'))
 
-/** One field at a time; the draft is a value, so an edit is a replacement. */
-function edit<K extends keyof TimerSetupDraft>(field: K, value: TimerSetupDraft[K]): void {
-  setDraft({ ...draft.value, [field]: value })
+/**
+ * The draft is a value, so an edit is a replacement: the mode's fields hand
+ * back whichever fields they changed and this folds them in.
+ */
+function edit(patch: Partial<TimerSetupDraft>): void {
+  setDraft({ ...draft.value, ...patch })
 }
-
-const formatTime = (seconds: number): string => humanizeSeconds(seconds, t)
 
 const canStart = (): boolean => isValidConfig.value && !isStarting.value && !hasActiveSession.value
 const canSavePreset = (): boolean => isValidPreset.value && !isSavingPreset.value
@@ -131,107 +125,7 @@ async function savePreset(): Promise<void> {
   <PageLayout :title="t('timer.setup.title', { mode: title() })" back-to="/" :data-mode="routeMode">
     <form class="mx-auto flex w-full max-w-lg flex-col gap-section p-4" @submit.prevent="start">
       <section class="rounded-2xl border bg-card p-4 shadow-xs">
-        <div v-if="routeMode === 'amrap'">
-          <TimePicker
-            id="duration"
-            :model-value="draft.durationSeconds"
-            :label="t('timer.setup.duration')"
-            :options="durationOptions(draft.durationSeconds, formatTime)"
-            :custom-label="t('timer.setup.customTime')"
-            :minutes-label="t('timer.setup.minutes')"
-            :seconds-label="t('timer.setup.seconds')"
-            :min-seconds="1"
-            :max-seconds="MAX_TIMER_DURATION_SECONDS"
-            @update:model-value="edit('durationSeconds', $event ?? 0)"
-          />
-        </div>
-        <div v-else-if="routeMode === 'forTime'" class="grid gap-4 sm:grid-cols-2">
-          <TimePicker
-            id="time-cap"
-            :model-value="draft.timeCapSeconds"
-            :label="t('timer.setup.timeCap')"
-            :options="durationOptions(draft.timeCapSeconds, formatTime)"
-            :empty-label="t('timer.setup.noTimeCap')"
-            :custom-label="t('timer.setup.customTime')"
-            :minutes-label="t('timer.setup.minutes')"
-            :seconds-label="t('timer.setup.seconds')"
-            :min-seconds="1"
-            :max-seconds="MAX_TIMER_DURATION_SECONDS"
-            @update:model-value="edit('timeCapSeconds', $event)"
-          />
-          <ValuePicker
-            id="target-rounds"
-            :model-value="draft.targetRounds"
-            :label="t('timer.setup.targetRounds')"
-            :options="roundOptions(draft.targetRounds)"
-            :empty-label="t('timer.setup.noTargetRounds')"
-            :custom-label="t('timer.setup.customRounds')"
-            @update:model-value="edit('targetRounds', $event)"
-          />
-        </div>
-        <div v-else-if="routeMode === 'emom'" class="grid gap-4 sm:grid-cols-2">
-          <TimePicker
-            id="interval"
-            :model-value="draft.intervalSeconds"
-            :label="t('timer.setup.interval')"
-            :options="intervalOptions(draft.intervalSeconds, formatTime)"
-            :custom-label="t('timer.setup.customTime')"
-            :minutes-label="t('timer.setup.minutes')"
-            :seconds-label="t('timer.setup.seconds')"
-            :min-seconds="5"
-            :max-seconds="3600"
-            @update:model-value="edit('intervalSeconds', $event ?? 0)"
-          />
-          <ValuePicker
-            id="emom-rounds"
-            :model-value="draft.rounds"
-            :label="t('timer.setup.rounds')"
-            :options="roundOptions(draft.rounds)"
-            :custom-label="t('timer.setup.customRounds')"
-            @update:model-value="edit('rounds', $event ?? 1)"
-          />
-        </div>
-        <div v-else-if="routeMode === 'tabata'" class="grid gap-4 sm:grid-cols-3">
-          <TimePicker
-            id="work"
-            :model-value="draft.workSeconds"
-            :label="t('timer.setup.work')"
-            :options="intervalOptions(draft.workSeconds, formatTime)"
-            :custom-label="t('timer.setup.customTime')"
-            :minutes-label="t('timer.setup.minutes')"
-            :seconds-label="t('timer.setup.seconds')"
-            :min-seconds="1"
-            :max-seconds="3600"
-            @update:model-value="edit('workSeconds', $event ?? 0)"
-          />
-          <TimePicker
-            id="rest"
-            :model-value="draft.restSeconds"
-            :label="t('timer.setup.rest')"
-            :options="restOptions(draft.restSeconds, formatTime)"
-            :custom-label="t('timer.setup.customTime')"
-            :minutes-label="t('timer.setup.minutes')"
-            :seconds-label="t('timer.setup.seconds')"
-            :min-seconds="0"
-            :max-seconds="3600"
-            @update:model-value="edit('restSeconds', $event ?? 0)"
-          />
-          <ValuePicker
-            id="tabata-rounds"
-            :model-value="draft.rounds"
-            :label="t('timer.setup.rounds')"
-            :options="roundOptions(draft.rounds)"
-            :custom-label="t('timer.setup.customRounds')"
-            @update:model-value="edit('rounds', $event ?? 1)"
-          />
-        </div>
-        <CircuitBlockEditor
-          v-else
-          :blocks="draft.blocks"
-          :repeat="draft.repeat"
-          @update:blocks="edit('blocks', $event)"
-          @update:repeat="edit('repeat', $event)"
-        />
+        <component :is="MODE_FIELDS[routeMode]" :draft="draft" @edit="edit" />
       </section>
 
       <div class="flex flex-col gap-2">
@@ -240,7 +134,7 @@ async function savePreset(): Promise<void> {
           id="workout-notes"
           :model-value="draft.workoutNotes"
           :placeholder="t('timer.setup.workoutNotesPlaceholder')"
-          @update:model-value="edit('workoutNotes', $event)"
+          @update:model-value="edit({ workoutNotes: $event })"
         />
       </div>
 
@@ -251,7 +145,7 @@ async function savePreset(): Promise<void> {
           :model-value="draft.presetName"
           maxlength="80"
           :placeholder="t('timer.setup.presetNamePlaceholder')"
-          @update:model-value="edit('presetName', $event)"
+          @update:model-value="edit({ presetName: $event })"
         />
         <Button type="button" variant="outline" :disabled="!canSavePreset()" @click="savePreset">
           {{ presetId ? t('timer.setup.updatePreset') : t('timer.setup.savePreset') }}
