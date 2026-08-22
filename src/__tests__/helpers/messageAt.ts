@@ -1,6 +1,4 @@
-import { Schema } from 'effect'
-
-const isMessage = Schema.is(Schema.String)
+import { Predicate, Schema } from 'effect'
 
 /** A node the walk can descend into: an object, not a leaf and not an array. */
 const isBranch = (node: Schema.Json | undefined): node is Schema.JsonObject =>
@@ -17,8 +15,8 @@ const isBranch = (node: Schema.Json | undefined): node is Schema.JsonObject =>
  *
  * The catalogue is JSON and a dotted key is a path through it, which is a
  * lookup no object type can describe: `en` knows nothing about the string
- * `'nav.timer'`. So the walk is typed as JSON, and the schema at the end is
- * what says the value found is a message.
+ * `'nav.timer'`. So the walk is typed as JSON, and the guard at the end is
+ * what says the value found is a message rather than a branch of the tree.
  */
 export function messageAt(catalogue: Schema.Json, key: string): string {
   const found = key
@@ -27,7 +25,7 @@ export function messageAt(catalogue: Schema.Json, key: string): string {
       Schema.Json | undefined
     >((node, segment) => (isBranch(node) ? node[segment] : undefined), catalogue)
 
-  if (!isMessage(found)) throw new Error(`no message at ${key}`)
+  if (!Predicate.isString(found)) throw new Error(`no message at ${key}`)
 
   return found
 }

@@ -1,4 +1,3 @@
-import type { Blob as NodeBlob } from 'node:buffer'
 import { afterEach, describe, expect, it } from 'vitest'
 import { env, jsdomOnly } from '@/__tests__/helpers/env'
 
@@ -34,21 +33,14 @@ const expected = {
 }[env]
 
 /**
- * What this file hands the store, and what the store hands back.
+ * Put a value through the store and read it back.
  *
- * There is no type for "a structured-cloneable value" — that is a runtime
- * rule, and the point of this file is to put values from both sides of it
- * through `put`. So the type is written the other way round: the shapes these
- * tests actually store and then assert on. The empty record is a member
- * because that is what a `Blob` that did not survive comes back as, and the
- * function is one because a value `put` must *refuse* is the contrast that
- * makes the rest meaningful. Node's own `Blob` is a member for the same
- * reason it appears below: it is a second, identically named class, and
- * telling the two apart is what one of these tests is for.
+ * The return type says the value came back as it went in, which is the claim
+ * every test below is here to check rather than to trust: `put` may refuse
+ * the value outright, and structured clone may hand back something else
+ * entirely. `undefined` is the row being absent.
  */
-type StoredValue = Blob | NodeBlob | Record<string, string | number> | (() => string)
-
-async function roundTrip(value: StoredValue): Promise<StoredValue | undefined> {
+async function roundTrip<T>(value: T): Promise<T | undefined> {
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1)
     request.onupgradeneeded = () => request.result.createObjectStore(STORE)
@@ -57,7 +49,7 @@ async function roundTrip(value: StoredValue): Promise<StoredValue | undefined> {
   })
 
   try {
-    return await new Promise<StoredValue | undefined>((resolve, reject) => {
+    return await new Promise<T | undefined>((resolve, reject) => {
       const write = database.transaction(STORE, 'readwrite')
       write.objectStore(STORE).put(value, 'entry')
       write.onerror = () => reject(write.error)
@@ -90,13 +82,13 @@ describe('a stored Blob', () => {
       'storage is defined by the structured clone algorithm, so if a Blob does not survive it, no binary the app owns survives either — and there is no DataCloneError, no rejected transaction, nothing to notice',
     ).toBe(expected.blobSurvives)
 
-    if (expected.blobSurvives) {
-      // SAFETY: the `instanceof Blob` assertion directly above is what
-      // establishes this, on the branch where it held.
-      const blob = stored as Blob
-      expect(blob.type).toBe('application/json')
-      expect(await blob.text()).toBe('backup contents')
+    if (stored instanceof Blob) {
+      expect(stored.type).toBe('application/json')
+      expect(await stored.text()).toBe('backup contents')
     } else {
+      // Not merely "not a Blob": every property went with it. `toBeDefined`
+      // first, so a missing row cannot pass this by having no keys either.
+      expect(stored).toBeDefined()
       expect(stored).toEqual({})
       expect(Object.keys(stored ?? {})).toEqual([])
     }
@@ -111,11 +103,7 @@ describe('a stored Blob', () => {
     // test has nothing to say.
     const stored = await roundTrip(new NodeBlob(['backup contents']))
 
-    // SAFETY: what came back is a clone of a Node `Blob`, and `size` is the
-    // property this test reads to show it survived. The optional shape is
-    // deliberate — a value that did not survive has no `size`, and that is a
-    // failed assertion rather than a thrown one.
-    expect((stored as { size?: number })?.size).toBe(15)
+    expect(stored?.size).toBe(15)
   })
 })
 

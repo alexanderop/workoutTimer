@@ -61,7 +61,7 @@ export const routeQueryAtom = Atom.family((name: string) =>
  * `connectRoute` that reads navigations performs them.
  */
 export interface NavigationRequest {
-  readonly name: string
+  readonly name: RouteName
   readonly params?: Record<string, string>
   readonly replace?: boolean
 }
@@ -71,13 +71,24 @@ export const navigationAtom: Atom.Writable<NavigationRequest | undefined> = Atom
 >(undefined).pipe(Atom.keepAlive)
 
 /**
- * Narrow vue-router's `RouteLocationNormalized` down to the parts the app
- * actually reads. Repeated params and array queries are collapsed to their
- * first value: no route in this app declares one, and carrying the union into
- * every consumer would buy nothing.
+ * A params or query bag, collapsed to one string per key.
+ *
+ * A repeated param and an array query both arrive as a list; taking the first
+ * value is the whole rule, and no route in this app declares one anyway —
+ * carrying the union into every consumer would buy nothing. A key whose value
+ * is absent or `null` is dropped rather than carried as an empty string.
  */
-const firstValue = (value: string | null | ReadonlyArray<string | null>): string | undefined =>
-  (Array.isArray(value) ? value[0] : value) ?? undefined
+const firstValues = (
+  record: Readonly<Record<string, string | null | ReadonlyArray<string | null>>>,
+): RouteSnapshot['params'] => {
+  const collapsed: Record<string, string> = {}
+  for (const [key, value] of Object.entries(record)) {
+    const first = (Array.isArray(value) ? value[0] : value) ?? undefined
+    if (first !== undefined) collapsed[key] = first
+  }
+
+  return collapsed
+}
 
 /** Every name the route table declares, as a list to match a location against. */
 const ROUTE_NAMES: ReadonlyArray<RouteName> = Object.values(RouteNames)
@@ -91,23 +102,12 @@ const ROUTE_NAMES: ReadonlyArray<RouteName> = Object.values(RouteNames)
 const toRouteName = (name: RouteLocationNormalizedGeneric['name']): RouteName | undefined =>
   ROUTE_NAMES.find((known) => known === name)
 
+/** vue-router's location, narrowed to the parts the app actually reads. */
 function toRouteSnapshot(location: RouteLocationNormalizedGeneric): RouteSnapshot {
-  const params: Record<string, string> = {}
-  for (const [key, value] of Object.entries(location.params)) {
-    const first = firstValue(value)
-    if (first !== undefined) params[key] = first
-  }
-
-  const query: Record<string, string> = {}
-  for (const [key, value] of Object.entries(location.query)) {
-    const first = firstValue(value)
-    if (first !== undefined) query[key] = first
-  }
-
   return {
     name: toRouteName(location.name),
-    params,
-    query,
+    params: firstValues(location.params),
+    query: firstValues(location.query),
     hideNav: location.meta.hideNav === true,
   }
 }

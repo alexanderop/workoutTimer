@@ -1,6 +1,6 @@
 import { History, Settings, Timer } from '@lucide/vue'
 import type { NavItem } from '@/types/navigation'
-import { RouteNames, type RouteName } from './routeNames'
+import { RouteNames } from './routeNames'
 
 /**
  * A tab before its label has been translated.
@@ -10,10 +10,7 @@ import { RouteNames, type RouteName } from './routeNames'
  * key. Written as two independent shapes, a field added to one would silently
  * not reach the other — and the mapping below would still compile.
  */
-type NavItemConfig = Omit<NavItem, 'label' | 'routeName'> & {
-  readonly routeName: RouteName
-  readonly labelKey: string
-}
+type NavItemConfig = Omit<NavItem, 'label'> & { readonly labelKey: string }
 
 const NAV_ITEMS: ReadonlyArray<NavItemConfig> = [
   { routeName: RouteNames.timer, icon: Timer, labelKey: 'nav.timer' },

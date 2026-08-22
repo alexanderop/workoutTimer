@@ -81,9 +81,8 @@ async function start(): Promise<void> {
   setStarting(true)
   unlockTimerAudio()
   const failed = reportFailure('start workout', t('timer.setup.startFailed'))
-  // `presetId` is `optionalKey` in the schema: a workout started from the
-  // setup screen has no preset, and the key is absent rather than present
-  // and undefined.
+  // See `createSession` — `presetId` is `optionalKey`, so the key is absent
+  // rather than present and undefined when there is no preset.
   const started: NewSession = {
     config: config.value,
     workoutNotes: draft.value.workoutNotes,

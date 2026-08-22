@@ -25,7 +25,7 @@ const reportReadFailure =
   <A, R>(self: Effect.Effect<A, DatabaseError, R>): Effect.Effect<A, DatabaseError, R> =>
     Effect.tapError(self, (error) =>
       Effect.logError(error).pipe(
-        Effect.annotateLogs({ boundary, operation, failure: 'Db.DatabaseError' }),
+        Effect.annotateLogs({ boundary, operation, failure: error._tag }),
       ),
     )
 

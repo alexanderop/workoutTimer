@@ -137,11 +137,8 @@ describe('what that adds up to for Tailwind v4', () => {
       for (const rule of list) {
         rules += 1
         if (rule.constructor.name.includes('Layer')) layers += 1
-        // SAFETY: only a grouping rule (@media, @supports, @layer) has
-        // `cssRules`; the read is guarded by the `if` on the next line, which
-        // is what tells a plain rule apart from one that nests.
-        const nested = (rule as CSSGroupingRule).cssRules
-        if (nested) walk(nested)
+        // Only a grouping rule (@media, @supports, @layer) nests.
+        if (rule instanceof CSSGroupingRule) walk(rule.cssRules)
       }
     }
 

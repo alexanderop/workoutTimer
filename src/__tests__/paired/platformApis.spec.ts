@@ -85,9 +85,8 @@ function mountPicker() {
   const host = document.createElement('div')
   document.body.append(host)
 
-  // Vue hands the handler `unknown`; what this file asserts on is a mount
-  // failure, which is an Error. Anything else is wrapped rather than dropped,
-  // so "something threw" survives even if it threw a string.
+  // Wrapped rather than dropped, so a non-Error throw still reads as a
+  // failed mount rather than as a mount that survived.
   let error: Error | undefined
   const app = createApp(Picker)
   app.config.errorHandler = (caught) => {
@@ -99,7 +98,7 @@ function mountPicker() {
     app.unmount()
     host.remove()
   })
-  return { host, error }
+  return { error }
 }
 
 // Restoring rather than deleting, because `delete Element.prototype

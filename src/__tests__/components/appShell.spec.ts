@@ -4,6 +4,7 @@ import { NotebookPen, Settings } from '@lucide/vue'
 import { page } from 'vitest/browser'
 import { render } from 'vitest-browser-vue'
 import { describe, expect } from 'vitest'
+import type { VNode } from 'vue'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
@@ -15,6 +16,12 @@ import { it as base } from '../fixtures'
 import { provideRegistry } from '../helpers/provideRegistry'
 
 const Stub = defineComponent({ render: () => h('div', 'stub view') })
+
+/** What `AppShell` declares — the optional slot is the variation these tests turn on. */
+type ShellSlots = {
+  default: () => VNode
+  'center-action'?: () => VNode
+}
 
 /**
  * Three routes, standing in for the app's own table.
@@ -57,14 +64,12 @@ const it = base.extend('renderShell', async ({}, { onCleanup }) => {
     const registry = AtomRegistry.make()
     connectRoute(router, registry)
 
+    const slots: ShellSlots = { default: () => h('div', 'page content') }
+    if (withCenterAction) slots['center-action'] = () => h('button', { type: 'button' }, 'center')
+
     mounted = render(AppShell, {
       props: { items },
-      slots: withCenterAction
-        ? {
-            default: () => h('div', 'page content'),
-            'center-action': () => h('button', { type: 'button' }, 'center'),
-          }
-        : { default: () => h('div', 'page content') },
+      slots,
       global: {
         plugins: [i18n, router],
         provide: provideRegistry(registry),

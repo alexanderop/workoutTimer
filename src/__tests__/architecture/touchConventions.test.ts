@@ -86,8 +86,10 @@ export function utilityBodies(css: string): Map<string, string> {
 
 /** Character ranges covered by the allowed utilities' bodies. */
 function allowedRanges(css: string): Array<[number, number]> {
+  const bodies = utilityBodies(css)
+
   return INSET_UTILITIES.flatMap((name): Array<[number, number]> => {
-    const body = utilityBodies(css).get(name)
+    const body = bodies.get(name)
     if (body === undefined) return []
     const start = css.indexOf(body)
     return [[start, start + body.length]]

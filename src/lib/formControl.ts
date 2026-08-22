@@ -9,19 +9,26 @@
  * (`target` is wherever the event started, which for a wrapped control can be
  * a child), and it is the one this module reads.
  *
- * One assertion, documented once, instead of one per handler — which is the
- * only reason this module exists rather than each screen doing it inline.
+ * The check is an `instanceof` rather than an assertion: a handler bound to
+ * something that is not a form control is a template bug, and throwing says
+ * so where reading `.value` off it would quietly yield `undefined` and save a
+ * blank preference.
  */
-
-/** The current value of the control an `@input`/`@change` handler fired from. */
-export function controlValue(event: Event): string {
-  // SAFETY: the handler is bound in a template directly to an <input> or
-  // <select>, so `currentTarget` is that element and has a `value`.
-  return (event.currentTarget as HTMLInputElement | HTMLSelectElement).value
-}
 
 /** The `<input type="file">` an `@change` handler fired from. */
 export function fileInputOf(event: Event): HTMLInputElement {
-  // SAFETY: as above — the handler is bound to the file input itself.
-  return event.currentTarget as HTMLInputElement
+  const control = event.currentTarget
+  if (control instanceof HTMLInputElement) return control
+
+  throw new TypeError('expected the handler to be bound to an <input>')
+}
+
+/** The current value of the control an `@input`/`@change` handler fired from. */
+export function controlValue(event: Event): string {
+  const control = event.currentTarget
+  if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+    return control.value
+  }
+
+  throw new TypeError('expected the handler to be bound to an <input> or <select>')
 }
