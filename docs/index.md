@@ -28,6 +28,7 @@ There is no `CLAUDE.md` and no `AGENTS.md`. A `SessionStart` hook (`.claude/hook
 | [UI components](ui-components.md) | Any work in `src/components/ui/` — adding a primitive, or wondering why a component takes `class` |
 | [Touch conventions](touch-conventions.md) | Adding any control, or touching the shell, safe areas, or a sheet — the rules that make it feel native |
 | [Effect](effect/index.md) | Any Effect work — branch chooser into the per-topic concepts |
+| [Cloud environment setup](cloud-environment.md) | Setting up or repairing a Claude Code cloud environment — what a fresh container installs before a session starts |
 
 Adding a doc means adding a concept file with frontmatter and linking it from this table, so the bundle stays conformant and navigable.
 
