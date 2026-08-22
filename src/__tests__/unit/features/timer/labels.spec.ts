@@ -1,14 +1,17 @@
 import { describe, expect, it } from '@effect/vitest'
-import { DEFAULT_CONFIGS, TIMER_MODES } from '@/features/timer/domain'
+import { DEFAULT_CONFIGS, HISTORY_FILTERS, TIMER_MODES } from '@/features/timer/domain'
 import {
   configSummary,
+  historyFilterName,
   humanizeSeconds,
   modeDescription,
   modeName,
+  runPhaseName,
   type Translate,
 } from '@/features/timer/labels'
 import en from '@/i18n/messages/en'
 import type { TimerConfig } from '@/db'
+import type { DerivedTimer } from '@/features/timer/domain'
 
 /**
  * The real English catalogue, walked by key. Using it rather than a stub is
@@ -110,5 +113,49 @@ describe('timer labels', () => {
     // An hour and a minute: the seconds part is dropped, not rendered as 0.
     expect(humanizeSeconds(3_660, translate)).toBe('1 hr 1 min')
     expect(humanizeSeconds(86_400, translate)).toBe('24 hr')
+  })
+})
+
+describe('the running timer in one word', () => {
+  const timer = (patch: Partial<DerivedTimer>): DerivedTimer => ({
+    elapsedMs: 0,
+    primaryMs: 0,
+    phase: 'work',
+    round: 1,
+    completedRounds: 0,
+    progress: 0,
+    isComplete: false,
+    ...patch,
+  })
+
+  it('names each phase from the catalogue', () => {
+    expect(runPhaseName('running', timer({ phase: 'countdown' }), translate)).toBe('Get ready')
+    expect(runPhaseName('running', timer({ phase: 'work' }), translate)).toBe('Work')
+    expect(runPhaseName('running', timer({ phase: 'rest' }), translate)).toBe('Rest')
+  })
+
+  it('lets paused win over the phase, and a named block win over the word', () => {
+    expect(runPhaseName('paused', timer({ phase: 'rest' }), translate)).toBe('Paused')
+    expect(runPhaseName('paused', timer({ phaseLabel: 'Burpees' }), translate)).toBe('Paused')
+    expect(runPhaseName('running', timer({ phase: 'rest', phaseLabel: 'Walk' }), translate)).toBe(
+      'Walk',
+    )
+  })
+
+  it('says something for a finished phase and before the row arrives', () => {
+    // The result screen is what reports a finished workout; the run screen
+    // holds this word only until the driver navigates away.
+    expect(runPhaseName('completed', timer({ phase: 'finished' }), translate)).toBe('Work')
+    expect(runPhaseName(undefined, undefined, translate)).toBe('Work')
+  })
+})
+
+describe('history filters', () => {
+  it('labels every filter the screen offers', () => {
+    expect(HISTORY_FILTERS.map((filter) => historyFilterName(filter, translate))).toEqual([
+      'All',
+      'Completed',
+      'Cancelled',
+    ])
   })
 })

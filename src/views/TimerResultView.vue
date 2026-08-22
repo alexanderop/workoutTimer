@@ -15,7 +15,7 @@ import {
 } from '@/features/timer/atoms'
 import { formatDuration } from '@/features/timer/domain'
 import { failureReporter } from '@/lib/reportFailure'
-import { RouteNames } from '@/router'
+import { RouteNames } from '@/router/routeNames'
 import { pendingAtom } from '@/state/pending'
 import { routeParamAtom } from '@/state/route'
 import { showToastAtom } from '@/state/toast'

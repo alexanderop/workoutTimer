@@ -27,7 +27,7 @@ import { downloadBackup, readBackupFile } from '@/lib/backupFile'
 import { failureReporter } from '@/lib/reportFailure'
 import { SUPPORTED_LOCALES } from '@/i18n'
 import { canInstallAtom, installDialogOpenAtom, isInstalledAtom } from '@/state/install'
-import { localeAtom } from '@/state/locale'
+import { isSupportedLocale, localeAtom } from '@/state/locale'
 import { isDarkAtom } from '@/state/theme'
 import { timerSettingsValueAtom } from '@/state/timerData'
 import { showToastAtom } from '@/state/toast'
@@ -49,8 +49,15 @@ function localeName(code: SupportedLocale): string {
   return t('settings.language.nativeName', {}, { locale: code })
 }
 
+/**
+ * A `<select>` hands back a string, and a stale service worker can serve a
+ * template still offering a language this build dropped — so the value is
+ * matched against the locales that exist rather than cast to one, exactly as
+ * `toStartCountdown` does below.
+ */
 function handleLocaleChange(event: Event): void {
-  setLocale((event.target as HTMLSelectElement).value as SupportedLocale)
+  const value = (event.target as HTMLSelectElement).value
+  if (isSupportedLocale(value)) setLocale(value)
 }
 
 function saveSetting(patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>): Promise<unknown> {

@@ -37,11 +37,13 @@ Why both? Because the migration only sees rows that were in the database at upgr
 
 > Never trust the shape of stored data; trust the decode.
 
-"Never trust" is meant literally: a table's TypeScript type is a claim, not a check. IndexedDB rows outlive app versions, get restored with a profile, and are editable from devtools, so `WorkoutsRepo.listSessions` decodes every row against the schema and fails with a `DatabaseError` when one does not match. One bad row fails the whole read on purpose — the schema accepts every shape this app has ever written, so a row that misses it is damaged rather than old, and silently dropping it would show a short history the user might then export over their last good backup.
+"Never trust" is meant literally: a table's TypeScript type is a claim, not a check. IndexedDB rows outlive app versions, get restored with a profile, and are editable from devtools, so `SessionsRepo.listSessions` decodes every row against the schema and fails with a `DatabaseError` when one does not match. One bad row fails the whole read on purpose — the schema accepts every shape this app has ever written, so a row that misses it is damaged rather than old, and silently dropping it would show a short history the user might then export over their last good backup.
+
+With one gap worth knowing, since it is the browser's rule rather than ours: `listSessions` reads through the `createdAt` index, and IndexedDB leaves a row *missing* the indexed key out of that index altogether. Such a row is skipped, not refused — the quiet fate the paragraph above is about. Every row this app writes carries a `createdAt`, so reaching it means hand-editing; it is recorded here because "the decode sees every row" is only true of rows the index returns.
 
 The same schema does triple duty: Dexie's table typing, that read-path decode, and backup validation in `src/db/backup.ts`. One definition means a field added to a session cannot reach disk while quietly disappearing from every export.
 
-The paths that exist are tested, all of them in the Node tier over `fake-indexeddb`: the decode rules in `src/__tests__/unit/db/converters.spec.ts`, repository CRUD and the rejected-row path in `workouts.spec.ts`, the backup round-trip in `backupRoundTrip.spec.ts`, and each `upgrade()` in `migrations.spec.ts` — a version bump lands its migration spec in the same commit.
+The paths that exist are tested, all of them in the Node tier over `fake-indexeddb`: the decode rules in `src/__tests__/unit/db/converters.spec.ts`, repository CRUD and the rejected-row path in `repositories.spec.ts`, the backup round-trip in `backupRoundTrip.spec.ts`, and each `upgrade()` in `migrations.spec.ts` — a version bump lands its migration spec in the same commit.
 
 ### Persistent storage is requested at boot
 

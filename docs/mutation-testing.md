@@ -151,10 +151,26 @@ A survivor is a question, not a verdict. Work through it in this order:
    the survivor is a scope bug — fix `mutate`, not the test.
 3. **Otherwise it is a missing assertion.** Write the test that kills it.
 
-The scope sits at **100%** — 284 mutants, all killed, nothing uncovered. It did
-not start there. The first run scored 86.89% with eight survivors, and each one
-resolved to a different step of the list above, which makes them the worked
-examples:
+The scope scores **95%** — 724 mutants, 687 killed. It did not start there: the
+first run scored 86.89% with eight survivors, and each one resolved to a
+different step of the list above, which makes them the worked examples below.
+
+It also does not sit at 100 any more, and the residue is worth naming rather
+than rounding away. Every file in the scope is at 100% except two, and both are
+atom modules that were added to `mutate` after the run that reached it:
+
+- **`features/timer/setupForm.ts`** — the survivors are all in the preset
+  *seeding* path, which reads `presetListAtom`, which reads IndexedDB. This
+  tier has none, so with no presets the seeded draft and the default draft are
+  the same value and nothing distinguishes the mutants. `src/__tests__/components/`
+  covers that path against the real database; step 2 of the list above says the
+  answer is the scope, not another test.
+- **`state/confirmation.ts`** — the survivors are the subscription's lifetime:
+  the finalizer, the `immediate` flag, the microtask that clears the record.
+  These are genuine missing assertions, and the honest label for them is "not
+  written yet".
+
+Treat a *new* survivor as a regression; treat these as the backlog they are.
 
 **Missing assertions (step 3), in `domain.ts`.** `if (elapsed < HOUR)` and
 `if (elapsed < DAY)` both survived flipping to `<=`. The spec pinned the
@@ -194,11 +210,12 @@ Its own CI job on every PR (`.github/workflows/ci.yml`), and never in the
 pre-commit hook or `pnpm check` — those are sub-15-second gates and this is a
 ten-second one that will grow with the scope.
 
-`thresholds.break` fails the build under 90, against a scope that is at 100. The
-gap is not slack for new survivors: it is there because part of the unit tier is
-property-based and fast-check draws a fresh seed per run, so a mutant that only
-some inputs distinguish can flicker between killed and survived. Ten points
-absorbs that. Six survivors do not fit in it.
+`thresholds.break` fails the build under 90, against a scope that scores 95. The
+gap is mostly the two files named above; the rest is there because part of the
+unit tier is property-based and fast-check draws a fresh seed per run, so a
+mutant that only some inputs distinguish can flicker between killed and
+survived. What the gap is *not* is room for new survivors: the margin is five
+points, and it is already spent.
 
 `incremental: true` caches verdicts for unchanged code in `reports/`, which is
 gitignored — locally the second run is near-instant, CI always runs cold.

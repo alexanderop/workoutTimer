@@ -1,4 +1,12 @@
-import type { CircuitBlock, TimerConfig, TimerMode, TimerPreset, WorkoutSession } from '@/db'
+import { FINISHED_STATUSES } from '@/db'
+import type {
+  CircuitBlock,
+  SessionStatus,
+  TimerConfig,
+  TimerMode,
+  TimerPreset,
+  WorkoutSession,
+} from '@/db'
 
 export const SECOND_MS = 1_000
 export const MINUTE_MS = 60 * SECOND_MS
@@ -60,6 +68,17 @@ export function capturesRoundSplits(mode: TimerMode): boolean {
   return mode === 'amrap' || mode === 'forTime'
 }
 
+/** `all`, or one of the ways a workout can be over. */
+export type HistoryFilter = 'all' | SessionStatus
+
+/**
+ * The slices of history the screen offers, built off the schema's own list of
+ * finished statuses — a vocabulary is a list, not a literal, and this one has
+ * to agree with what `historySessionsAtom` filters by and with the
+ * `history.<filter>` keys `historyFilterName` builds.
+ */
+export const HISTORY_FILTERS: ReadonlyArray<HistoryFilter> = ['all', ...FINISHED_STATUSES]
+
 const MAX_DURATION_MS = 24 * HOUR_MS
 
 function isDuration(value: number): boolean {
@@ -119,7 +138,7 @@ export function totalDurationMs(config: TimerConfig): number | undefined {
   }
 }
 
-type TimerPhase = 'countdown' | 'work' | 'rest' | 'finished'
+export type TimerPhase = 'countdown' | 'work' | 'rest' | 'finished'
 
 export type DerivedTimer = {
   readonly elapsedMs: number

@@ -1,7 +1,7 @@
 import { AtomRegistry } from '@effect/atom-vue'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { localeAtom, localeEffectAtom } from '@/state/locale'
-import { i18n } from '@/i18n'
+import { isSupportedLocale, localeAtom, localeEffectAtom } from '@/state/locale'
+import { i18n, SUPPORTED_LOCALES } from '@/i18n'
 import { resetAppState } from '../helpers/reset'
 
 describe('locale', () => {
@@ -24,5 +24,18 @@ describe('locale', () => {
     expect(document.documentElement.lang).toBe('en')
 
     stop()
+  })
+
+  /**
+   * The guard the Settings `<select>` runs its value through. A stale service
+   * worker can serve a template still offering a language this build dropped,
+   * and casting the select's value would hand that straight to i18n.
+   */
+  it('recognises every locale this build ships, and nothing else', () => {
+    for (const locale of SUPPORTED_LOCALES) expect(isSupportedLocale(locale)).toBe(true)
+
+    expect(isSupportedLocale('fr')).toBe(false)
+    expect(isSupportedLocale('')).toBe(false)
+    expect(isSupportedLocale('EN')).toBe(false)
   })
 })

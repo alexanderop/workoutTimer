@@ -6,7 +6,16 @@ import { localStorageAtom, notifyLocalStorageChanged } from '@/state/browser'
 export const LOCALE_STORAGE_KEY = 'workout-timer.locale'
 const DEFAULT_LOCALE: SupportedLocale = 'en'
 
-function isSupportedLocale(value: string): value is SupportedLocale {
+/**
+ * Whether a string is a locale this build ships.
+ *
+ * Exported because a `<select>` hands back a string too, and a stale service
+ * worker can serve a template still offering a language this build dropped —
+ * the same reason the persisted value is normalised below, and the same reason
+ * `START_COUNTDOWN_OPTIONS` is matched rather than cast in the settings
+ * screen. Casting the select's value would let "fr" through to i18n.
+ */
+export function isSupportedLocale(value: string): value is SupportedLocale {
   return (SUPPORTED_LOCALES as ReadonlyArray<string>).includes(value)
 }
 

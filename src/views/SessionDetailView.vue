@@ -10,7 +10,7 @@ import { currentSessionAtom, currentSessionResultAtom } from '@/features/timer/a
 import { formatDuration } from '@/features/timer/domain'
 import { configSummary, modeName } from '@/features/timer/labels'
 import { failureReporter } from '@/lib/reportFailure'
-import { RouteNames } from '@/router'
+import { RouteNames } from '@/router/routeNames'
 import { armedConfirmationAtom, requestConfirmationIn } from '@/state/confirmation'
 import { showToastAtom } from '@/state/toast'
 import type { TimerConfig } from '@/db'

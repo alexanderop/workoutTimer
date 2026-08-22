@@ -11,7 +11,7 @@ import {
 } from '@/features/timer/domain'
 import {
   countValues,
-  includeSelectedValue,
+  pickerOptions,
   timerDurationValues,
   type PickerOption,
 } from '@/features/timer/pickerOptions'
@@ -106,11 +106,17 @@ export const setupKeyAtom = Atom.make((get) =>
   setupKey({ mode: get(setupModeAtom), presetId: get(setupPresetIdAtom) }),
 )
 
+/**
+ * The key read back apart. `parseTimerMode` rather than a cast: a family key
+ * is a string by the time it comes back, and the modes have a list that
+ * answers this — the fallback is unreachable through `setupKeyAtom`, and is
+ * the same fallback a hand-typed `/timer/nonsense` already gets.
+ */
 const parseKey = (key: string): TimerSetupTarget => {
   const separator = key.indexOf(':')
   const presetId = key.slice(separator + 1)
   return {
-    mode: key.slice(0, separator) as TimerMode,
+    mode: parseTimerMode(key.slice(0, separator)) ?? 'amrap',
     presetId: presetId === '' ? undefined : presetId,
   }
 }
@@ -343,35 +349,34 @@ export const setupValidPresetAtom = Atom.family((key: string) =>
 )
 
 /**
- * Picker options.
+ * Picker options: which values each field offers, labelled.
  *
- * Plain functions rather than atoms: the labels are translations, so these
+ * Plain functions rather than atoms — the labels are translations, so these
  * depend on the active locale as much as on the value, and building the list
  * is an array map over at most a few dozen numbers. Called from the template,
  * they re-run exactly when the screen re-renders.
+ *
+ * The rule itself (fold in the selected value, then label every value) is
+ * `pickerOptions` in `./pickerOptions`, beside the functions that build the
+ * value lists. This module used to carry a private copy of it, which meant the
+ * exported one was reachable only from its own spec — a duplicate that could
+ * not drift *visibly*, since nothing shipped ran the version being tested.
  */
-const optionsFor = (
-  values: ReadonlyArray<number>,
-  selected: number | undefined,
-  label: (value: number) => string,
-): Array<PickerOption> =>
-  includeSelectedValue(values, selected).map((value) => ({ value, label: label(value) }))
-
 export const durationOptions = (
   selected: number | undefined,
   formatTime: (seconds: number) => string,
-): Array<PickerOption> => optionsFor(DURATION_VALUES, selected, formatTime)
+): Array<PickerOption> => pickerOptions(DURATION_VALUES, selected, formatTime)
 
 export const intervalOptions = (
   selected: number | undefined,
   formatTime: (seconds: number) => string,
-): Array<PickerOption> => optionsFor(INTERVAL_VALUES, selected, formatTime)
+): Array<PickerOption> => pickerOptions(INTERVAL_VALUES, selected, formatTime)
 
 /** Rest is the one duration that may legitimately be none: an EMOM-style Tabata. */
 export const restOptions = (
   selected: number | undefined,
   formatTime: (seconds: number) => string,
-): Array<PickerOption> => optionsFor([0, ...INTERVAL_VALUES], selected, formatTime)
+): Array<PickerOption> => pickerOptions([0, ...INTERVAL_VALUES], selected, formatTime)
 
 export const roundOptions = (selected: number | undefined): Array<PickerOption> =>
-  optionsFor(ROUND_VALUES, selected, String)
+  pickerOptions(ROUND_VALUES, selected, String)

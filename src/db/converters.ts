@@ -268,6 +268,18 @@ export const decodeTimerSettings = Schema.decodeUnknownEffect(TimerSettingsSchem
 export const decodePresetDraft = Schema.decodeUnknownEffect(PresetDraftSchema)
 export const decodeNewSession = Schema.decodeUnknownEffect(NewSessionSchema)
 
+/**
+ * The same decode, synchronously.
+ *
+ * A repository that reads and writes a row in one Dexie transaction cannot
+ * `yield*` an Effect inside the transaction callback, and dropping out of the
+ * transaction to decode is what reintroduces the race the transaction exists
+ * to close. This throws a `SchemaError` instead, which `tryDb` turns into a
+ * `DatabaseError` carrying it as the cause — the same failure by a different
+ * road. `src/db/repositories/settings.ts` is the caller.
+ */
+export const decodeTimerSettingsSync = Schema.decodeUnknownSync(TimerSettingsSchema)
+
 const parsePresetDraft = Schema.decodeUnknownResult(PresetDraftSchema)
 export const isPresetDraft = (draft: PresetDraft): boolean =>
   Result.isSuccess(parsePresetDraft(draft))
