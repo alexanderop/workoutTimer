@@ -86,6 +86,45 @@ describe('setupDraftAtom', () => {
   })
 })
 
+/**
+ * The key is the family's whole addressing scheme, and it goes out as a string
+ * and comes back as one — so reading it apart is a parse, not a cast, and this
+ * is where that parse is checked. `setupKeyAtom` can only ever produce a
+ * well-formed key; a family key is still a string, and the modes have a list
+ * that answers what a segment means.
+ */
+describe('reading a family key apart', () => {
+  const configFor = (key: string) => AtomRegistry.make().get(setupConfigAtom(key))
+
+  it('reads the mode back out of a key', () => {
+    expect(configFor(setupKey({ mode: 'emom', presetId: undefined })).mode).toBe('emom')
+    expect(configFor(setupKey({ mode: 'tabata', presetId: 'preset-1' })).mode).toBe('tabata')
+  })
+
+  it('falls back to AMRAP for a segment that names no mode', () => {
+    // The same fallback a hand-typed `/timer/nonsense` gets, rather than a
+    // cast that would carry the nonsense into a config.
+    expect(configFor('nonsense:').mode).toBe('amrap')
+    expect(configFor(':').mode).toBe('amrap')
+  })
+
+  it('separates the mode from the preset at the first colon, and only there', () => {
+    // A preset id is opaque, so a colon inside one belongs to the id.
+    const key = setupKey({ mode: 'emom', presetId: 'a:b' })
+    expect(key).toBe('emom:a:b')
+    expect(configFor(key).mode).toBe('emom')
+  })
+
+  it('treats an empty preset segment as "no preset", so the mode defaults win', () => {
+    // Both keys have no preset to seed from, so both read the mode's defaults —
+    // the distinction that matters is that neither goes looking for a preset
+    // whose id is the empty string.
+    expect(configFor(setupKey({ mode: 'tabata', presetId: undefined }))).toEqual(
+      configFor('tabata:'),
+    )
+  })
+})
+
 describe('the draft as a flat set of fields', () => {
   /** What the screen does on arrival: start from the defaults, seed the mode shown. */
   it('seeds a mode from its default and reads that default back', () => {

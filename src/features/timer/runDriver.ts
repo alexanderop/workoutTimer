@@ -5,7 +5,7 @@ import { currentSessionAtom, nowAtom, runDerivedTimerAtom } from '@/features/tim
 import { deriveTimer, SECOND_MS } from '@/features/timer/domain'
 import { emitTimerCue } from '@/features/timer/timerFeedback'
 import { i18n } from '@/i18n'
-import { RouteNames } from '@/router'
+import { RouteNames } from '@/router/routeNames'
 import { navigationAtom } from '@/state/route'
 import { timerSettingsValueAtom } from '@/state/timerData'
 import { showToastIn } from '@/state/toast'

@@ -1,7 +1,6 @@
 import { History, Settings, Timer } from '@lucide/vue'
 import type { NavItem } from '@/types/navigation'
-import type { RouteName } from './index'
-import { RouteNames } from './index'
+import { RouteNames, type RouteName } from './routeNames'
 
 /**
  * A tab before its label has been translated.
