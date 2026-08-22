@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   createPreset,
   createSession,
+  type NewSession,
   presetMutation,
   updatePreset,
   workoutStartMutation,
@@ -80,13 +81,17 @@ async function start(): Promise<void> {
   setStarting(true)
   unlockTimerAudio()
   const failed = reportFailure('start workout', t('timer.setup.startFailed'))
+  // See `createSession` — `presetId` is `optionalKey`, so the key is absent
+  // rather than present and undefined when there is no preset.
+  const started: NewSession = {
+    config: config.value,
+    workoutNotes: draft.value.workoutNotes,
+    countdownDurationMs: settings.value.startCountdownMs,
+  }
+  const session = presetId.value === undefined ? started : { ...started, presetId: presetId.value }
+
   await runStartMutation(
-    createSession({
-      config: config.value,
-      ...(presetId.value === undefined ? {} : { presetId: presetId.value }),
-      workoutNotes: draft.value.workoutNotes,
-      countdownDurationMs: settings.value.startCountdownMs,
-    }).pipe(
+    createSession(session).pipe(
       Effect.tap((session) =>
         Effect.sync(() => {
           void router.push({ name: RouteNames.timerRun, params: { id: session.id } })

@@ -3,6 +3,7 @@ import { useAtom } from '@effect/atom-vue'
 import { pickerCustomOpenAtom } from '@/features/timer/atoms'
 import { chipClass } from '@/features/timer/components/chip'
 import type { PickerOption } from '@/features/timer/pickerOptions'
+import { controlValue } from '@/lib/formControl'
 
 const props = defineProps<{
   id: string
@@ -30,7 +31,7 @@ function openCustom(): void {
 }
 
 function updateValue(event: Event): void {
-  const value = Number((event.currentTarget as HTMLInputElement).value)
+  const value = Number(controlValue(event))
   emit('update:modelValue', Math.min(999, Math.max(1, Math.trunc(value || 1))))
 }
 </script>

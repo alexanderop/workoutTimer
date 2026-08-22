@@ -16,7 +16,7 @@ const DEFAULT_LOCALE: SupportedLocale = 'en'
  * screen. Casting the select's value would let "fr" through to i18n.
  */
 export function isSupportedLocale(value: string): value is SupportedLocale {
-  return (SUPPORTED_LOCALES as ReadonlyArray<string>).includes(value)
+  return SUPPORTED_LOCALES.some((locale) => locale === value)
 }
 
 /**

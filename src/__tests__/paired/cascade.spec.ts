@@ -137,8 +137,8 @@ describe('what that adds up to for Tailwind v4', () => {
       for (const rule of list) {
         rules += 1
         if (rule.constructor.name.includes('Layer')) layers += 1
-        const nested = (rule as CSSGroupingRule).cssRules
-        if (nested) walk(nested)
+        // Only a grouping rule (@media, @supports, @layer) nests.
+        if (rule instanceof CSSGroupingRule) walk(rule.cssRules)
       }
     }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PrimitiveProps } from 'reka-ui'
-import type { HTMLAttributes } from 'vue'
+import type { HTMLAttributes, VNode } from 'vue'
 import { Primitive } from 'reka-ui'
 import type { ButtonVariants } from '.'
 import { buttonVariants } from '.'
@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 defineSlots<{
-  default: () => unknown
+  default: () => VNode[]
 }>()
 </script>
 

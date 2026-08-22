@@ -103,12 +103,12 @@ export function humanizeSeconds(seconds: number, t: Translate): string {
  */
 type RunPhaseWord = 'countdown' | 'rest' | 'work'
 
-const RUN_PHASE_WORDS: Readonly<Record<TimerPhase, RunPhaseWord>> = {
+const RUN_PHASE_WORDS = {
   countdown: 'countdown',
   rest: 'rest',
   work: 'work',
   finished: 'work',
-}
+} satisfies Readonly<Record<TimerPhase, RunPhaseWord>>
 
 /**
  * What the running timer is doing, in one word: paused beats everything, a

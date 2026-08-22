@@ -1,4 +1,5 @@
 import { Effect } from 'effect'
+import type { TimerPreset, TimerSettings, WorkoutSession } from '../converters'
 import { DatabaseError, WorkoutInvalidError } from '../errors'
 
 /**
@@ -24,13 +25,20 @@ export const invalid = (message: string): WorkoutInvalidError =>
   new WorkoutInvalidError({ message })
 
 /**
+ * A row as a Dexie table hands it back — which is a claim about what was
+ * written, not a check on what came out. `converters.ts` says why that
+ * distinction matters; `decodeRow` below is where the claim gets tested.
+ */
+type StoredRow = TimerPreset | TimerSettings | WorkoutSession
+
+/**
  * A stored row, decoded. A row that does not match is a `DatabaseError`
  * naming the decode that failed, not a `WorkoutInvalidError`: nobody handed
  * this in, it was already on disk.
  */
 export const decodeRow =
-  <A, E>(operation: string, decode: (stored: unknown) => Effect.Effect<A, E>) =>
-  (stored: unknown): Effect.Effect<A, DatabaseError> =>
+  <A, E>(operation: string, decode: (stored: StoredRow) => Effect.Effect<A, E>) =>
+  (stored: StoredRow): Effect.Effect<A, DatabaseError> =>
     decode(stored).pipe(Effect.mapError((cause) => new DatabaseError({ operation, cause })))
 
 /** A draft the caller handed in, validated. */

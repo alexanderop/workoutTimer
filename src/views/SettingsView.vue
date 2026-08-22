@@ -24,6 +24,7 @@ import { SECOND_MS } from '@/features/timer/domain'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
 import type { SupportedLocale } from '@/i18n'
 import { downloadBackup, readBackupFile } from '@/lib/backupFile'
+import { controlValue, fileInputOf } from '@/lib/formControl'
 import { failureReporter } from '@/lib/reportFailure'
 import { SUPPORTED_LOCALES } from '@/i18n'
 import { canInstallAtom, installDialogOpenAtom, isInstalledAtom } from '@/state/install'
@@ -56,11 +57,11 @@ function localeName(code: SupportedLocale): string {
  * `toStartCountdown` does below.
  */
 function handleLocaleChange(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value
+  const value = controlValue(event)
   if (isSupportedLocale(value)) setLocale(value)
 }
 
-function saveSetting(patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>): Promise<unknown> {
+function saveSetting(patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>): Promise<void> {
   return runSettingsMutation(
     updateTimerSettings(patch).pipe(
       Effect.catchTag(
@@ -71,8 +72,8 @@ function saveSetting(patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>): P
   )
 }
 
-function handleVolumeChange(event: Event): Promise<unknown> {
-  const value = Number((event.target as HTMLInputElement).value)
+function handleVolumeChange(event: Event): Promise<void> {
+  const value = Number(controlValue(event))
   if (!Number.isFinite(value) || value < 0 || value > 100) return Promise.resolve()
   const soundVolume = value / 100
   // Play the round cue at the new level so the user hears what they picked.
@@ -94,8 +95,8 @@ function toStartCountdown(value: string): StartCountdownMs | undefined {
   return START_COUNTDOWN_OPTIONS.find((option) => String(option) === value)
 }
 
-function handleCountdownChange(event: Event): Promise<unknown> {
-  const startCountdownMs = toStartCountdown((event.target as HTMLSelectElement).value)
+function handleCountdownChange(event: Event): Promise<void> {
+  const startCountdownMs = toStartCountdown(controlValue(event))
   if (startCountdownMs === undefined) return Promise.resolve()
 
   return saveSetting({ startCountdownMs })
@@ -122,7 +123,7 @@ function handleExport(): Promise<void> {
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 
 async function handleImportFile(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
+  const input = fileInputOf(event)
   const file = input.files?.[0]
   input.value = ''
   if (!file) return

@@ -22,10 +22,10 @@ import TabataFields from './TabataFields.vue'
  */
 export type ModeFields = Component<{ draft: TimerSetupDraft }>
 
-export const MODE_FIELDS: Readonly<Record<TimerMode, ModeFields>> = {
+export const MODE_FIELDS = {
   amrap: AmrapFields,
   forTime: ForTimeFields,
   emom: EmomFields,
   tabata: TabataFields,
   custom: CircuitFields,
-}
+} satisfies Readonly<Record<TimerMode, ModeFields>>

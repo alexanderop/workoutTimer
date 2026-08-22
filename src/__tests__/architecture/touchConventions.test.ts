@@ -73,6 +73,8 @@ export function utilityBodies(css: string): Map<string, string> {
       else if (css[index] === '}') {
         depth -= 1
         if (depth === 0) {
+          // SAFETY: the pattern this `match` comes from has one capture
+          // group, and a match of it always captured.
           bodies.set(match[1] as string, css.slice(open + 1, index))
           break
         }
@@ -84,11 +86,13 @@ export function utilityBodies(css: string): Map<string, string> {
 
 /** Character ranges covered by the allowed utilities' bodies. */
 function allowedRanges(css: string): Array<[number, number]> {
-  return INSET_UTILITIES.flatMap((name) => {
-    const body = utilityBodies(css).get(name)
+  const bodies = utilityBodies(css)
+
+  return INSET_UTILITIES.flatMap((name): Array<[number, number]> => {
+    const body = bodies.get(name)
     if (body === undefined) return []
     const start = css.indexOf(body)
-    return [[start, start + body.length] as [number, number]]
+    return [[start, start + body.length]]
   })
 }
 

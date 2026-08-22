@@ -79,9 +79,8 @@ export class SessionsRepo extends Context.Service<
         createSession: Effect.fn('SessionsRepo.createSession')(function* (draft: NewSession) {
           const valid = yield* validateSessionDraft(draft)
           const now = yield* Clock.currentTimeMillis
-          const session: WorkoutSession = {
+          const started: WorkoutSession = {
             id: generateId(),
-            ...(valid.presetId === undefined ? {} : { presetId: valid.presetId }),
             config: valid.config,
             status: valid.countdownDurationMs > 0 ? 'countdown' : 'running',
             workoutNotes: valid.workoutNotes,
@@ -93,6 +92,13 @@ export class SessionsRepo extends Context.Service<
             createdAt: now,
             updatedAt: now,
           }
+
+          // A session started from a preset carries its id; one started from
+          // the setup screen has no preset to name, and `presetId` is absent
+          // rather than present-and-undefined — the schema declares it with
+          // `optionalKey`, and a row is what the schema says it is.
+          const session: WorkoutSession =
+            valid.presetId === undefined ? started : { ...started, presetId: valid.presetId }
 
           yield* tryDb('create session', () =>
             db.transaction('rw', db.sessions, db.presets, async () => {

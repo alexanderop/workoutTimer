@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DialogTitleProps } from 'reka-ui'
-import type { HTMLAttributes } from 'vue'
+import type { HTMLAttributes, VNode } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import { DialogTitle, useForwardProps } from 'reka-ui'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 const props = defineProps<DialogTitleProps & { class?: HTMLAttributes['class'] }>()
 
 defineSlots<{
-  default: () => unknown
+  default: () => VNode[]
 }>()
 
 // `class` is consumed here, not forwarded — reka would set it verbatim and

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useAtomValue } from '@effect/atom-vue'
+import type { VNode } from 'vue'
 import { useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import NavTab from '@/components/NavTab.vue'
 import { hideNavigationAtom, routeNameAtom } from '@/state/route'
+import type { RouteName } from '@/router/routeNames'
 import type { NavItem } from '@/types/navigation'
 
 /**
@@ -20,8 +22,8 @@ const { items } = defineProps<{
 }>()
 
 defineSlots<{
-  default: () => unknown
-  'center-action'?: () => unknown
+  default: () => VNode[]
+  'center-action'?: () => VNode[]
 }>()
 
 const { t } = useI18n()
@@ -44,11 +46,11 @@ const leftItems = (): ReadonlyArray<NavItem> =>
 const rightItems = (): ReadonlyArray<NavItem> =>
   hasCenterAction() ? items.slice(splitIndex()) : []
 
-function isActive(routeName: string): boolean {
+function isActive(routeName: RouteName): boolean {
   return activeRouteName.value === routeName
 }
 
-function navigate(routeName: string): void {
+function navigate(routeName: RouteName): void {
   void router.push({ name: routeName })
 }
 </script>

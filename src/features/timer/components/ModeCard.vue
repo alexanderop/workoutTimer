@@ -11,13 +11,13 @@ const { mode } = defineProps<{
 
 const emit = defineEmits<{ select: [] }>()
 
-const icons: Readonly<Record<TimerMode, Component>> = {
+const icons = {
   amrap: Repeat2,
   forTime: Gauge,
   emom: TimerReset,
   tabata: Activity,
   custom: Layers,
-}
+} satisfies Readonly<Record<TimerMode, Component>>
 </script>
 
 <template>
