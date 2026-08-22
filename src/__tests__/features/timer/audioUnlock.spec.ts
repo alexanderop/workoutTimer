@@ -1,7 +1,6 @@
 import { AtomRegistry } from '@effect/atom-vue'
 import { describe, expect, it, vi } from 'vitest'
 import { audioUnlockEffectAtom } from '@/features/timer/audioUnlock'
-import { unlockTimerAudio } from '@/features/timer/timerFeedback'
 
 /**
  * Subscribing is what runs the atom's read, and the read is what attaches the
@@ -28,19 +27,34 @@ function mount(): () => void {
 const GESTURES = ['pointerdown', 'keydown']
 
 describe('audioUnlockEffectAtom', () => {
-  it('listens for the first gesture of either kind, and only the first', () => {
+  it('listens for the first gesture of either kind', () => {
     const add = vi.spyOn(document, 'addEventListener')
     const stop = mount()
 
     const registered = add.mock.calls.filter(([type]) => GESTURES.includes(type))
 
     expect(registered.map(([type]) => type)).toEqual(GESTURES)
-    for (const [, handler, options] of registered) {
-      // The handler is the unlock itself, so a gesture reaching document is
-      // the whole mechanism — there is no wrapper to get wrong.
-      expect(handler).toBe(unlockTimerAudio)
+    for (const [, , options] of registered) {
       expect(options).toMatchObject({ once: true, passive: true })
     }
+
+    stop()
+  })
+
+  /**
+   * `once: true` removes only the listener that fired, so a tap used to leave
+   * the `keydown` listener on `document` for the life of the screen. The
+   * handler disarms both, which is what this asserts — before `stop()`, so a
+   * finalizer that happens to clean up cannot stand in for it.
+   */
+  it('drops the other gesture listener too, on the first gesture', () => {
+    const remove = vi.spyOn(document, 'removeEventListener')
+    const stop = mount()
+
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+
+    const removed = remove.mock.calls.filter(([type]) => GESTURES.includes(type))
+    expect(removed.map(([type]) => type).sort()).toEqual([...GESTURES].sort())
 
     stop()
   })
@@ -60,7 +74,6 @@ describe('audioUnlockEffectAtom', () => {
 
     const removed = remove.mock.calls.filter(([type]) => GESTURES.includes(type))
     expect(removed.map(([type]) => type)).toEqual(GESTURES)
-    for (const [, handler] of removed) expect(handler).toBe(unlockTimerAudio)
   })
 
   it('leaves no listener of its own behind on a real gesture', () => {

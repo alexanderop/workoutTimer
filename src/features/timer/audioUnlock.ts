@@ -17,20 +17,28 @@ import { unlockTimerAudio } from '@/features/timer/timerFeedback'
  * disarms it — the same shape as `wakeLockEffectAtom` beside it, and the same
  * shape every `watch(…, { immediate: true })` in this codebase became.
  *
- * `once: true` on both listeners means the first gesture of either kind
- * disarms both handlers; the finalizer covers leaving the screen before any
- * gesture arrives. One unlock is all we need — `unlockTimerAudio` is
- * idempotent regardless.
+ * The handler disarms *both* listeners rather than relying on `once: true`,
+ * which only removes the one that fired — a tap would otherwise leave the
+ * `keydown` listener on `document` for the life of the screen. The finalizer
+ * covers the other order: leaving before any gesture arrives. One unlock is
+ * all we need, and `unlockTimerAudio` is idempotent regardless.
  */
 export const audioUnlockEffectAtom = Atom.make((get): null => {
-  const options = { once: true, passive: true } as const
-  document.addEventListener('pointerdown', unlockTimerAudio, options)
-  document.addEventListener('keydown', unlockTimerAudio, options)
+  const unlockOnFirstGesture = (): void => {
+    stopListening()
+    unlockTimerAudio()
+  }
 
-  get.addFinalizer(() => {
-    document.removeEventListener('pointerdown', unlockTimerAudio)
-    document.removeEventListener('keydown', unlockTimerAudio)
-  })
+  function stopListening(): void {
+    document.removeEventListener('pointerdown', unlockOnFirstGesture)
+    document.removeEventListener('keydown', unlockOnFirstGesture)
+  }
+
+  const options = { once: true, passive: true } as const
+  document.addEventListener('pointerdown', unlockOnFirstGesture, options)
+  document.addEventListener('keydown', unlockOnFirstGesture, options)
+
+  get.addFinalizer(stopListening)
 
   return null
 })

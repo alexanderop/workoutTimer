@@ -1,7 +1,11 @@
 import { Clock, Context, Effect, Layer } from 'effect'
-import { decodeTimerSettings, makeDefaultTimerSettings } from '../converters'
+import {
+  decodeTimerSettings,
+  decodeTimerSettingsSync,
+  makeDefaultTimerSettings,
+} from '../converters'
 import type { TimerSettings } from '../converters'
-import { DatabaseError } from '../errors'
+import type { DatabaseError } from '../errors'
 import { db } from '../schema'
 import { decodeRow, tryDb } from './shared'
 
@@ -39,28 +43,49 @@ export class SettingsRepo extends Context.Service<
           return yield* decodeSettingsRow(row)
         }),
 
+        /**
+         * A patch, applied to whatever is on disk right now.
+         *
+         * Read, merge and write happen in one transaction, for the reason
+         * `changeSession` opens one in `./sessions.ts`: the row cannot move
+         * between the read and the write. Two settings writes really can
+         * overlap — `settingsMutation` is `concurrent: true`, and the settings
+         * screen has half a dozen controls that each fire one — and reading
+         * outside the transaction means both fibers merge their patch into the
+         * same `current` and the second `put` drops the first. No error, no
+         * conflict: the preference simply does not stick.
+         *
+         * The decode inside is the sync one because a transaction callback
+         * cannot `yield*`; leaving the transaction to validate would put the
+         * gap straight back. A `SchemaError` thrown in there is caught by
+         * `tryDb` and arrives as a `DatabaseError` carrying it.
+         */
         updateSettings: Effect.fn('SettingsRepo.updateSettings')(function* (
           patch: Partial<Omit<TimerSettings, 'id' | 'updatedAt'>>,
         ) {
           const now = yield* Clock.currentTimeMillis
-          const currentRow = yield* tryDb('get timer settings for update', () =>
-            db.timerSettings.get(SETTINGS_ROW_ID),
+          return yield* tryDb('update timer settings', () =>
+            db.transaction('rw', db.timerSettings, async () => {
+              const stored = await db.timerSettings.get(SETTINGS_ROW_ID)
+              const current =
+                stored === undefined
+                  ? makeDefaultTimerSettings(now)
+                  : decodeTimerSettingsSync(stored)
+              const next: TimerSettings = {
+                ...current,
+                ...patch,
+                id: SETTINGS_ROW_ID,
+                updatedAt: now,
+              }
+              // The decoded row, not the one handed to the decoder: they agree
+              // today, and storing the value that was actually validated is
+              // what keeps them agreeing if the schema grows a decoding
+              // default.
+              const validated = decodeTimerSettingsSync(next)
+              await db.timerSettings.put(validated)
+              return validated
+            }),
           )
-          const current =
-            currentRow === undefined
-              ? makeDefaultTimerSettings(now)
-              : yield* decodeSettingsRow(currentRow)
-          const next: TimerSettings = { ...current, ...patch, id: SETTINGS_ROW_ID, updatedAt: now }
-          const validated = yield* decodeTimerSettings(next).pipe(
-            Effect.mapError(
-              (cause) => new DatabaseError({ operation: 'validate timer settings', cause }),
-            ),
-          )
-          yield* tryDb('update timer settings', async () => db.timerSettings.put(validated))
-          // The decoded row, not the one handed to the decoder: they agree
-          // today, and returning the value that was actually stored is what
-          // keeps them agreeing if the schema grows a decoding default.
-          return validated
         }),
       }),
     ),

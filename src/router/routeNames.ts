@@ -9,8 +9,9 @@
  * file — a unit spec for anything that merely mentions a route name fails to
  * transform, and the mutation run over that tier fails with it.
  *
- * So: a `.ts` module that needs a route name imports it here; `.vue` files can
- * keep reading `@/router`, which re-exports both this and `createAppRouter`.
+ * So every module that needs a route name imports it from here, `.vue` files
+ * included. `@/router` deliberately does not re-export them: re-exporting
+ * would put the trap straight back, one convenient import at a time.
  */
 export const RouteNames = {
   timer: 'timer',

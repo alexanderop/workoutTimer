@@ -94,24 +94,55 @@ export function modeSwitches(source: string): string[] {
  * into a map would cost more than it explains. By the third branch it is a
  * table.
  */
-const BRANCH_CONDITION = /v-(?:else-)?if="([^"]*)"/g
-const LITERAL_COMPARISON = /([\w.?![\]$]+)\s*===\s*'([^']*)'/
+/**
+ * Both quote styles, on both sides. Vue accepts either delimiter for an
+ * attribute and either for a string inside it, so `v-if='mode === "amrap"'` is
+ * the same rule written the other way round. Prettier happens to normalise it
+ * to the first form and `format:check` gates on prettier — but a tripwire that
+ * only works because another tool ran first is one bad `--no-verify` from
+ * being decorative.
+ */
+const BRANCH_CONDITION = /v-(else-)?if=("[^"]*"|'[^']*')/g
+const LITERAL_COMPARISON = /([\w.?![\]$]+)\s*===\s*(?:'([^']*)'|"([^"]*)")/
 
-export function literalDispatchChains(source: string): string[] {
-  const byExpression = new Map<string, Set<string>>()
+const unquote = (attribute: string): string => attribute.slice(1, -1)
 
-  for (const [, condition] of stripComments(source).matchAll(BRANCH_CONDITION)) {
-    const comparison = LITERAL_COMPARISON.exec(condition ?? '')
-    if (comparison === null) continue
-    const [, expression, literal] = comparison
-    const literals = byExpression.get(expression ?? '') ?? new Set<string>()
-    literals.add(literal ?? '')
-    byExpression.set(expression ?? '', literals)
+/**
+ * One `v-if` and the `v-else-if`s that follow it — the branches that are
+ * actually alternatives to each other.
+ *
+ * Counting per *file* instead was wrong in a way worth keeping written down: a
+ * status badge branching on `status` in a header and an action button
+ * branching on the same `status` further down are two conditionals, not a
+ * six-way table, and a rule that flags them teaches people to ignore it. A
+ * `v-if` opens a chain and a `v-else-if` continues the one before it, which is
+ * the whole of Vue's own rule and needs no parser to follow.
+ */
+function branchChains(source: string): Array<Map<string, Set<string>>> {
+  const chains: Array<Map<string, Set<string>>> = []
+
+  for (const [, elseIf, attribute] of stripComments(source).matchAll(BRANCH_CONDITION)) {
+    if (elseIf === undefined || chains.length === 0) chains.push(new Map())
+    const chain = chains[chains.length - 1]
+
+    const comparison = LITERAL_COMPARISON.exec(unquote(attribute ?? '""'))
+    if (chain === undefined || comparison === null) continue
+
+    const [, expression, singleQuoted, doubleQuoted] = comparison
+    const literals = chain.get(expression ?? '') ?? new Set<string>()
+    literals.add(singleQuoted ?? doubleQuoted ?? '')
+    chain.set(expression ?? '', literals)
   }
 
-  return [...byExpression]
-    .filter(([, literals]) => literals.size >= 3)
-    .map(([expression, literals]) => `${expression} vs ${[...literals].join(', ')}`)
+  return chains
+}
+
+export function literalDispatchChains(source: string): string[] {
+  return branchChains(source).flatMap((chain) =>
+    [...chain]
+      .filter(([, literals]) => literals.size >= 3)
+      .map(([expression, literals]) => `${expression} vs ${[...literals].join(', ')}`),
+  )
 }
 
 // --- V2: the vocabulary is imported, not re-spelled ------------------------
@@ -210,6 +241,40 @@ describe('V4 — no template dispatches on a union either', () => {
         <div v-else-if="routeMode === 'forTime'" />
         <div v-else-if="routeMode === 'emom'" />
         <div v-else-if="routeMode === 'tabata'" />
+      `),
+    ).toHaveLength(1)
+  })
+
+  it('catches the same chain written with the other quote style', () => {
+    expect(
+      literalDispatchChains(`
+        <div v-if='routeMode === "amrap"' />
+        <div v-else-if='routeMode === "forTime"' />
+        <div v-else-if='routeMode === "emom"' />
+      `),
+    ).toHaveLength(1)
+  })
+
+  it('counts each chain on its own, not the whole file', () => {
+    // Three independent conditionals on one expression are three conditionals.
+    // A rule that called this a six-way table would be one people learn to
+    // ignore.
+    expect(
+      literalDispatchChains(`
+        <span v-if="status === 'completed'" />
+        <hr />
+        <span v-if="status === 'cancelled'" />
+        <hr />
+        <span v-if="status === 'running'" />
+      `),
+    ).toEqual([])
+
+    // The same three literals inside one chain still are one.
+    expect(
+      literalDispatchChains(`
+        <span v-if="status === 'completed'" />
+        <span v-else-if="status === 'cancelled'" />
+        <span v-else-if="status === 'running'" />
       `),
     ).toHaveLength(1)
   })
