@@ -1,5 +1,5 @@
 import { Atom } from '@effect/atom-vue'
-import { FINISHED_STATUSES, isActiveSession, isFinishedSession } from '@/db'
+import { isActiveSession, isFinishedSession } from '@/db'
 import { clockAtom } from '@/state/browser'
 import {
   presetListAtom,
@@ -10,8 +10,8 @@ import {
 } from '@/state/timerData'
 import { routeParamAtom } from '@/state/route'
 import { deriveTimer, finalResult, sortPresets, sortSessions } from '@/features/timer/domain'
-import type { SessionStatus, WorkoutSession } from '@/db'
-import type { DerivedTimer } from '@/features/timer/domain'
+import type { WorkoutSession } from '@/db'
+import type { DerivedTimer, HistoryFilter } from '@/features/timer/domain'
 
 /**
  * Everything the timer screens read, as derivations over the store atoms.
@@ -65,11 +65,6 @@ export const recentPresetsAtom = Atom.map(sortedPresetsAtom, (presets) => preset
 export const homeLoadFailedAtom = Atom.make(
   (get) => get(sessionsLoadFailedAtom) || get(presetsLoadFailedAtom),
 )
-
-/** `all`, or one of the ways a workout can be over. */
-export type HistoryFilter = 'all' | SessionStatus
-
-export const HISTORY_FILTERS: ReadonlyArray<HistoryFilter> = ['all', ...FINISHED_STATUSES]
 
 /**
  * Which slice of history is on screen. A `ref` in the view before; an atom now,

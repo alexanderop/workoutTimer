@@ -5,17 +5,13 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PageLayout from '@/components/PageLayout.vue'
 import { Button } from '@/components/ui/button'
-import {
-  HISTORY_FILTERS,
-  historyFilterAtom,
-  historySessionsAtom,
-  type HistoryFilter,
-} from '@/features/timer/atoms'
-import { finalResult, formatDuration } from '@/features/timer/domain'
-import { modeName } from '@/features/timer/labels'
+import { historyFilterAtom, historySessionsAtom } from '@/features/timer/atoms'
+import { finalResult, formatDuration, HISTORY_FILTERS } from '@/features/timer/domain'
+import { historyFilterName, modeName } from '@/features/timer/labels'
 import { RouteNames } from '@/router'
 import { sessionsLoadFailedAtom } from '@/state/timerData'
 import type { SessionStatus, WorkoutSession } from '@/db'
+import type { HistoryFilter } from '@/features/timer/domain'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -24,13 +20,7 @@ const [filter, setFilter] = useAtom(() => historyFilterAtom)
 const sessions = useAtomValue(() => historySessionsAtom)
 const loadFailed = useAtomValue(() => sessionsLoadFailedAtom)
 
-function filterLabel(value: HistoryFilter): string {
-  return value === 'all'
-    ? t('history.all')
-    : value === 'completed'
-      ? t('history.completed')
-      : t('history.cancelled')
-}
+const filterLabel = (value: HistoryFilter): string => historyFilterName(value, t)
 
 const sessionModeName = (session: WorkoutSession): string => modeName(session.config.mode, t)
 

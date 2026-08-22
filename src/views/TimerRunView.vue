@@ -19,7 +19,7 @@ import {
 import { currentSessionAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
 import { capturesRoundSplits, formatDuration, SECOND_MS } from '@/features/timer/domain'
-import { modeName } from '@/features/timer/labels'
+import { modeName, runPhaseName } from '@/features/timer/labels'
 import { timerCueAtom, timerRunDriverAtom } from '@/features/timer/runDriver'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
 import { wakeLockEffectAtom } from '@/features/timer/wakeLock'
@@ -107,20 +107,7 @@ function persistCompletion(
   )
 }
 
-function phaseLabel(): string {
-  if (session.value?.status === 'paused') return t('timer.run.paused')
-  // A named circuit block says what to do; the generic word is the fallback.
-  const blockLabel = derived.value?.phaseLabel
-  if (blockLabel !== undefined) return blockLabel
-  switch (derived.value?.phase) {
-    case 'countdown':
-      return t('timer.run.countdown')
-    case 'rest':
-      return t('timer.run.rest')
-    default:
-      return t('timer.run.work')
-  }
-}
+const phaseLabel = (): string => runPhaseName(session.value?.status, derived.value, t)
 
 const currentModeName = (): string => modeName(mode(), t)
 
