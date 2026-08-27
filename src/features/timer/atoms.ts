@@ -94,7 +94,7 @@ export const activeSessionAtom = Atom.map(sessionListAtom, (sessions) => session
 export const hasActiveSessionAtom = Atom.map(activeSessionAtom, (session) => session !== undefined)
 
 /**
- * The session addressed by the current URL (`/timer/run/:id`, `/history/:id`).
+ * The session addressed by the current URL (`/session/:id`, `/history/:id`).
  *
  * The run, result and detail screens all mean the same thing by "this
  * session", so they share one atom rather than three identical `computed`s
