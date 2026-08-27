@@ -1,18 +1,8 @@
 import type { RouteRecordRaw, Router, RouterHistory } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
+import { RouteNames } from './routeNames'
 
-export const RouteNames = {
-  timer: 'timer',
-  timerSetup: 'timer-setup',
-  timerRun: 'timer-run',
-  timerResult: 'timer-result',
-  history: 'history',
-  sessionDetail: 'session-detail',
-  presets: 'presets',
-  settings: 'settings',
-} as const
-
-export type RouteName = (typeof RouteNames)[keyof typeof RouteNames]
+export { RouteNames, type RouteName } from './routeNames'
 
 declare module 'vue-router' {
   interface RouteMeta {
