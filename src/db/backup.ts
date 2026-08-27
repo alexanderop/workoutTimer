@@ -1,5 +1,10 @@
 import { DateTime, Effect, Schema } from 'effect'
-import { TimerPresetSchema, TimerSettingsSchema, WorkoutSessionSchema } from './converters'
+import {
+  isActiveSession,
+  TimerPresetSchema,
+  TimerSettingsSchema,
+  WorkoutSessionSchema,
+} from './converters'
 import { BackupInvalidError, type DatabaseError } from './errors'
 import { listPresets, PresetsRepo } from './repositories/presets'
 import { replaceAllData } from './repositories/restore'
@@ -49,6 +54,24 @@ export const importData = Effect.fn('Backup.importData')(function* (payload: Sch
   const backup = yield* decodeBackup(payload)
   const sessions = [...backup.sessions]
   const presets = [...backup.presets]
+
+  // `BackupSchema` grades one row at a time, and "at most one workout is on
+  // the clock" is a rule about the *set* — the one `createSession` enforces
+  // transactionally, and the one `replaceAllData` cites as its reason to
+  // replace rather than merge. A file carrying two of them restores cleanly
+  // and then wedges the app: the home screen offers to resume whichever
+  // `activeSessionAtom` finds first, and every new workout is refused by the
+  // other. Checked here because this is the boundary the untrusted file
+  // crosses; `replaceAllData` has no other caller.
+  const unfinished = sessions.filter((session) => isActiveSession(session.status))
+  if (unfinished.length > 1) {
+    return yield* Effect.fail(
+      new BackupInvalidError({
+        message: `a backup may hold at most one unfinished workout, this one holds ${unfinished.length}`,
+      }),
+    )
+  }
+
   yield* replaceAllData(sessions, presets, backup.timerSettings)
   return { sessions: sessions.length, presets: presets.length }
 })
