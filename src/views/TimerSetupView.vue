@@ -68,9 +68,15 @@ const isValidPreset = useAtomValue(() => setupValidPresetAtom(setupKey.value))
 const [isStarting, setStarting] = useAtom(() => pendingAtom('timer-setup.start'))
 const [isSavingPreset, setSavingPreset] = useAtom(() => pendingAtom('timer-setup.savePreset'))
 
-/** One field at a time; the draft is a value, so an edit is a replacement. */
+/**
+ * One field at a time, and *only* that field. Writing `{ ...draft.value }`
+ * here snapshotted the whole form, which froze every untouched field at
+ * whatever the seed happened to be answering at that moment — the mode's
+ * defaults, if the preset's row had not come back from IndexedDB yet. A patch
+ * leaves the rest tracking the seed, so a late row still lands.
+ */
 function edit<K extends keyof TimerSetupDraft>(field: K, value: TimerSetupDraft[K]): void {
-  setDraft({ ...draft.value, [field]: value })
+  setDraft({ [field]: value })
 }
 
 const formatTime = (seconds: number): string => humanizeSeconds(seconds, t)

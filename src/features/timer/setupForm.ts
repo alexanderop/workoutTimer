@@ -172,14 +172,27 @@ const setupSeedAtom = Atom.family((key: string) =>
   }),
 )
 
-/** What the user typed, or `undefined` while they have typed nothing. */
-const setupEditAtom = Atom.family((_key: string) =>
-  Atom.make<TimerSetupDraft | undefined>(undefined),
-)
+/**
+ * The fields the user has actually touched, and only those — empty while they
+ * have typed nothing.
+ *
+ * A *whole draft* here was a data-loss bug. The seed cannot tell "this preset
+ * has no row" from "its row has not arrived from IndexedDB yet" — both answer
+ * with the mode's defaults — and an edit that snapshotted every field froze
+ * the other eight at whatever was on screen when the first key was pressed.
+ * Open `/timer/:mode?preset=X` cold, change one field before the table
+ * resolves, press Save, and `updatePreset` replaced the stored preset with
+ * mode defaults plus that one keystroke, with no warning and no undo.
+ *
+ * A patch has no such window: an untouched field keeps reading the seed, so a
+ * row arriving late still changes the answer, exactly as the seed's own
+ * comment promises.
+ */
+const setupEditAtom = Atom.family((_key: string) => Atom.make<Partial<TimerSetupDraft>>({}))
 
 /**
- * The draft itself, one per `mode:presetId`: the edit if there is one, the
- * seed otherwise.
+ * The draft itself, one per `mode:presetId`: the seed, with whatever has been
+ * typed laid over it field by field.
  *
  * Stating the rule as two atoms rather than as a `seeded` flag is what keeps
  * it registry-scoped. A family memoizes one atom object per key at module
@@ -188,11 +201,14 @@ const setupEditAtom = Atom.family((_key: string) =>
  * already "seeded" and show the mode defaults instead of the saved values.
  * Neither atom is `keepAlive`, so both are dropped when the screen unmounts
  * and coming back re-reads what was actually saved.
+ *
+ * Written with a patch rather than a full draft, so a screen cannot capture
+ * fields it was not editing.
  */
 export const setupDraftAtom = Atom.family((key: string) =>
-  Atom.writable<TimerSetupDraft, TimerSetupDraft>(
-    (get) => get(setupEditAtom(key)) ?? get(setupSeedAtom(key)),
-    (ctx, draft) => ctx.set(setupEditAtom(key), draft),
+  Atom.writable<TimerSetupDraft, Partial<TimerSetupDraft>>(
+    (get) => ({ ...get(setupSeedAtom(key)), ...get(setupEditAtom(key)) }),
+    (ctx, patch) => ctx.set(setupEditAtom(key), { ...ctx.get(setupEditAtom(key)), ...patch }),
   ),
 )
 

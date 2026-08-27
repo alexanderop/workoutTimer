@@ -34,8 +34,9 @@ function draftFor(mode: TimerMode) {
 
   return {
     read: (): TimerSetupDraft => registry.get(atom),
-    edit: (patch: Partial<TimerSetupDraft>): void =>
-      registry.set(atom, { ...registry.get(atom), ...patch }),
+    // A patch, which is the whole write API: the draft is the seed with the
+    // touched fields over it, never a captured copy of the form.
+    edit: (patch: Partial<TimerSetupDraft>): void => registry.set(atom, patch),
     config: () => registry.get(setupConfigAtom(key)),
   }
 }
