@@ -98,6 +98,17 @@ export function finishAt(
  * A tapped round split. Declined for a workout that is over, and for a second
  * tap inside the debounce window — a split the athlete did not mean to record
  * is worse than one they have to tap again for.
+ *
+ * "Inside the window" is two clocks, and it has to be both. The elapsed
+ * comparison is what a split *means* — two taps at the same point in the
+ * workout are one round — but `elapsedSessionMs` freezes while a session is
+ * paused, so on its own it made the window infinite there: every deliberate
+ * tap after the first was silently dropped, with no toast and no haptic,
+ * because the round cue is gated on the write landing. On AMRAP and For Time
+ * those taps are the score. The wall-clock comparison is what re-opens the
+ * window while the workout stands still, and requiring both is what keeps an
+ * unrelated write — a pause 100 ms before the tap also stamps `updatedAt` —
+ * from swallowing a legitimate round.
  */
 export function appendRound(
   session: WorkoutSession,
@@ -107,9 +118,10 @@ export function appendRound(
   if (session.status !== 'running' && session.status !== 'paused') return undefined
 
   const last = session.rounds.at(-1)
-  if (last !== undefined && Math.abs(last.capturedAtElapsedMs - elapsedMs) < ROUND_DEBOUNCE_MS) {
-    return undefined
-  }
+  const sameElapsed =
+    last !== undefined && Math.abs(last.capturedAtElapsedMs - elapsedMs) < ROUND_DEBOUNCE_MS
+  const sameMoment = now - session.updatedAt < ROUND_DEBOUNCE_MS
+  if (sameElapsed && sameMoment) return undefined
 
   return {
     ...session,

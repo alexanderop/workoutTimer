@@ -174,25 +174,63 @@ describe('appendRound', () => {
   })
 
   /**
-   * A double-tap is one round. The window is compared on the *elapsed* time
-   * the taps report, not on wall clock, because that is what a split is.
+   * A double-tap is one round. Both clocks have to agree that it is one: the
+   * elapsed times the taps report are what a split *means*, and the wall clock
+   * is what says the two taps were the same gesture.
    */
   it('treats a second tap inside the debounce window as the same round', () => {
-    const withOne = session({ rounds: [{ capturedAtElapsedMs: 30_000 }] })
+    // The row was last written when the first split was tapped, at 30 s in.
+    const tapped = session({ rounds: [{ capturedAtElapsedMs: 30_000 }], updatedAt: 31_000 })
 
-    expect(appendRound(withOne, 30_000 + ROUND_DEBOUNCE_MS - 1, 9_000)).toBeUndefined()
-    expect(appendRound(withOne, 30_000 - ROUND_DEBOUNCE_MS + 1, 9_000)).toBeUndefined()
-    expect(appendRound(withOne, 30_000 + ROUND_DEBOUNCE_MS, 9_000)?.rounds).toHaveLength(2)
-    expect(appendRound(withOne, 30_000 - ROUND_DEBOUNCE_MS, 9_000)?.rounds).toHaveLength(2)
+    expect(appendRound(tapped, 30_000 + ROUND_DEBOUNCE_MS - 1, 31_000)).toBeUndefined()
+    expect(appendRound(tapped, 30_000 - ROUND_DEBOUNCE_MS + 1, 31_000)).toBeUndefined()
+    expect(appendRound(tapped, 30_000 + ROUND_DEBOUNCE_MS, 31_000)?.rounds).toHaveLength(2)
+    expect(appendRound(tapped, 30_000 - ROUND_DEBOUNCE_MS, 31_000)?.rounds).toHaveLength(2)
+  })
+
+  /**
+   * The bug the wall-clock half of the window exists to close.
+   *
+   * `elapsedSessionMs` stops moving while a session is paused, so every tap
+   * after the first reported the *same* elapsed time — and an elapsed-only
+   * window read that as one long double-tap. The window was effectively
+   * infinite: one round per pause, however long the athlete stood there, with
+   * no toast and no haptic to say a split had been dropped.
+   */
+  it('records a second split at the same elapsed time once the moment has passed', () => {
+    const paused = session({
+      status: 'paused',
+      rounds: [{ capturedAtElapsedMs: 30_000 }],
+      updatedAt: 31_000,
+    })
+
+    expect(appendRound(paused, 30_000, 31_000 + ROUND_DEBOUNCE_MS - 1)).toBeUndefined()
+    expect(appendRound(paused, 30_000, 31_000 + ROUND_DEBOUNCE_MS)?.rounds).toHaveLength(2)
+    expect(appendRound(paused, 30_000, 41_000)?.rounds).toHaveLength(2)
+  })
+
+  /**
+   * The other half: `updatedAt` is stamped by every transition, not only by a
+   * split, so a tap that lands just after a pause must still be recorded.
+   */
+  it('is not swallowed by an unrelated write in the same moment', () => {
+    const justPaused = session({
+      status: 'paused',
+      rounds: [{ capturedAtElapsedMs: 10_000 }],
+      updatedAt: 31_000,
+    })
+
+    expect(appendRound(justPaused, 30_000, 31_050)?.rounds).toHaveLength(2)
   })
 
   /** Only the most recent split guards the window — an earlier one is history. */
   it('compares against the last split, not any of them', () => {
     const withTwo = session({
       rounds: [{ capturedAtElapsedMs: 30_000 }, { capturedAtElapsedMs: 60_000 }],
+      updatedAt: 61_000,
     })
 
-    expect(appendRound(withTwo, 30_010, 9_000)?.rounds).toHaveLength(3)
+    expect(appendRound(withTwo, 30_010, 61_000)?.rounds).toHaveLength(3)
   })
 })
 
