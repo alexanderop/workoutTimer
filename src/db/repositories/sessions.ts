@@ -1,6 +1,7 @@
 import { Clock, Context, Effect, Layer } from 'effect'
 import { ACTIVE_STATUSES, decodeNewSession, decodeWorkoutSession } from '../converters'
 import type { FinishReason, NewSession, WorkoutSession } from '../converters'
+import { SessionActiveError } from '../errors'
 import type { DatabaseError, WorkoutInvalidError } from '../errors'
 import { GenerateId } from '../generateId'
 import { db } from '../schema'
@@ -49,7 +50,7 @@ export class SessionsRepo extends Context.Service<
     listSessions: () => Effect.Effect<Array<WorkoutSession>, DatabaseError>
     createSession: (
       draft: NewSession,
-    ) => Effect.Effect<WorkoutSession, DatabaseError | WorkoutInvalidError>
+    ) => Effect.Effect<WorkoutSession, DatabaseError | WorkoutInvalidError | SessionActiveError>
     markRunning: (id: string) => Effect.Effect<void, DatabaseError>
     pauseSession: (id: string) => Effect.Effect<void, DatabaseError>
     resumeSession: (id: string) => Effect.Effect<void, DatabaseError>
@@ -100,19 +101,28 @@ export class SessionsRepo extends Context.Service<
           const session: WorkoutSession =
             valid.presetId === undefined ? started : { ...started, presetId: valid.presetId }
 
-          yield* tryDb('create session', () =>
+          // The conflict is *returned* from the transaction, not thrown out of
+          // it. A throw here reaches `tryDb`, which turns everything into a
+          // `DatabaseError` — so "you already have a workout running", a rule
+          // this repository enforces on purpose, was indistinguishable from
+          // IndexedDB being unwell, and the setup screen could only offer the
+          // generic save-failed toast. Reporting it in the success channel
+          // keeps it a rule until there is an Effect to fail with.
+          const blocked = yield* tryDb('create session', () =>
             db.transaction('rw', db.sessions, db.presets, async () => {
               const active = await db.sessions
                 .where('status')
                 .anyOf([...ACTIVE_STATUSES])
                 .first()
-              if (active) throw new Error('an active session already exists')
+              if (active !== undefined) return true
               await db.sessions.add(session)
               if (valid.presetId !== undefined) {
                 await db.presets.update(valid.presetId, { lastUsedAt: now })
               }
+              return false
             }),
           )
+          if (blocked) return yield* Effect.fail(new SessionActiveError())
           return session
         }),
 

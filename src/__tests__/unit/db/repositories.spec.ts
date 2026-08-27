@@ -6,6 +6,7 @@ import {
   createPreset,
   createSession,
   DatabaseError,
+  SessionActiveError,
   getTimerSettings,
   listPresets,
   listSessions,
@@ -33,7 +34,13 @@ describe('the repositories, through the operations the app calls', () => {
     expect(await runDb(listSessions.pipe(Effect.orDie))).toMatchObject([{ id: created.id }])
   })
 
-  it('enforces one active session', async () => {
+  /**
+   * A rule, and it says so by name. This used to assert `DatabaseError`,
+   * which is what a thrown `Error` inside the Dexie transaction became — so
+   * the setup screen could not tell "you already have a workout running" from
+   * "IndexedDB is unwell", and offered the generic save-failed toast for both.
+   */
+  it('enforces one active session, by name', async () => {
     const draft = {
       config: { mode: 'forTime' } as const,
       workoutNotes: '',
@@ -41,7 +48,7 @@ describe('the repositories, through the operations the app calls', () => {
     }
     await runDb(createSession(draft).pipe(Effect.orDie))
     const error = await runDb(createSession(draft).pipe(Effect.flip, Effect.orDie))
-    expect(error).toBeInstanceOf(DatabaseError)
+    expect(error).toBeInstanceOf(SessionActiveError)
   })
 
   it('pauses, resumes, and captures a round', async () => {

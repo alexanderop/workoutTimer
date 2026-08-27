@@ -104,6 +104,12 @@ async function start(): Promise<void> {
       Effect.catchTags({
         'Db.DatabaseError': failed,
         'Db.WorkoutInvalidError': failed,
+        // Its own message, because it is its own thing: a workout is already
+        // on the clock, which is a rule rather than a failure. The Start
+        // button disables itself once `hasActiveSession` resolves, so this is
+        // the race — a start pressed before the sessions table arrives, or one
+        // begun in a second tab.
+        'Db.SessionActiveError': reportFailure('start workout', t('timer.setup.activeExists')),
       }),
       Effect.ensuring(Effect.sync(() => setStarting(false))),
     ),

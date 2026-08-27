@@ -34,7 +34,7 @@ export type {
   TimerSettings,
   WorkoutSession,
 } from './converters'
-export { DatabaseError } from './errors'
+export { DatabaseError, SessionActiveError } from './errors'
 // The services a program handed to a mutation atom may require. Exported so a
 // module outside src/db can *name* that contract — src/features/timer/runDriver.ts
 // composes such a program — without reaching into src/db/layer.ts.
