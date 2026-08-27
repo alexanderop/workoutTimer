@@ -113,6 +113,7 @@ describe('the running timer in one word', () => {
   const timer = (patch: Partial<DerivedTimer>): DerivedTimer => ({
     elapsedMs: 0,
     primaryMs: 0,
+    remainingMs: 0,
     phase: 'work',
     round: 1,
     completedRounds: 0,

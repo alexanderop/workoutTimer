@@ -197,8 +197,13 @@ export const timerCueAtom = Atom.make((get): null => {
       previousPhase = state.phase
       previousRound = state.round
 
-      const second = Math.ceil(state.primaryMs / SECOND_MS)
-      if (second <= 3 && second > 0 && second !== previousCountdownSecond) {
+      // `remainingMs`, not `primaryMs`. The two agree in every mode whose big
+      // clock counts down, which is why this read the wrong field for so
+      // long — For Time counts up, so three-two-one landed on the opening
+      // seconds of the workout and the time cap arrived in silence.
+      const remaining = state.remainingMs
+      const second = remaining === undefined ? undefined : Math.ceil(remaining / SECOND_MS)
+      if (second !== undefined && second <= 3 && second > 0 && second !== previousCountdownSecond) {
         emitTimerCue(settings, 'countdown', String(second))
       }
       previousCountdownSecond = second
