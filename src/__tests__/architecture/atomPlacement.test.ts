@@ -57,10 +57,30 @@ const ATOM_HOMES = [/^src\/state\//, /^src\/features\/[^/]+\//, /^src\/db\/atoms
 const mayDeclareAtoms = (id: string): boolean => ATOM_HOMES.some((home) => home.test(id))
 
 /**
- * An exported composable. `use*` inside `src/components/ui/` is the substrate
- * (reka-ui's own primitives, `useForwardProps`) and is not ours to police.
+ * An exported composable, in every shape an export comes in. `use*` inside
+ * `src/components/ui/` is the substrate (reka-ui's own primitives,
+ * `useForwardProps`) and is not ours to police.
+ *
+ * The four alternatives are the point. This used to be the first one alone,
+ * and so did the ESLint selector it backs up — so "enforced in both layers"
+ * described two matchers with the *same* blind spot rather than two that cover
+ * for each other. A composable declared plainly and re-exported at the bottom
+ * of the file passed both, and a self-test that only ever fed them the inline
+ * form could not say so.
  */
-const EXPORTS_COMPOSABLE = /export\s+(?:async\s+)?function\s+use[A-Z]/
+const EXPORTS_COMPOSABLE = new RegExp(
+  [
+    // export function useThing() {}
+    String.raw`export\s+(?:async\s+)?function\s+use[A-Z]`,
+    // export const useThing = () => {}
+    String.raw`export\s+(?:const|let|var)\s+use[A-Z]`,
+    // export default function useThing() {}
+    String.raw`export\s+default\s+(?:async\s+)?function\s+use[A-Z]`,
+    // export { useThing } / export { thing as useThing } / export default useThing
+    String.raw`export\s*\{[^}]*\buse[A-Z]`,
+    String.raw`export\s+default\s+use[A-Z]`,
+  ].join('|'),
+)
 
 describe('atoms are declared in one of three places', () => {
   it.each(FILES.filter((file) => DECLARES_ATOM.test(file.source)).map((file) => file.id))(
@@ -106,6 +126,27 @@ describe('there are no composables outside the UI substrate', () => {
     // local to PresetsView — the `use` prefix there is English, not a
     // convention, and a rule that flagged it would be noise.
     expect(EXPORTS_COMPOSABLE.test('function usePreset(p: Preset) {}')).toBe(false)
+  })
+
+  /**
+   * The shapes that walked past both this rule and its ESLint counterpart. A
+   * matcher that has only ever been shown the form it was written for is not
+   * evidence that the rule holds.
+   */
+  it.each([
+    ['a re-export', 'function useSneaky() {}\nexport { useSneaky }'],
+    ['a renamed re-export', 'function sneaky() {}\nexport { sneaky as useSneaky }'],
+    ['a default function', 'export default function useSneaky() { return {} }'],
+    ['a default identifier', 'function useSneaky() {}\nexport default useSneaky'],
+    ['a const arrow', 'export const useSneaky = () => ({})'],
+  ])('catches %s too', (_shape, source) => {
+    expect(EXPORTS_COMPOSABLE.test(source)).toBe(true)
+  })
+
+  it('still leaves an import and a call alone', () => {
+    expect(EXPORTS_COMPOSABLE.test(`import { useAtomValue } from '@effect/atom-vue'`)).toBe(false)
+    expect(EXPORTS_COMPOSABLE.test('const value = useAtomValue(atom)')).toBe(false)
+    expect(EXPORTS_COMPOSABLE.test('export { formatDuration }')).toBe(false)
   })
 
   /**

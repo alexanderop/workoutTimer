@@ -211,6 +211,26 @@ describe('no composable layer', () => {
     expect(await lint(filePath, code)).toContain(SYNTAX)
   })
 
+  /**
+   * The two shapes that used to pass. Both were run against the real config
+   * and reported zero errors: the selectors only saw an `export` written
+   * *inline* on the declaration, so declaring the composable plainly and
+   * exporting it a line later was enough to walk past the ban — in this layer
+   * and in atomPlacement.test.ts's regex at the same time, since the two were
+   * written to the same shape.
+   */
+  it.each([
+    ['a re-export', 'function useSneaky() {\n  return {}\n}\nexport { useSneaky }\n'],
+    [
+      'a renamed re-export',
+      'function sneaky() {\n  return {}\n}\nexport { sneaky as useSneaky }\n',
+    ],
+    ['a default function', 'export default function useSneaky() {\n  return {}\n}\n'],
+    ['a default identifier', 'function useSneaky() {\n  return {}\n}\nexport default useSneaky\n'],
+  ])('rejects %s', async (_shape, code) => {
+    expect(await lint('src/state/theme.ts', code)).toContain(SYNTAX)
+  })
+
   it('rejects one inside a component too', async () => {
     const rules = await lint(
       'src/components/AppShell.vue',

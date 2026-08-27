@@ -304,6 +304,27 @@ export default defineConfigWithVueTs(
             'ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[id.name=/^use[A-Z]/]',
           message: NO_COMPOSABLES,
         },
+        // The two shapes the inline-`export` selectors above cannot see. Both
+        // were verified to pass a clean lint before these existed, which made
+        // "the rule is enforced twice" untrue in exactly the same way in both
+        // enforcers: a composable declared plainly and re-exported, and one
+        // exported as the module's default.
+        {
+          // One entry matching either name, rather than two: `export { useX }`
+          // has the same identifier on both sides, and two entries would
+          // report it twice.
+          selector:
+            'ExportSpecifier:matches([local.name=/^use[A-Z]/], [exported.name=/^use[A-Z]/])',
+          message: NO_COMPOSABLES,
+        },
+        {
+          selector: 'ExportDefaultDeclaration > FunctionDeclaration[id.name=/^use[A-Z]/]',
+          message: NO_COMPOSABLES,
+        },
+        {
+          selector: 'ExportDefaultDeclaration > Identifier[name=/^use[A-Z]/]',
+          message: NO_COMPOSABLES,
+        },
       ],
     },
   },
