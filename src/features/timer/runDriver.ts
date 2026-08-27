@@ -2,10 +2,10 @@ import { Atom, type AtomRegistry } from '@effect/atom-vue'
 import { Effect, Schedule } from 'effect'
 import { finishSession, markSessionRunning, sessionMutation, type DbServices } from '@/db'
 import { currentSessionAtom, nowAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
-import { deriveTimer, SECOND_MS } from '@/features/timer/domain'
+import { capturesRoundSplits, deriveTimer, SECOND_MS } from '@/features/timer/domain'
 import { emitTimerCue } from '@/features/timer/timerFeedback'
 import { i18n } from '@/i18n'
-import { RouteNames } from '@/router'
+import { RouteNames } from '@/router/routeNames'
 import { navigationAtom } from '@/state/route'
 import { timerSettingsValueAtom } from '@/state/timerData'
 import { showToastIn } from '@/state/toast'
@@ -67,6 +67,14 @@ const report = (operation: string) => (error: { readonly _tag: string }) =>
     Effect.annotateLogs({ boundary: 'timer-run', operation, failure: error._tag }),
   )
 
+/**
+ * The guard is set *before* the write, not after: `registry.set` on a mutation
+ * atom can publish synchronously, which re-runs this read, and a guard set
+ * afterwards would let that re-entrant pass fire the same transition again.
+ * What makes that ordering safe is `get.mount(sessionMutation)` below —
+ * without a subscriber the write would be silently a no-op, and the guard
+ * would have recorded a transition that never happened.
+ */
 function fire(
   registry: AtomRegistry.AtomRegistry,
   transition: string,
@@ -78,6 +86,15 @@ function fire(
 }
 
 export const timerRunDriverAtom = Atom.make((get): null => {
+  // Writing an unmounted function atom is a no-op — there is no subscriber to
+  // run the program. Until this line the driver's writes worked only because
+  // `TimerRunView` happens to declare a `useAtomSet(sessionMutation)` for its
+  // Pause and Finish buttons: moving those two buttons into a child component
+  // would have stopped countdown-to-running and auto-finish in every mode,
+  // with no error and no toast. `mount` takes no dependency on the mutation's
+  // result, so nothing here re-runs when a write settles.
+  get.mount(sessionMutation)
+
   const session = get(currentSessionAtom)
   if (session === undefined) return null
 
@@ -141,7 +158,7 @@ export const timerRunDriverAtom = Atom.make((get): null => {
  * The audible half of the same screen: a cue on every phase change, and one
  * per second over the last three.
  *
- * The two `let`s below are the reason this is a subscription rather than a
+ * The `let`s below are the reason this is a subscription rather than a
  * dependency of `timerRunDriverAtom`'s read. "Did the phase change?" needs the
  * previous phase, so the reaction has to outlive a single evaluation — and
  * reading the settings through the registry rather than with `get` keeps a
@@ -149,6 +166,7 @@ export const timerRunDriverAtom = Atom.make((get): null => {
  */
 export const timerCueAtom = Atom.make((get): null => {
   let previousPhase: string | undefined
+  let previousRound: number | undefined
   let previousCountdownSecond: number | undefined
 
   get.subscribe(
@@ -159,8 +177,25 @@ export const timerCueAtom = Atom.make((get): null => {
 
       if (previousPhase !== undefined && previousPhase !== state.phase) {
         emitTimerCue(settings, 'phase')
+      } else if (previousRound !== undefined && previousRound !== state.round) {
+        // EMOM's phase is `work` from the first second to the last, so the
+        // phase cue above never fires for it — the athlete heard the 3-2-1 and
+        // then silence at the exact moment the round turned over, in the one
+        // mode designed to be used eyes-free. Tabata reaches its boundaries
+        // through a phase change and is served by the branch above, which is
+        // why this one is an `else`: a rest→work turn is one cue, not two.
+        //
+        // Only where the clock counts the rounds. In AMRAP and For Time
+        // `round` is the number of splits the athlete has tapped, and the tap
+        // already cues itself in `TimerRunView.addRound` — from the write,
+        // so that a debounced tap makes no sound.
+        const session = get.registry.get(currentSessionAtom)
+        if (session !== undefined && !capturesRoundSplits(session.config.mode)) {
+          emitTimerCue(settings, 'phase')
+        }
       }
       previousPhase = state.phase
+      previousRound = state.round
 
       const second = Math.ceil(state.primaryMs / SECOND_MS)
       if (second <= 3 && second > 0 && second !== previousCountdownSecond) {
