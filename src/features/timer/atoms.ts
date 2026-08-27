@@ -121,10 +121,18 @@ export const currentSessionAtom = Atom.make((get): WorkoutSession | undefined =>
  * costing anything: a session with a `finishedAt` never touches `nowAtom`, so
  * no dependency on it is recorded and no interval starts. A bare `Date.now()`
  * would freeze at whenever the read first ran instead.
+ *
+ * The condition has to be a *statement*, not the `??` inside an argument.
+ * `finalResult(session, get(nowAtom))` evaluates its arguments eagerly, so
+ * every reader of a finished session subscribed to a 10 Hz interval and
+ * republished an object whose fields never changed — atom equality is
+ * `Object.is` and `deriveTimer` returns a fresh literal, so every tick
+ * invalidated the result and detail screens for nothing.
  */
 export const currentSessionResultAtom = Atom.make((get): DerivedTimer | undefined => {
   const session = get(currentSessionAtom)
   if (session === undefined) return undefined
+  if (session.finishedAt !== undefined) return finalResult(session)
   return finalResult(session, get(nowAtom))
 })
 
