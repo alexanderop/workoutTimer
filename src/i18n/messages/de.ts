@@ -77,6 +77,7 @@ const de: MessageSchema = {
       countdown: 'Mach dich bereit',
       work: 'Arbeit',
       rest: 'Pause',
+      finished: 'Fertig',
       paused: 'Pausiert',
       pause: 'Pausieren',
       resume: 'Fortsetzen',

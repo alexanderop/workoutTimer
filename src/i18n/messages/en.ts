@@ -75,6 +75,7 @@ export default {
       countdown: 'Get ready',
       work: 'Work',
       rest: 'Rest',
+      finished: 'Done',
       paused: 'Paused',
       pause: 'Pause',
       resume: 'Resume',

@@ -82,7 +82,14 @@ export function totalDurationMs(config: TimerConfig): number | undefined {
   }
 }
 
-type TimerPhase = 'countdown' | 'work' | 'rest' | 'finished'
+/**
+ * Exported because the run screen has to *name* the phase, and a screen that
+ * cannot reference the union writes a `switch` with a `default:` instead —
+ * which is how `finished` came to render as the Work label inside an
+ * `aria-live` region. `labels.ts` turns one of these into a string; the type
+ * being public is what makes a fifth phase a compile error there.
+ */
+export type TimerPhase = 'countdown' | 'work' | 'rest' | 'finished'
 
 export type DerivedTimer = {
   readonly elapsedMs: number

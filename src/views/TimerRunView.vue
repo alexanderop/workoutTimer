@@ -19,7 +19,7 @@ import {
 import { currentSessionAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
 import { capturesRoundSplits, formatDuration, SECOND_MS } from '@/features/timer/domain'
-import { modeName } from '@/features/timer/labels'
+import { modeName, phaseName } from '@/features/timer/labels'
 import { timerCueAtom, timerRunDriverAtom } from '@/features/timer/runDriver'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
 import { wakeLockEffectAtom } from '@/features/timer/wakeLock'
@@ -107,16 +107,15 @@ function persistCompletion(
   )
 }
 
+/**
+ * A paused workout says so whatever phase it is in; otherwise the phase names
+ * itself. `phaseName` lives in `features/timer/labels.ts` so that a new phase
+ * fails to compile there rather than falling through a `default:` here.
+ */
 function phaseLabel(): string {
   if (session.value?.status === 'paused') return t('timer.run.paused')
-  switch (derived.value?.phase) {
-    case 'countdown':
-      return t('timer.run.countdown')
-    case 'rest':
-      return t('timer.run.rest')
-    default:
-      return t('timer.run.work')
-  }
+  const state = derived.value
+  return state === undefined ? t('timer.run.work') : phaseName(state.phase, t)
 }
 
 const currentModeName = (): string => modeName(mode(), t)

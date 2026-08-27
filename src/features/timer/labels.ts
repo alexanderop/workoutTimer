@@ -1,4 +1,5 @@
 import { formatDuration } from './domain'
+import type { TimerPhase } from './domain'
 import type { TimerConfig, TimerMode } from '@/db'
 
 /**
@@ -22,13 +23,17 @@ import type { TimerConfig, TimerMode } from '@/db'
 
 type ModeKey = `timer.modes.${TimerMode}.${'name' | 'description'}`
 type UnitKey = `timer.setup.units.${'hoursShort' | 'minutesShort' | 'secondsShort'}`
+type PhaseKey = `timer.run.${TimerPhase}`
 
 /**
  * The slice of vue-i18n's `t` these functions use. `t` accepts every key in
  * the catalogue, so it satisfies this narrower one — and nothing here can
  * reach for a key outside the set.
  */
-export type Translate = (key: ModeKey | UnitKey, named?: Record<string, number>) => string
+export type Translate = (
+  key: ModeKey | UnitKey | PhaseKey,
+  named?: Record<string, number>,
+) => string
 
 export function modeName(mode: TimerMode, t: Translate): string {
   return t(`timer.modes.${mode}.name`)
@@ -36,6 +41,18 @@ export function modeName(mode: TimerMode, t: Translate): string {
 
 export function modeDescription(mode: TimerMode, t: Translate): string {
   return t(`timer.modes.${mode}.description`)
+}
+
+/**
+ * What the ring announces. The run screen used to answer this with its own
+ * `switch (derived.phase)` and a `default:` — so `finished`, a real phase a
+ * completing workout sits in until the result screen takes over, was read out
+ * as "Work" inside an `aria-live` region. Built off `TimerPhase` here instead:
+ * a fifth phase widens `PhaseKey`, and `MessageSchema` has no entry for it, so
+ * it is a compile error rather than a wrong label.
+ */
+export function phaseName(phase: TimerPhase, t: Translate): string {
+  return t(`timer.run.${phase}`)
 }
 
 /**

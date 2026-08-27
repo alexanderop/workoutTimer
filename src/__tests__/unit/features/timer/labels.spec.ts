@@ -5,10 +5,25 @@ import {
   humanizeSeconds,
   modeDescription,
   modeName,
+  phaseName,
   type Translate,
 } from '@/features/timer/labels'
 import en from '@/i18n/messages/en'
+import type { TimerPhase } from '@/features/timer/domain'
 import type { TimerConfig } from '@/db'
+
+/**
+ * A `Record` keyed on the union rather than an array of it: an array typed as
+ * `TimerPhase[]` is satisfied by a list missing three of them, and a phase
+ * this file forgot is exactly the failure being guarded against. A fifth
+ * phase is a missing key here, which is a compile error.
+ */
+const PHASE_LABELS: Record<TimerPhase, string> = {
+  countdown: 'Get ready',
+  work: 'Work',
+  rest: 'Rest',
+  finished: 'Done',
+}
 
 /**
  * The real English catalogue, walked by key. Using it rather than a stub is
@@ -27,6 +42,23 @@ const translate: Translate = (key, named) => {
 
   return message.replace(/\{(\w+)\}/g, (_, name: string) => String(named?.[name] ?? `{${name}}`))
 }
+
+/**
+ * Every phase, including the one the run screen used to get wrong. It answered
+ * this with its own `switch` and a `default:`, so `finished` — a real phase, a
+ * completing workout sits in it until the result screen takes over — was read
+ * out as "Work" inside an `aria-live` region. Walking the union is what makes
+ * a missing message a failure here rather than a wrong label there.
+ */
+describe('phase names', () => {
+  it.each(Object.entries(PHASE_LABELS))('names %s from the catalogue', (phase, label) => {
+    expect(phaseName(phase as TimerPhase, translate)).toBe(label)
+  })
+
+  it('gives the end of a workout a name of its own', () => {
+    expect(phaseName('finished', translate)).not.toBe(phaseName('work', translate))
+  })
+})
 
 describe('timer labels', () => {
   it('names and describes every mode from the catalogue', () => {
