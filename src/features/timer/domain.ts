@@ -155,6 +155,21 @@ export type TimerPhase = 'countdown' | 'work' | 'rest' | 'finished'
 export type DerivedTimer = {
   readonly elapsedMs: number
   readonly primaryMs: number
+  /**
+   * Time left until the next boundary — the end of the countdown, the
+   * interval, the block, the workout. `undefined` where there is no boundary
+   * to count towards (an uncapped For Time), `0` once it has been reached.
+   *
+   * Distinct from `primaryMs`, which is whatever the big clock shows: For Time
+   * counts *up*, so a cue derived from `primaryMs` beeped three-two-one over
+   * the opening seconds of the workout and stayed silent at the time cap.
+   *
+   * Required rather than optional, unlike `totalRounds` above. A branch that
+   * forgets a `totalRounds` shows a wrong number; one that forgets this goes
+   * quiet, which nobody notices until they are mid-workout with the phone on
+   * the floor. A sixth mode is a compile error here instead.
+   */
+  readonly remainingMs: number | undefined
   readonly phase: TimerPhase
   /**
    * What the current circuit block is called, when it has a name. Only the
@@ -230,6 +245,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
     return {
       elapsedMs: 0,
       primaryMs: remaining,
+      remainingMs: remaining,
       phase: 'countdown',
       round: 0,
       completedRounds: 0,
@@ -248,6 +264,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       return {
         elapsedMs: Math.min(elapsed, session.config.durationMs),
         primaryMs: remaining,
+        remainingMs: remaining,
         phase: complete ? 'finished' : 'work',
         round: session.rounds.length,
         completedRounds: session.rounds.length,
@@ -268,6 +285,9 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       return {
         elapsedMs: cappedElapsed,
         primaryMs: cappedElapsed,
+        // The clock counts up here, so the boundary is the cap — and an
+        // uncapped For Time has none.
+        remainingMs: cap === undefined ? undefined : Math.max(0, cap - elapsed),
         phase: complete ? 'finished' : 'work',
         round: session.rounds.length,
         completedRounds: session.rounds.length,
@@ -290,6 +310,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       return {
         elapsedMs: cappedElapsed,
         primaryMs: complete ? 0 : session.config.intervalMs - withinRound,
+        remainingMs: complete ? 0 : session.config.intervalMs - withinRound,
         phase: complete ? 'finished' : 'work',
         round: complete ? session.config.rounds : completedRounds + 1,
         completedRounds,
@@ -312,6 +333,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         return {
           elapsedMs: cappedElapsed,
           primaryMs: 0,
+          remainingMs: 0,
           phase: 'finished',
           round: session.config.rounds,
           completedRounds,
@@ -331,6 +353,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       return {
         elapsedMs: cappedElapsed,
         primaryMs: Math.max(0, phaseDuration - phaseElapsed),
+        remainingMs: Math.max(0, phaseDuration - phaseElapsed),
         phase: resting ? 'rest' : 'work',
         round: Math.min(session.config.rounds, roundIndex + 1),
         completedRounds,
@@ -354,6 +377,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         return {
           elapsedMs: cappedElapsed,
           primaryMs: 0,
+          remainingMs: 0,
           phase: 'finished',
           round: session.config.repeat,
           completedRounds,
@@ -367,6 +391,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       return {
         elapsedMs: cappedElapsed,
         primaryMs: Math.max(0, block.durationMs - phaseElapsed),
+        remainingMs: Math.max(0, block.durationMs - phaseElapsed),
         phase: block.kind,
         phaseLabel: block.label === '' ? undefined : block.label,
         round: Math.min(session.config.repeat, roundIndex + 1),

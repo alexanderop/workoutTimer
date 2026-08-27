@@ -141,6 +141,7 @@ describe('timer domain', () => {
     ).toEqual({
       elapsedMs: 0,
       primaryMs: 1_500,
+      remainingMs: 1_500,
       phase: 'countdown',
       round: 0,
       completedRounds: 0,
@@ -172,6 +173,7 @@ describe('timer domain', () => {
     expect(state).toEqual({
       elapsedMs: 15_000,
       primaryMs: 45_000,
+      remainingMs: 45_000,
       phase: 'work',
       round: 1,
       completedRounds: 1,
@@ -181,6 +183,7 @@ describe('timer domain', () => {
     expect(deriveTimer(session({ mode: 'amrap', durationMs: 60_000 }), 61_000)).toEqual({
       elapsedMs: 60_000,
       primaryMs: 0,
+      remainingMs: 0,
       phase: 'finished',
       round: 0,
       completedRounds: 0,
@@ -221,6 +224,10 @@ describe('timer domain', () => {
     expect(deriveTimer(session({ mode: 'forTime' }), 6_000)).toEqual({
       elapsedMs: 5_000,
       primaryMs: 5_000,
+      // The one mode whose big clock counts *up*, so there is nothing to
+      // count down to without a cap. A cue that read `primaryMs` here beeped
+      // three-two-one over the opening seconds of the workout.
+      remainingMs: undefined,
       phase: 'work',
       round: 0,
       completedRounds: 0,
@@ -239,6 +246,7 @@ describe('timer domain', () => {
     ).toEqual({
       elapsedMs: 5_000,
       primaryMs: 5_000,
+      remainingMs: 5_000,
       phase: 'work',
       round: 2,
       completedRounds: 2,
@@ -249,6 +257,7 @@ describe('timer domain', () => {
     expect(deriveTimer(session({ mode: 'forTime', timeCapMs: 10_000 }), 16_000)).toMatchObject({
       elapsedMs: 10_000,
       primaryMs: 10_000,
+      remainingMs: 0,
       phase: 'finished',
       progress: 1,
       isComplete: true,
@@ -273,6 +282,7 @@ describe('timer domain', () => {
     expect(deriveTimer(emom, 31_000)).toEqual({
       elapsedMs: 30_000,
       primaryMs: 30_000,
+      remainingMs: 30_000,
       phase: 'work',
       round: 1,
       completedRounds: 0,
@@ -288,6 +298,7 @@ describe('timer domain', () => {
     expect(deriveTimer(emom, 601_000)).toEqual({
       elapsedMs: 600_000,
       primaryMs: 0,
+      remainingMs: 0,
       phase: 'finished',
       round: 10,
       completedRounds: 10,
@@ -303,6 +314,7 @@ describe('timer domain', () => {
     expect(deriveTimer(tabata, 11_000)).toMatchObject({
       elapsedMs: 10_000,
       primaryMs: 10_000,
+      remainingMs: 10_000,
       phase: 'work',
       round: 1,
       totalRounds: 2,
@@ -311,12 +323,14 @@ describe('timer domain', () => {
     })
     expect(deriveTimer(tabata, 21_000)).toMatchObject({
       primaryMs: 10_000,
+      remainingMs: 10_000,
       phase: 'rest',
       round: 1,
       progress: 0,
     })
     expect(deriveTimer(tabata, 31_000)).toMatchObject({
       primaryMs: 20_000,
+      remainingMs: 20_000,
       phase: 'work',
       round: 2,
       progress: 0,
@@ -324,6 +338,7 @@ describe('timer domain', () => {
     expect(deriveTimer(tabata, 51_000)).toEqual({
       elapsedMs: 50_000,
       primaryMs: 0,
+      remainingMs: 0,
       phase: 'finished',
       round: 2,
       completedRounds: 2,
@@ -348,6 +363,7 @@ describe('timer domain', () => {
     expect(deriveTimer(circuit, 11_000)).toEqual({
       elapsedMs: 10_000,
       primaryMs: 20_000,
+      remainingMs: 20_000,
       phase: 'work',
       phaseLabel: 'Burpees',
       round: 1,
@@ -361,6 +377,7 @@ describe('timer domain', () => {
     expect(deriveTimer(circuit, 31_000)).toEqual({
       elapsedMs: 30_000,
       primaryMs: 15_000,
+      remainingMs: 15_000,
       phase: 'rest',
       round: 1,
       completedRounds: 0,
@@ -387,6 +404,7 @@ describe('timer domain', () => {
     expect(deriveTimer(circuit, 131_000)).toEqual({
       elapsedMs: 130_000,
       primaryMs: 0,
+      remainingMs: 0,
       phase: 'finished',
       round: 2,
       completedRounds: 2,
