@@ -105,6 +105,32 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # The only tier with a coarse pointer, and the one guarding the 44 px touch
+  # floor in an app whose stated product is the mobile shell. It is out of
+  # `pnpm check` and the pre-commit hook by design — both are browser-free —
+  # which left it running nowhere at all.
+  touch:
+    name: Touch tier
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          playwright: 'true'
+      - run: pnpm test:touch
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vitest-traces-touch
+          path: .vitest/traces
+          if-no-files-found: ignore
+          retention-days: 7
+
   a11y:
     name: Accessibility tier
     runs-on: ubuntu-latest

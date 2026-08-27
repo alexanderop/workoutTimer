@@ -102,6 +102,6 @@ Screenshot baselines live in `__screenshots__/` and are **platform-specific** (f
 
 - **Every commit** (husky, ~15 s): lint-staged, type-check, `test:unit`, knip. The unit tier is ~2.5 s of that; the db-backed specs are what it buys, and they are still an order of magnitude cheaper than the browser tier they came from.
 - **While working / before pushing** (`pnpm check`, ~8 s): lint, formatting, types, knip, `test:unit` and `test:arch`, run concurrently and reported together — every gate that needs no browser. Then the browser tiers your change touches. Formatting on commit only reaches staged files, so the `format:check` inside `pnpm check` is what catches the rest.
-- **CI on every PR**: everything, with the browser tier sharded, plus the mutation score as its own job (`.github/workflows/ci.yml`).
+- **CI on every PR**: every tier except `visual` and `jsdom`, each as its own job, with the browser tier sharded and the mutation score alongside it (`.github/workflows/ci.yml`). `touch` is one of those jobs: it is browser-only, so neither `pnpm check` nor the pre-commit hook can run it, and for a while nothing else did either — the tier built because nothing was looking at the mobile shell had nothing looking at it.
 
 The principle: the cost of a check should match how often it runs. Fast checks run on every commit; minutes-long tiers are CI's job.
