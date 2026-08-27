@@ -41,6 +41,13 @@ export const it = test
     onCleanup(() => timer.close())
     return timer
   })
+  // The circuit builder, cold, through its deep link.
+  .extend('circuitSetup', async ({}, { onCleanup }) => {
+    await prepareTimer()
+    const timer = await TimerScreen.open('/timer/custom')
+    onCleanup(() => timer.close())
+    return timer
+  })
   // A saved preset opened for editing, cold, through the URL the presets list
   // links to. The preset exists on disk before the screen mounts, so the form
   // has to seed itself from a row that arrives after its first render.

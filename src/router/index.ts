@@ -2,7 +2,10 @@ import type { RouteRecordRaw, Router, RouterHistory } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
 import { RouteNames } from './routeNames'
 
-export { RouteNames, type RouteName } from './routeNames'
+// The names are not re-exported from here on purpose: importing them from this
+// module would pull the lazy view imports below in behind them, which is fatal
+// in the Node tier. Everything that needs a name imports `./routeNames`; this
+// module is the router itself.
 
 declare module 'vue-router' {
   interface RouteMeta {

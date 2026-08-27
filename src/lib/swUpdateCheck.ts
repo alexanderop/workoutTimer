@@ -2,6 +2,14 @@
 const SW_UPDATE_INTERVAL_MS = 60 * 60 * 1000
 
 /**
+ * The two members of a registration this poll touches. A real
+ * `ServiceWorkerRegistration` satisfies it; asking for no more than this is
+ * what lets a spec hand in the two members rather than fabricate the other
+ * dozen it would never read.
+ */
+type UpdatableRegistration = Pick<ServiceWorkerRegistration, 'installing' | 'update'>
+
+/**
  * Poll for a new service worker on a timer.
  *
  * `useRegisterSW` only checks for an update on registration, and an installed
@@ -15,7 +23,7 @@ const SW_UPDATE_INTERVAL_MS = 60 * 60 * 1000
  */
 export function startPeriodicUpdateCheck(
   swUrl: string,
-  registration: ServiceWorkerRegistration,
+  registration: UpdatableRegistration,
   intervalMs: number = SW_UPDATE_INTERVAL_MS,
 ): () => void {
   const timer = setInterval(() => {
@@ -27,10 +35,7 @@ export function startPeriodicUpdateCheck(
   }
 }
 
-async function checkForUpdate(
-  swUrl: string,
-  registration: ServiceWorkerRegistration,
-): Promise<void> {
+async function checkForUpdate(swUrl: string, registration: UpdatableRegistration): Promise<void> {
   // An install is already in flight — let it finish.
   if (registration.installing) return
 

@@ -32,7 +32,15 @@ const expected = {
   browser: { blobSurvives: true },
 }[env]
 
-async function roundTrip(value: unknown): Promise<unknown> {
+/**
+ * Put a value through the store and read it back.
+ *
+ * The return type says the value came back as it went in, which is the claim
+ * every test below is here to check rather than to trust: `put` may refuse
+ * the value outright, and structured clone may hand back something else
+ * entirely. `undefined` is the row being absent.
+ */
+async function roundTrip<T>(value: T): Promise<T | undefined> {
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1)
     request.onupgradeneeded = () => request.result.createObjectStore(STORE)
@@ -41,7 +49,7 @@ async function roundTrip(value: unknown): Promise<unknown> {
   })
 
   try {
-    return await new Promise<unknown>((resolve, reject) => {
+    return await new Promise<T | undefined>((resolve, reject) => {
       const write = database.transaction(STORE, 'readwrite')
       write.objectStore(STORE).put(value, 'entry')
       write.onerror = () => reject(write.error)
@@ -74,13 +82,15 @@ describe('a stored Blob', () => {
       'storage is defined by the structured clone algorithm, so if a Blob does not survive it, no binary the app owns survives either — and there is no DataCloneError, no rejected transaction, nothing to notice',
     ).toBe(expected.blobSurvives)
 
-    if (expected.blobSurvives) {
-      const blob = stored as Blob
-      expect(blob.type).toBe('application/json')
-      expect(await blob.text()).toBe('backup contents')
+    if (stored instanceof Blob) {
+      expect(stored.type).toBe('application/json')
+      expect(await stored.text()).toBe('backup contents')
     } else {
+      // Not merely "not a Blob": every property went with it. `toBeDefined`
+      // first, so a missing row cannot pass this by having no keys either.
+      expect(stored).toBeDefined()
       expect(stored).toEqual({})
-      expect(Object.keys(stored as object)).toEqual([])
+      expect(Object.keys(stored ?? {})).toEqual([])
     }
   })
 
@@ -93,7 +103,7 @@ describe('a stored Blob', () => {
     // test has nothing to say.
     const stored = await roundTrip(new NodeBlob(['backup contents']))
 
-    expect((stored as { size?: number })?.size).toBe(15)
+    expect(stored?.size).toBe(15)
   })
 })
 

@@ -9,7 +9,7 @@ import { activeSessionAtom, homeLoadFailedAtom, recentPresetsAtom } from '@/feat
 import ModeCard from '@/features/timer/components/ModeCard.vue'
 import { TIMER_MODES } from '@/features/timer/domain'
 import { configSummary, modeDescription, modeName } from '@/features/timer/labels'
-import { RouteNames } from '@/router'
+import { RouteNames } from '@/router/routeNames'
 import type { TimerConfig, TimerMode } from '@/db'
 
 const { t } = useI18n()

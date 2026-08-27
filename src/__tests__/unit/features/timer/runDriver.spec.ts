@@ -247,3 +247,55 @@ describe('cues', () => {
     driven.dispose()
   })
 })
+
+/**
+ * The last-three-seconds cue, per mode.
+ *
+ * `primaryMs` is what the big clock shows, and For Time is the one mode where
+ * that counts *up* — so a cue derived from it beeped over the first three
+ * seconds of the workout and said nothing at the time cap. `remainingMs` is
+ * the field that means "time to the next boundary" in every mode, and these
+ * two tests are the ones that told the difference.
+ */
+describe('counting down to a boundary', () => {
+  let vibrate: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vibrate = vi.fn()
+    vi.stubGlobal('navigator', { vibrate })
+  })
+
+  /** A For Time that has just started is nowhere near a boundary. */
+  it('stays quiet through the opening seconds of a For Time', async () => {
+    const driven = await drive({ mode: 'forTime' }, 0, [timerCueAtom])
+
+    for (const offset of [1_100, 2_100, 3_100]) {
+      clockAt(driven.session.startedAt + offset)
+      await vi.waitFor(() => expect(driven.stored().status).toBe('running'))
+      await advanceOneTick()
+    }
+
+    expect(vibrate).not.toHaveBeenCalled()
+
+    driven.dispose()
+  })
+
+  it('counts a capped For Time down to its cap', async () => {
+    const driven = await drive({ mode: 'forTime', timeCapMs: 300_000 }, 0, [timerCueAtom])
+
+    clockAt(driven.session.startedAt + 100_000)
+    await advanceOneTick()
+    vibrate.mockClear()
+
+    clockAt(driven.session.startedAt + 297_500)
+
+    await vi.waitFor(() => expect(vibrate).toHaveBeenCalledTimes(1))
+
+    driven.dispose()
+  })
+})
+
+/** One turn of `clockAtom`'s real 100 ms interval, so the cue subscription runs. */
+async function advanceOneTick(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 150))
+}

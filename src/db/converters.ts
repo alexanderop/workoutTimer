@@ -71,6 +71,30 @@ const TabataConfigSchema = Schema.Struct({
 })
 
 /**
+ * One step of a custom circuit: what to do, for how long, under what name.
+ * The label may be empty — the run screen then falls back to the kind's own
+ * word — but it is always present, so a block is one shape, not two.
+ */
+const CircuitBlockSchema = Schema.Struct({
+  label: Schema.String,
+  kind: Schema.Literals(['work', 'rest'] as const),
+  durationMs: Duration,
+})
+
+export type CircuitBlock = typeof CircuitBlockSchema.Type
+
+/**
+ * A user-built sequence of blocks, repeated whole. The length cap bounds the
+ * per-tick block walk in `deriveTimer` and keeps the editor usable on a phone;
+ * like every other bound here, `isTimerConfig` restates it for form values.
+ */
+const CustomConfigSchema = Schema.Struct({
+  mode: Schema.Literal('custom'),
+  blocks: Schema.Array(CircuitBlockSchema).check(Schema.isMinLength(1), Schema.isMaxLength(30)),
+  repeat: Count,
+})
+
+/**
  * Exported because `isTimerConfig` in the timer domain restates these bounds by
  * hand — it has to, since it grades a form's in-progress value rather than a
  * decoded row. Two statements of one rule drift, so the unit tier holds them
@@ -81,6 +105,7 @@ export const TimerConfigSchema = Schema.Union([
   ForTimeConfigSchema,
   EmomConfigSchema,
   TabataConfigSchema,
+  CustomConfigSchema,
 ])
 
 /** A union, so this is a `type` — the `interface … extends` idiom below only fits structs. */
@@ -243,10 +268,23 @@ export const decodeTimerSettings = Schema.decodeUnknownEffect(TimerSettingsSchem
 export const decodePresetDraft = Schema.decodeUnknownEffect(PresetDraftSchema)
 export const decodeNewSession = Schema.decodeUnknownEffect(NewSessionSchema)
 
+/**
+ * The same decode, synchronously.
+ *
+ * A repository that reads and writes a row in one Dexie transaction cannot
+ * `yield*` an Effect inside the transaction callback, and dropping out of the
+ * transaction to decode is what reintroduces the race the transaction exists
+ * to close. This throws a `SchemaError` instead, which `tryDb` turns into a
+ * `DatabaseError` carrying it as the cause — the same failure by a different
+ * road. `src/db/repositories/settings.ts` is the caller.
+ */
+export const decodeTimerSettingsSync = Schema.decodeUnknownSync(TimerSettingsSchema)
+
 const parsePresetDraft = Schema.decodeUnknownResult(PresetDraftSchema)
 export const isPresetDraft = (draft: PresetDraft): boolean =>
   Result.isSuccess(parsePresetDraft(draft))
 
-export function makeDefaultTimerSettings(now: number): TimerSettings {
+/** The defaults above, stamped with the clock that is about to persist them. */
+export function defaultTimerSettingsAt(now: number): TimerSettings {
   return { ...DEFAULT_TIMER_SETTINGS, updatedAt: now }
 }

@@ -227,7 +227,7 @@ describe('no composable layer', () => {
     ],
     ['a default function', 'export default function useSneaky() {\n  return {}\n}\n'],
     ['a default identifier', 'function useSneaky() {\n  return {}\n}\nexport default useSneaky\n'],
-  ])('rejects %s', async (_shape, code) => {
+  ])('rejects %s', async (_exportForm, code) => {
     expect(await lint('src/state/theme.ts', code)).toContain(SYNTAX)
   })
 

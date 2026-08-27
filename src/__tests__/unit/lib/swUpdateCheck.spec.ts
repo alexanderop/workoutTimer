@@ -4,10 +4,7 @@ import { startPeriodicUpdateCheck } from '@/lib/swUpdateCheck'
 const SW_URL = '/sw.js'
 
 function fakeRegistration(installing: ServiceWorker | null = null) {
-  return {
-    installing,
-    update: vi.fn().mockResolvedValue(undefined),
-  } as unknown as ServiceWorkerRegistration & { update: ReturnType<typeof vi.fn> }
+  return { installing, update: vi.fn().mockResolvedValue(undefined) }
 }
 
 /** Advance past one interval and let the async check settle. */
@@ -61,6 +58,8 @@ describe('startPeriodicUpdateCheck', () => {
   })
 
   it('skips the poll while an install is in flight', async () => {
+    // SAFETY: `checkForUpdate` reads `installing` for presence and nothing
+    // else, so any object stands for "an install is already in flight".
     const registration = fakeRegistration({} as ServiceWorker)
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

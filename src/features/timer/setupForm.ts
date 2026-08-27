@@ -1,15 +1,17 @@
 import { Atom } from '@effect/atom-vue'
 import { isPresetDraft } from '@/db'
 import {
+  DEFAULT_CIRCUIT_BLOCKS,
   DEFAULT_CONFIGS,
   isTimerConfig,
+  MAX_CIRCUIT_BLOCKS,
   parseTimerMode,
   SECOND_MS,
   TIMER_MODES,
 } from '@/features/timer/domain'
 import {
   countValues,
-  includeSelectedValue,
+  pickerOptions,
   timerDurationValues,
   type PickerOption,
 } from '@/features/timer/pickerOptions'
@@ -42,6 +44,13 @@ const ROUND_VALUES = countValues(20)
  * changes the answer — unless the user has typed, in which case the edit atom
  * is what the draft reads and the arrival is invisible.
  */
+/** One circuit block as the editor binds it — seconds, because the inputs are. */
+export interface CircuitBlockDraft {
+  readonly label: string
+  readonly kind: 'work' | 'rest'
+  readonly durationSeconds: number
+}
+
 export interface TimerSetupDraft {
   readonly durationSeconds: number
   readonly timeCapSeconds: number | undefined
@@ -50,6 +59,8 @@ export interface TimerSetupDraft {
   readonly rounds: number
   readonly workSeconds: number
   readonly restSeconds: number
+  readonly blocks: ReadonlyArray<CircuitBlockDraft>
+  readonly repeat: number
   readonly workoutNotes: string
   readonly presetName: string
 }
@@ -63,6 +74,8 @@ const NOTHING_SET: TimerSetupDraft = {
   rounds: 0,
   workSeconds: 0,
   restSeconds: 0,
+  blocks: [],
+  repeat: 0,
   workoutNotes: '',
   presetName: '',
 }
@@ -93,11 +106,17 @@ export const setupKeyAtom = Atom.make((get) =>
   setupKey({ mode: get(setupModeAtom), presetId: get(setupPresetIdAtom) }),
 )
 
+/**
+ * The key read back apart. `parseTimerMode` rather than a cast: a family key
+ * is a string by the time it comes back, and the modes have a list that
+ * answers this — the fallback is unreachable through `setupKeyAtom`, and is
+ * the same fallback a hand-typed `/timer/nonsense` already gets.
+ */
 const parseKey = (key: string): TimerSetupTarget => {
   const separator = key.indexOf(':')
   const presetId = key.slice(separator + 1)
   return {
-    mode: key.slice(0, separator) as TimerMode,
+    mode: parseTimerMode(key.slice(0, separator)) ?? 'amrap',
     presetId: presetId === '' ? undefined : presetId,
   }
 }
@@ -125,6 +144,16 @@ export function applyConfigToDraft(draft: TimerSetupDraft, config: TimerConfig):
         workSeconds: config.workMs / SECOND_MS,
         restSeconds: config.restMs / SECOND_MS,
         rounds: config.rounds,
+      }
+    case 'custom':
+      return {
+        ...draft,
+        blocks: config.blocks.map((block) => ({
+          label: block.label,
+          kind: block.kind,
+          durationSeconds: block.durationMs / SECOND_MS,
+        })),
+        repeat: config.repeat,
       }
   }
 }
@@ -212,6 +241,8 @@ export const setupDraftAtom = Atom.family((key: string) =>
   ),
 )
 
+type ForTimeConfig = Extract<TimerConfig, { mode: 'forTime' }>
+
 /**
  * The form read back as the config for one mode. The other modes' fields are
  * ignored, so what the user set for Tabata does not leak into the AMRAP they
@@ -228,16 +259,19 @@ export function toTimerConfig(mode: TimerMode, draft: TimerSetupDraft): TimerCon
   switch (mode) {
     case 'amrap':
       return { mode: 'amrap', durationMs: Math.round(draft.durationSeconds * SECOND_MS) }
-    case 'forTime':
-      return {
-        mode: 'forTime',
-        ...(draft.timeCapSeconds === undefined || draft.timeCapSeconds === 0
-          ? {}
-          : { timeCapMs: Math.round(draft.timeCapSeconds * SECOND_MS) }),
-        ...(draft.targetRounds === undefined || draft.targetRounds === 0
-          ? {}
-          : { targetRounds: Math.round(draft.targetRounds) }),
-      }
+    case 'forTime': {
+      // Both fields are `optionalKey` in the schema, so "not set" is the key
+      // being absent — never present with an `undefined` value. Each one is
+      // added to the config only once it has a value to add.
+      const capped: ForTimeConfig =
+        draft.timeCapSeconds === undefined || draft.timeCapSeconds === 0
+          ? { mode: 'forTime' }
+          : { mode: 'forTime', timeCapMs: Math.round(draft.timeCapSeconds * SECOND_MS) }
+
+      return draft.targetRounds === undefined || draft.targetRounds === 0
+        ? capped
+        : { ...capped, targetRounds: Math.round(draft.targetRounds) }
+    }
     case 'emom':
       return {
         mode: 'emom',
@@ -251,7 +285,63 @@ export function toTimerConfig(mode: TimerMode, draft: TimerSetupDraft): TimerCon
         restMs: Math.round(draft.restSeconds * SECOND_MS),
         rounds: Math.round(draft.rounds),
       }
+    case 'custom':
+      return {
+        mode: 'custom',
+        blocks: draft.blocks.map((block) => ({
+          label: block.label,
+          kind: block.kind,
+          durationMs: Math.round(block.durationSeconds * SECOND_MS),
+        })),
+        repeat: Math.round(draft.repeat),
+      }
   }
+}
+
+/**
+ * Block-list edits, as pure functions over the draft's array. The editor emits
+ * a whole new list per gesture — an edit is a replacement, like every other
+ * draft field. Out-of-range indices return the list unchanged: a tap that
+ * raced a removal is a no-op, not a crash.
+ */
+export function appendCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  kind: CircuitBlockDraft['kind'],
+): ReadonlyArray<CircuitBlockDraft> {
+  if (blocks.length >= MAX_CIRCUIT_BLOCKS) return blocks
+  const template = DEFAULT_CIRCUIT_BLOCKS[kind]
+  return [
+    ...blocks,
+    { label: template.label, kind, durationSeconds: template.durationMs / SECOND_MS },
+  ]
+}
+
+export function updateCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  index: number,
+  patch: Partial<CircuitBlockDraft>,
+): ReadonlyArray<CircuitBlockDraft> {
+  return blocks.map((block, at) => (at === index ? { ...block, ...patch } : block))
+}
+
+export function removeCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  index: number,
+): ReadonlyArray<CircuitBlockDraft> {
+  return blocks.filter((_, at) => at !== index)
+}
+
+/** An adjacent swap, so the lookups are the bounds check. */
+export function moveCircuitBlock(
+  blocks: ReadonlyArray<CircuitBlockDraft>,
+  from: number,
+  offset: -1 | 1,
+): ReadonlyArray<CircuitBlockDraft> {
+  const to = from + offset
+  const moved: CircuitBlockDraft | undefined = blocks[from]
+  const displaced: CircuitBlockDraft | undefined = blocks[to]
+  if (moved === undefined || displaced === undefined) return blocks
+  return blocks.map((block, at) => (at === from ? displaced : at === to ? moved : block))
 }
 
 export const setupConfigAtom = Atom.family((key: string) =>
@@ -280,35 +370,34 @@ export const setupValidPresetAtom = Atom.family((key: string) =>
 )
 
 /**
- * Picker options.
+ * Picker options: which values each field offers, labelled.
  *
- * Plain functions rather than atoms: the labels are translations, so these
+ * Plain functions rather than atoms — the labels are translations, so these
  * depend on the active locale as much as on the value, and building the list
  * is an array map over at most a few dozen numbers. Called from the template,
  * they re-run exactly when the screen re-renders.
+ *
+ * The rule itself (fold in the selected value, then label every value) is
+ * `pickerOptions` in `./pickerOptions`, beside the functions that build the
+ * value lists. This module used to carry a private copy of it, which meant the
+ * exported one was reachable only from its own spec — a duplicate that could
+ * not drift *visibly*, since nothing shipped ran the version being tested.
  */
-const optionsFor = (
-  values: ReadonlyArray<number>,
-  selected: number | undefined,
-  label: (value: number) => string,
-): Array<PickerOption> =>
-  includeSelectedValue(values, selected).map((value) => ({ value, label: label(value) }))
-
 export const durationOptions = (
   selected: number | undefined,
   formatTime: (seconds: number) => string,
-): Array<PickerOption> => optionsFor(DURATION_VALUES, selected, formatTime)
+): Array<PickerOption> => pickerOptions(DURATION_VALUES, selected, formatTime)
 
 export const intervalOptions = (
   selected: number | undefined,
   formatTime: (seconds: number) => string,
-): Array<PickerOption> => optionsFor(INTERVAL_VALUES, selected, formatTime)
+): Array<PickerOption> => pickerOptions(INTERVAL_VALUES, selected, formatTime)
 
 /** Rest is the one duration that may legitimately be none: an EMOM-style Tabata. */
 export const restOptions = (
   selected: number | undefined,
   formatTime: (seconds: number) => string,
-): Array<PickerOption> => optionsFor([0, ...INTERVAL_VALUES], selected, formatTime)
+): Array<PickerOption> => pickerOptions([0, ...INTERVAL_VALUES], selected, formatTime)
 
 export const roundOptions = (selected: number | undefined): Array<PickerOption> =>
-  optionsFor(ROUND_VALUES, selected, String)
+  pickerOptions(ROUND_VALUES, selected, String)

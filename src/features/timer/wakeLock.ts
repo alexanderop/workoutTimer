@@ -30,6 +30,9 @@ type WakeLockNavigator = Navigator & {
 export const wakeLockEffectAtom = Atom.make((get) => {
   if (!(get(keepAwakeAtom) && get(documentVisibleAtom))) return null
 
+  // SAFETY: `WakeLockNavigator` only adds the Screen Wake Lock API that
+  // lib.dom does not declare yet; the property is read as possibly missing
+  // and the very next line handles the browsers that do not have it.
   const wakeLock = (navigator as WakeLockNavigator).wakeLock
   if (!wakeLock) return null
 

@@ -14,6 +14,10 @@ describe('accessibility', () => {
     await assertNoViolations(amrapSetup.container)
   })
 
+  it('circuit setup has no violations', async ({ circuitSetup }) => {
+    await assertNoViolations(circuitSetup.container)
+  })
+
   it('history has no violations', async ({ history }) => {
     await assertNoViolations(history.container)
   })

@@ -1,6 +1,6 @@
-import { formatDuration } from './domain'
-import type { TimerPhase } from './domain'
-import type { TimerConfig, TimerMode } from '@/db'
+import { circuitCycleMs, formatDuration } from './domain'
+import type { DerivedTimer, HistoryFilter, TimerPhase } from './domain'
+import type { SessionStatus, TimerConfig, TimerMode } from '@/db'
 
 /**
  * How a timer reads to a human — the mode's name, what a config comes to, how
@@ -23,7 +23,8 @@ import type { TimerConfig, TimerMode } from '@/db'
 
 type ModeKey = `timer.modes.${TimerMode}.${'name' | 'description'}`
 type UnitKey = `timer.setup.units.${'hoursShort' | 'minutesShort' | 'secondsShort'}`
-type PhaseKey = `timer.run.${TimerPhase}`
+type RunPhaseKey = `timer.run.${'paused' | RunPhaseWord}`
+type HistoryFilterKey = `history.${HistoryFilter}`
 
 /**
  * The slice of vue-i18n's `t` these functions use. `t` accepts every key in
@@ -31,7 +32,7 @@ type PhaseKey = `timer.run.${TimerPhase}`
  * reach for a key outside the set.
  */
 export type Translate = (
-  key: ModeKey | UnitKey | PhaseKey,
+  key: ModeKey | UnitKey | RunPhaseKey | HistoryFilterKey,
   named?: Record<string, number>,
 ) => string
 
@@ -41,18 +42,6 @@ export function modeName(mode: TimerMode, t: Translate): string {
 
 export function modeDescription(mode: TimerMode, t: Translate): string {
   return t(`timer.modes.${mode}.description`)
-}
-
-/**
- * What the ring announces. The run screen used to answer this with its own
- * `switch (derived.phase)` and a `default:` — so `finished`, a real phase a
- * completing workout sits in until the result screen takes over, was read out
- * as "Work" inside an `aria-live` region. Built off `TimerPhase` here instead:
- * a fifth phase widens `PhaseKey`, and `MessageSchema` has no entry for it, so
- * it is a compile error rather than a wrong label.
- */
-export function phaseName(phase: TimerPhase, t: Translate): string {
-  return t(`timer.run.${phase}`)
 }
 
 /**
@@ -75,6 +64,8 @@ export function configSummary(config: TimerConfig, t: Translate): string {
       return `${config.rounds} × ${formatDuration(config.intervalMs)}`
     case 'tabata':
       return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
+    case 'custom':
+      return `${config.repeat} × ${formatDuration(circuitCycleMs(config.blocks))}`
   }
 }
 
@@ -98,4 +89,58 @@ export function humanizeSeconds(seconds: number, t: Translate): string {
   }
 
   return parts.join(' ')
+}
+
+/**
+ * The word the run screen shows over the clock, per phase.
+ *
+ * A record rather than a `switch`, and keyed by `TimerPhase`, so a sixth phase
+ * is a compile error here instead of a screen quietly showing "Work".
+ *
+ * `finished` gets a word of its own rather than borrowing the work one. The
+ * run screen holds that phase only for the instant between `deriveTimer`
+ * reporting completion and the driver navigating to the result screen — but
+ * this word sits in an `aria-live` region, so that instant is announced, and
+ * announcing "Work" at the moment a workout ends is the one reading that is
+ * simply wrong. The result screen still says what the workout came to.
+ */
+type RunPhaseWord = 'countdown' | 'rest' | 'work' | 'finished'
+
+const RUN_PHASE_WORDS = {
+  countdown: 'countdown',
+  rest: 'rest',
+  work: 'work',
+  finished: 'finished',
+} satisfies Readonly<Record<TimerPhase, RunPhaseWord>>
+
+/**
+ * What the running timer is doing, in one word: paused beats everything, a
+ * named circuit block says what to do, and the phase's own word is the
+ * fallback. `undefined` for either argument is the moment before the session
+ * row has arrived, which reads as the work phase — the screen renders its
+ * "workout not found" branch instead in that case, so the word is never seen.
+ */
+export function runPhaseName(
+  status: SessionStatus | undefined,
+  timer: DerivedTimer | undefined,
+  t: Translate,
+): string {
+  if (status === 'paused') return t('timer.run.paused')
+  if (timer?.phaseLabel !== undefined) return timer.phaseLabel
+  return t(`timer.run.${RUN_PHASE_WORDS[timer?.phase ?? 'work']}`)
+}
+
+/**
+ * A history filter chip's label, keyed by the filter itself rather than by a
+ * chain of comparisons — so the `HISTORY_FILTERS` list and the translations
+ * are one thing rather than two that have to agree.
+ *
+ * The compiler cannot help here the way it does for `modeName`: `t` accepts
+ * every key in the catalogue, so it satisfies this narrower signature whether
+ * or not `history.<filter>` exists. The labels spec is what closes that — it
+ * walks `HISTORY_FILTERS` against the real English catalogue, so a new
+ * finished status without a message fails there.
+ */
+export function historyFilterName(filter: HistoryFilter, t: Translate): string {
+  return t(`history.${filter}`)
 }

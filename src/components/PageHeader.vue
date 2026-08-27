@@ -2,6 +2,7 @@
 import { ChevronLeft } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import type { VNode } from 'vue'
 import { Button } from '@/components/ui/button'
 
 const { t } = useI18n()
@@ -28,7 +29,7 @@ const emit = defineEmits<{
 }>()
 
 defineSlots<{
-  actions?: () => unknown
+  actions?: () => VNode[]
 }>()
 
 const router = useRouter()

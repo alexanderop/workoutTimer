@@ -15,8 +15,9 @@ import {
   runDb,
   updateTimerSettings,
 } from '@/db'
+import { db } from '@/db/schema'
 
-describe('workouts repository', () => {
+describe('the repositories, through the operations the app calls', () => {
   beforeEach(resetDatabase)
 
   it('creates a recoverable active session', async () => {
@@ -104,5 +105,67 @@ describe('workouts repository', () => {
       { name: 'Eight rounds', lastUsedAt: expect.any(Number) },
     ])
     expect((await runDb(getTimerSettings.pipe(Effect.orDie))).soundEnabled).toBe(false)
+  })
+
+  /**
+   * Two settings writes really can overlap: `settingsMutation` is built
+   * `concurrent: true` and the settings screen has half a dozen controls that
+   * each fire one. Reading the row outside a transaction meant both fibers
+   * merged their patch into the same `current`, and whichever `put` landed
+   * second dropped the other patch — no error, no conflict, the preference
+   * simply did not stick.
+   */
+  /**
+   * The rule at the centre of docs/local-first.md — "never trust the shape of
+   * stored data; trust the decode" — stated as a test rather than only as
+   * prose. Rows outlive app versions, get restored with a profile, and are
+   * editable from devtools, so a damaged one has to fail the read out loud:
+   * silently dropping it would show a short history the user might then export
+   * over their last good backup.
+   */
+  it('fails the whole read when one stored row does not match the schema', async () => {
+    await runDb(
+      createSession({
+        config: { mode: 'amrap', durationMs: 600_000 },
+        workoutNotes: '',
+        countdownDurationMs: 0,
+      }).pipe(Effect.orDie),
+    )
+    // `db.table(name)` rather than `db.sessions`, which is typed — the point is
+    // to write a row the type says cannot exist, because devtools can.
+    //
+    // It carries a `createdAt` on purpose. `listSessions` reads through the
+    // `createdAt` index, and IndexedDB leaves a row *missing* the indexed key
+    // out of that index entirely — such a row is skipped rather than refused,
+    // which is a different (and quieter) fate than the one under test here.
+    await db.table('sessions').add({ id: 'damaged', status: 'nonsense', createdAt: Date.now() })
+
+    // The failure *is* the assertion, so `Effect.flip` (docs/index.md).
+    const error = await runDb(listSessions.pipe(Effect.flip, Effect.orDie))
+
+    expect(error).toBeInstanceOf(DatabaseError)
+    expect(error.operation).toBe('decode session row')
+  })
+
+  it('does not lose a patch when two settings writes overlap', async () => {
+    await Promise.all([
+      runDb(updateTimerSettings({ soundEnabled: false }).pipe(Effect.orDie)),
+      runDb(updateTimerSettings({ keepAwake: false }).pipe(Effect.orDie)),
+    ])
+
+    const settings = await runDb(getTimerSettings.pipe(Effect.orDie))
+    expect({ soundEnabled: settings.soundEnabled, keepAwake: settings.keepAwake }).toEqual({
+      soundEnabled: false,
+      keepAwake: false,
+    })
+  })
+
+  it('applies a patch to what is on disk, not to the defaults', async () => {
+    await runDb(updateTimerSettings({ soundEnabled: false }).pipe(Effect.orDie))
+    await runDb(updateTimerSettings({ keepAwake: false }).pipe(Effect.orDie))
+
+    const settings = await runDb(getTimerSettings.pipe(Effect.orDie))
+    expect(settings.soundEnabled).toBe(false)
+    expect(settings.keepAwake).toBe(false)
   })
 })

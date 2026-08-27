@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { failureReporter } from '@/lib/reportFailure'
 
 /**
+ * The three keys every report is supposed to carry — the subject of the test
+ * below, written as a type so the collector says what it is collecting. The
+ * values stay `unknown` because that is what the logger hands over; the
+ * assertions are what pin them to strings.
+ */
+type ReportedAnnotations = {
+  readonly boundary?: unknown
+  readonly operation?: unknown
+  readonly failure?: unknown
+}
+
+/**
  * The failure branch six views share, as a pure function.
  *
  * It used to be `useReportFailure`, a composable that reached for the toast
@@ -55,7 +67,7 @@ describe('failureReporter', () => {
    * `_tag` is what makes a log entry searchable by failure type.
    */
   it('annotates every report with the same keys', async () => {
-    const entries: Array<Record<string, unknown>> = []
+    const entries: Array<ReportedAnnotations> = []
     const reportFailure = failureReporter('timer-run', () => {})
 
     // `formatStructured` is the shape a log entry has once the fiber's

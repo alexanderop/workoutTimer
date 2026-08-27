@@ -6,7 +6,7 @@ import { OtlpLogger, OtlpSerialization, OtlpTracer } from 'effect/unstable/obser
  * Telemetry export for the Effect runtimes — development only, opt-in.
  *
  * The instrumentation itself is already in the code and costs nothing extra:
- * every `Effect.fn('WorkoutsRepo.listSessions')` opens a named span, `Effect.withSpan`
+ * every `Effect.fn('SessionsRepo.listSessions')` opens a named span, `Effect.withSpan`
  * wraps the backup programs, and `useReportFailure` emits annotated log
  * records on the fiber inside them. Without a tracer installed those spans are
  * built and dropped. This layer is what gives them somewhere to go.

@@ -23,6 +23,11 @@ function unavailable<T>(name: string): T {
   }
 
   // A function target so both `page.getByRole(…)` and `userEvent(…)` trap.
+  //
+  // SAFETY: nothing here is ever really a `T`. Every property read and every
+  // call throws, so the only way this value is ever observed is as the error
+  // above — the type exists so the stub can stand in for the real export at
+  // the import site.
   return new Proxy(() => {}, {
     get: (_target, key) =>
       // `then` is exempt so an accidental `await` reports the error below

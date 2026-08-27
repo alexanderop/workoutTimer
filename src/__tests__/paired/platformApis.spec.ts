@@ -46,6 +46,8 @@ const expected = {
 
 describe('the platform APIs this app is built on', () => {
   it.each(Object.keys(PLATFORM_APIS))('%s is available', (name) => {
+    // SAFETY: `name` comes from `Object.keys(PLATFORM_APIS)` in the
+    // `it.each` above, so it is one of that object's own keys.
     const value = PLATFORM_APIS[name as keyof typeof PLATFORM_APIS]()
 
     expect(
@@ -79,14 +81,16 @@ const mounted: Array<() => void> = []
 
 // Mounted by hand: @testing-library/vue reads `process` at import time, which
 // does not exist in the browser tier, so a shared spec cannot use it.
-function mountPicker(): { host: HTMLElement; error: unknown } {
+function mountPicker() {
   const host = document.createElement('div')
   document.body.append(host)
 
-  let error: unknown
+  // Wrapped rather than dropped, so a non-Error throw still reads as a
+  // failed mount rather than as a mount that survived.
+  let error: Error | undefined
   const app = createApp(Picker)
   app.config.errorHandler = (caught) => {
-    error = caught
+    error = caught instanceof Error ? caught : new Error(`mount threw ${String(caught)}`)
   }
   app.mount(host)
 
@@ -94,7 +98,7 @@ function mountPicker(): { host: HTMLElement; error: unknown } {
     app.unmount()
     host.remove()
   })
-  return { host, error }
+  return { error }
 }
 
 // Restoring rather than deleting, because `delete Element.prototype
@@ -109,8 +113,14 @@ function stubScrollIntoView(record: (options?: ScrollIntoViewOptions | boolean) 
     record(options)
   }
   restoreScrollIntoView = () => {
-    if (original) Object.defineProperty(Element.prototype, 'scrollIntoView', original)
-    else delete (Element.prototype as Partial<Element>).scrollIntoView
+    if (original) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', original)
+    } else {
+      // SAFETY: widening to `Partial` only so the delete compiles. This branch
+      // runs where there was no descriptor to restore, which is exactly where
+      // the property this stub added is the only one there is.
+      delete (Element.prototype as Partial<Element>).scrollIntoView
+    }
   }
 }
 
@@ -127,7 +137,7 @@ describe('what that costs at the point of use', () => {
     expect(
       error,
       'the component never rendered — this is a TypeError during mount, not a failed assertion, and it will be resolved with a stub',
-    ).toSatisfy((caught: unknown) =>
+    ).toSatisfy((caught: Error | undefined) =>
       expected.mountSurvives
         ? caught === undefined
         : caught instanceof TypeError && /scrollIntoView is not a function/.test(caught.message),

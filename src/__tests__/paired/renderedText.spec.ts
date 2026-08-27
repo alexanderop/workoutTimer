@@ -44,6 +44,9 @@ const expected = {
 
 /** `innerText` is absent from the type in neither environment, but from the DOM in one. */
 function innerTextOf(element: HTMLElement): string | undefined {
+  // SAFETY: widening, not narrowing — lib.dom declares `innerText` as always
+  // present and this file exists because one of the two runners disagrees.
+  // The optional shape is what lets the absent case be read at all.
   return (element as { innerText?: string }).innerText
 }
 
@@ -111,7 +114,10 @@ describe('writing to innerText', () => {
   it('changes the document, or is absorbed by the JavaScript object', () => {
     const container = render(`<p>Rest 90 seconds</p>`)
     const paragraph = container.querySelector('p')!
-    ;(paragraph as { innerText?: string }).innerText = 'Rest 60 seconds'
+    // SAFETY: as in `innerTextOf` above — the optional shape is the honest
+    // one, and writing through it is what this test is measuring.
+    const writable = paragraph as { innerText?: string }
+    writable.innerText = 'Rest 60 seconds'
 
     expect(
       !Object.hasOwn(paragraph, 'innerText'),

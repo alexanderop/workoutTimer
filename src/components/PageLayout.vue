@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { VNode } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 
 const {
@@ -22,9 +23,9 @@ const emit = defineEmits<{
 }>()
 
 defineSlots<{
-  'header-actions'?: () => unknown
-  default: () => unknown
-  footer?: () => unknown
+  'header-actions'?: () => VNode[]
+  default: () => VNode[]
+  footer?: () => VNode[]
 }>()
 </script>
 

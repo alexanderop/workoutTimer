@@ -139,7 +139,7 @@ describe('there are no composables outside the UI substrate', () => {
     ['a default function', 'export default function useSneaky() { return {} }'],
     ['a default identifier', 'function useSneaky() {}\nexport default useSneaky'],
     ['a const arrow', 'export const useSneaky = () => ({})'],
-  ])('catches %s too', (_shape, source) => {
+  ])('catches %s too', (_exportForm, source) => {
     expect(EXPORTS_COMPOSABLE.test(source)).toBe(true)
   })
 

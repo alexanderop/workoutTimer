@@ -47,7 +47,7 @@ const expected = {
 const ROW_HEIGHT = 20
 const VISIBLE_HEIGHT = 100
 
-function scroller(): { container: HTMLElement; rows: Array<HTMLElement> } {
+function scroller() {
   const container = document.createElement('div')
   container.style.cssText = `overflow-y: auto; height: ${VISIBLE_HEIGHT}px;`
 
@@ -137,7 +137,7 @@ describe('scrollIntoView moves the element into view', () => {
     const { rows } = scroller()
 
     expect(
-      typeof rows[40].scrollIntoView === 'function',
+      rows[40].scrollIntoView instanceof Function,
       'the method is missing, so the call throws until it is stubbed — and a stub can only record its arguments',
     ).toBe(expected.hasScrollIntoView)
   })

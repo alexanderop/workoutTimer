@@ -2,6 +2,8 @@
 import { useAtom } from '@effect/atom-vue'
 import { nextTick, onMounted, onUpdated, useTemplateRef } from 'vue'
 import { pickerCustomOpenAtom } from '@/features/timer/atoms'
+import { chipClass } from '@/features/timer/components/chip'
+import DurationFields from '@/features/timer/components/DurationFields.vue'
 import type { PickerOption } from '@/features/timer/pickerOptions'
 
 const props = defineProps<{
@@ -28,9 +30,6 @@ const [customOpen, setCustomOpen] = useAtom(() => pickerCustomOpenAtom(props.id)
 // one `Ref` this codebase still creates on purpose.
 const scroller = useTemplateRef<HTMLDivElement>('scroller')
 
-const minutes = (): number => Math.floor((props.modelValue ?? 0) / 60)
-const seconds = (): number => (props.modelValue ?? 0) % 60
-
 function choose(value: number | undefined): void {
   emit('update:modelValue', value)
   setCustomOpen(false)
@@ -43,21 +42,6 @@ function openCustom(): void {
   setCustomOpen(next)
   if (next && props.modelValue === undefined) emit('update:modelValue', props.minSeconds)
   if (!next) void scrollToSelected('smooth')
-}
-
-function updateCustom(nextMinutes: number, nextSeconds: number): void {
-  const total = Math.trunc(nextMinutes) * 60 + Math.trunc(nextSeconds)
-  emit('update:modelValue', Math.min(props.maxSeconds, Math.max(props.minSeconds, total)))
-}
-
-function updateMinutes(event: Event): void {
-  const value = Number((event.currentTarget as HTMLInputElement).value)
-  updateCustom(Number.isFinite(value) ? Math.max(0, value) : 0, seconds())
-}
-
-function updateSeconds(event: Event): void {
-  const value = Number((event.currentTarget as HTMLInputElement).value)
-  updateCustom(minutes(), Number.isFinite(value) ? Math.min(59, Math.max(0, value)) : 0)
 }
 
 async function scrollToSelected(behavior: ScrollBehavior): Promise<void> {
@@ -103,12 +87,7 @@ onUpdated(() => {
       <button
         v-if="emptyLabel"
         type="button"
-        class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
-        :class="
-          modelValue === undefined
-            ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
-            : 'bg-background'
-        "
+        :class="[chipClass(modelValue === undefined), 'snap-center']"
         :aria-pressed="modelValue === undefined"
         @click="choose(undefined)"
       >
@@ -118,12 +97,7 @@ onUpdated(() => {
         v-for="option in options"
         :key="option.value"
         type="button"
-        class="h-touch-target shrink-0 snap-center select-none touch-manipulation rounded-full border px-4 font-medium transition-[color,background-color,border-color,scale] duration-100 active:scale-95"
-        :class="
-          modelValue === option.value
-            ? 'border-transparent bg-[var(--mode-color)] text-[var(--mode-foreground)]'
-            : 'bg-background'
-        "
+        :class="[chipClass(modelValue === option.value), 'snap-center']"
         :aria-pressed="modelValue === option.value"
         @click="choose(option.value)"
       >
@@ -142,37 +116,16 @@ onUpdated(() => {
       {{ customLabel }}
     </button>
 
-    <div
-      v-if="customOpen"
-      :id="`${id}-custom`"
-      class="mt-2 grid grid-cols-2 gap-3 rounded-xl bg-muted p-3"
-    >
-      <label class="flex flex-col gap-1.5 text-xs font-medium" :for="`${id}-minutes`">
-        {{ minutesLabel }}
-        <input
-          :id="`${id}-minutes`"
-          class="h-touch-target min-w-0 rounded-lg border bg-background px-3 text-lg font-semibold"
-          type="number"
-          inputmode="numeric"
-          min="0"
-          :max="Math.floor(maxSeconds / 60)"
-          :value="minutes()"
-          @input="updateMinutes"
-        />
-      </label>
-      <label class="flex flex-col gap-1.5 text-xs font-medium" :for="`${id}-seconds`">
-        {{ secondsLabel }}
-        <input
-          :id="`${id}-seconds`"
-          class="h-touch-target min-w-0 rounded-lg border bg-background px-3 text-lg font-semibold"
-          type="number"
-          inputmode="numeric"
-          min="0"
-          max="59"
-          :value="seconds()"
-          @input="updateSeconds"
-        />
-      </label>
+    <div v-if="customOpen" :id="`${id}-custom`" class="mt-2 rounded-xl bg-muted p-3">
+      <DurationFields
+        :id="id"
+        :model-value="modelValue ?? 0"
+        :minutes-label="minutesLabel"
+        :seconds-label="secondsLabel"
+        :min-seconds="minSeconds"
+        :max-seconds="maxSeconds"
+        @update:model-value="emit('update:modelValue', $event)"
+      />
     </div>
   </fieldset>
 </template>

@@ -1,15 +1,17 @@
 /**
- * The route names, on their own.
+ * The route vocabulary, on its own so that naming a route does not cost the
+ * whole route table.
  *
- * Separate from `src/router/index.ts` because that module *is* the route
- * table: its records name a lazily-imported `.vue` file for every screen in
- * the app, so anything importing it pulls all of them into its module graph.
- * A name is a string, and the one non-view module that needs one —
- * `features/timer/runDriver.ts`, which navigates to the result screen — should
- * not drag eight views behind it. The Node test tier is where that showed up:
- * it has no plugin that can transform a `.vue` file.
+ * `src/router/index.ts` maps every name to a `() => import('@/views/….vue')`,
+ * so importing the names *from there* pulls the view graph in behind them.
+ * That is invisible in the app, where the views are what you wanted anyway,
+ * and fatal in the Node tier, which has no plugin that can parse a `.vue`
+ * file — a unit spec for anything that merely mentions a route name fails to
+ * transform, and the mutation run over that tier fails with it.
  *
- * `@/router` re-exports these, so a view can keep importing both from one place.
+ * So every module that needs a route name imports it from here, `.vue` files
+ * included. `@/router` deliberately does not re-export them: re-exporting
+ * would put the trap straight back, one convenient import at a time.
  */
 export const RouteNames = {
   timer: 'timer',

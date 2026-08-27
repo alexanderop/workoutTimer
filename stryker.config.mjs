@@ -75,10 +75,12 @@ export default {
 
   reporters: ['html', 'clear-text', 'progress'],
 
-  // The scope is at 100: every mutant in it is either killed or carries a
-  // `// Stryker disable` with a reason. `break` sits at 90 rather than 100
-  // because the unit tier is partly property-based — fast-check picks a fresh
-  // seed per run, so a mutant that only some inputs distinguish can flicker.
-  // Ten points is room for that, not room to delete a test.
+  // The scope scores 95. Every file in it is at 100 except `setupForm.ts` and
+  // `state/confirmation.ts`, whose residue docs/mutation-testing.md names and
+  // explains — the first needs a database this tier does not have, the second
+  // is assertions nobody has written. `break` sits at 90 rather than 100 both
+  // for that and because the unit tier is partly property-based: fast-check
+  // picks a fresh seed per run, so a mutant that only some inputs distinguish
+  // can flicker. The margin is not room to delete a test.
   thresholds: { high: 100, low: 90, break: 90 },
 }

@@ -60,6 +60,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:testing",
+    "@oxlint/plugins": "catalog:lint",
     "@playwright/test": "catalog:testing",
     "@size-limit/file": "catalog:lint",
     "@stryker-mutator/api": "catalog:testing",

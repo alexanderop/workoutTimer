@@ -2,7 +2,6 @@
 import { injectRegistry, useAtomSet, useAtomValue } from '@effect/atom-vue'
 import { Pause, Play, Plus, Volume2, VolumeX, X } from '@lucide/vue'
 import { Effect } from 'effect'
-import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
@@ -17,14 +16,15 @@ import {
   updateTimerSettings,
 } from '@/db'
 import { currentSessionAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
+import { audioUnlockEffectAtom } from '@/features/timer/audioUnlock'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
 import { capturesRoundSplits, formatDuration, SECOND_MS } from '@/features/timer/domain'
-import { modeName, phaseName } from '@/features/timer/labels'
+import { modeName, runPhaseName } from '@/features/timer/labels'
 import { timerCueAtom, timerRunDriverAtom } from '@/features/timer/runDriver'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
 import { wakeLockEffectAtom } from '@/features/timer/wakeLock'
 import { failureReporter } from '@/lib/reportFailure'
-import { RouteNames } from '@/router'
+import { RouteNames } from '@/router/routeNames'
 import { armedConfirmationAtom, requestConfirmationIn } from '@/state/confirmation'
 import { timerSettingsValueAtom } from '@/state/timerData'
 import { showToastAtom } from '@/state/toast'
@@ -43,11 +43,13 @@ const session = useAtomValue(() => currentSessionAtom)
 const settings = useAtomValue(() => timerSettingsValueAtom)
 const derived = useAtomValue(() => runDerivedTimerAtom)
 
-// Subscribing is what starts them: the transition machine, the audio cues, and
-// the wake lock all live in atoms and run only while this screen is mounted.
+// Subscribing is what starts them: the transition machine, the audio cues, the
+// wake lock and the first-gesture audio unlock all live in atoms and run only
+// while this screen is mounted.
 useAtomValue(() => timerRunDriverAtom)
 useAtomValue(() => timerCueAtom)
 useAtomValue(() => wakeLockEffectAtom)
+useAtomValue(() => audioUnlockEffectAtom)
 
 const mode = (): TimerMode => session.value?.config.mode ?? 'amrap'
 const displayTime = (): string =>
@@ -55,25 +57,6 @@ const displayTime = (): string =>
     ? formatDuration(derived.value.primaryMs, derived.value.primaryMs <= 10 * SECOND_MS)
     : '00:00'
 const canCaptureRound = (): boolean => capturesRoundSplits(mode())
-
-/**
- * An AudioContext may only be created from a user gesture, and this screen is
- * reachable without passing through the setup screen that used to be the only
- * place we asked for one — "Resume timer" on the home screen, or a reload
- * straight onto this URL mid-workout. Without this the header would render the
- * sound-on icon over a timer that never makes a sound. The first gesture
- * anywhere on the page is enough, and one is all we need.
- */
-onMounted(() => {
-  const options = { once: true, passive: true } as const
-  document.addEventListener('pointerdown', unlockTimerAudio, options)
-  document.addEventListener('keydown', unlockTimerAudio, options)
-
-  onBeforeUnmount(() => {
-    document.removeEventListener('pointerdown', unlockTimerAudio)
-    document.removeEventListener('keydown', unlockTimerAudio)
-  })
-})
 
 // Read as well as write: the Finish and Cancel labels change while armed,
 // and the subscription is what gives the 3 s expiry a registry to write to.
@@ -98,7 +81,7 @@ function persistCompletion(
   id: string,
   reason: FinishReason,
   destination: RouteLocationRaw,
-): Promise<unknown> {
+): Promise<void> {
   return runMutation(
     finishSession(id, reason).pipe(
       Effect.tap(() => Effect.sync(() => void router.replace(destination))),
@@ -107,16 +90,7 @@ function persistCompletion(
   )
 }
 
-/**
- * A paused workout says so whatever phase it is in; otherwise the phase names
- * itself. `phaseName` lives in `features/timer/labels.ts` so that a new phase
- * fails to compile there rather than falling through a `default:` here.
- */
-function phaseLabel(): string {
-  if (session.value?.status === 'paused') return t('timer.run.paused')
-  const state = derived.value
-  return state === undefined ? t('timer.run.work') : phaseName(state.phase, t)
-}
+const phaseLabel = (): string => runPhaseName(session.value?.status, derived.value, t)
 
 const currentModeName = (): string => modeName(mode(), t)
 
@@ -167,7 +141,7 @@ async function cancel(): Promise<void> {
   await persistCompletion(current.id, 'cancelled', { name: RouteNames.timer })
 }
 
-function toggleSound(): Promise<unknown> {
+function toggleSound(): Promise<void> {
   // Turning sound *on* is a gesture, and possibly the first one on this page —
   // take it as the cue to open the AudioContext so the next beep is audible.
   unlockTimerAudio()

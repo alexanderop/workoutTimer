@@ -89,7 +89,7 @@ describe('the measurement the gate makes', () => {
 
 describe('the condition the gate measures under', () => {
   it('can be asked for', () => {
-    expect(typeof window.matchMedia === 'function').toBe(expected.hasMatchMedia)
+    expect(window.matchMedia instanceof Function).toBe(expected.hasMatchMedia)
   })
 
   it('cannot be usefully stubbed, in either environment', () => {

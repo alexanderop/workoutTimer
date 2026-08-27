@@ -1,10 +1,11 @@
-import { AtomRegistry, registryKey } from '@effect/atom-vue'
+import { AtomRegistry } from '@effect/atom-vue'
 import { render } from 'vitest-browser-vue'
 import { createMemoryHistory } from 'vue-router'
 import App from '@/App.vue'
 import { i18n } from '@/i18n'
 import { createAppRouter } from '@/router'
 import { connectRoute } from '@/state/route'
+import { provideRegistry } from './provideRegistry'
 
 /**
  * Mounts the full app (shell, router, i18n) the way main.ts does, but with
@@ -27,9 +28,7 @@ export async function renderApp(initialPath = '/') {
   const screen = render(App, {
     global: {
       plugins: [i18n, router],
-      provide: {
-        [registryKey as symbol]: registry,
-      },
+      provide: provideRegistry(registry),
     },
   })
 

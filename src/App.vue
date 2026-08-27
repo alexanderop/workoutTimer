@@ -6,11 +6,10 @@ import AppShell from '@/components/AppShell.vue'
 import PwaInstallPrompt from '@/components/PwaInstallPrompt.vue'
 import PwaUpdatePrompt from '@/components/PwaUpdatePrompt.vue'
 import ToastViewport from '@/components/ToastViewport.vue'
-import { NAV_ITEMS } from '@/router/navigation'
+import { navItems } from '@/router/navigation'
 import { keyboardInsetEffectAtom } from '@/state/keyboard'
 import { localeEffectAtom } from '@/state/locale'
 import { themeEffectAtom } from '@/state/theme'
-import type { NavItem } from '@/types/navigation'
 
 const { t } = useI18n()
 
@@ -25,17 +24,12 @@ useAtomValue(() => keyboardInsetEffectAtom)
 // A function, not a `computed`: the labels are translations, so the only
 // dependency is the active locale, and reading it during render is what makes
 // the shell re-render when the language changes.
-const navItems = (): Array<NavItem> =>
-  NAV_ITEMS.map((item) => ({
-    routeName: item.routeName,
-    icon: item.icon,
-    label: t(item.labelKey),
-  }))
+const tabs = () => navItems(t)
 </script>
 
 <template>
   <div data-testid="app" class="h-full">
-    <AppShell :items="navItems()">
+    <AppShell :items="tabs()">
       <RouterView />
     </AppShell>
     <PwaUpdatePrompt />

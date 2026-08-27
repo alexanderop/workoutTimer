@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DialogCloseProps } from 'reka-ui'
 import { DialogClose } from 'reka-ui'
+import type { VNode } from 'vue'
 
 /**
  * Closes the nearest `<Dialog>`. It reads the open state from the provider,
@@ -10,7 +11,7 @@ import { DialogClose } from 'reka-ui'
 const props = defineProps<DialogCloseProps>()
 
 defineSlots<{
-  default: () => unknown
+  default: () => VNode[]
 }>()
 </script>
 

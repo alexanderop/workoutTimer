@@ -44,7 +44,7 @@ function css(text: string): void {
   sheets.push(style)
 }
 
-function buttonUnderScrim(): { button: HTMLButtonElement; clicked: () => boolean } {
+function buttonUnderScrim() {
   let clicked = false
   const button = document.createElement('button')
   button.textContent = 'Delete workout'
@@ -81,7 +81,7 @@ describe('a full-screen scrim over a button', () => {
     buttonUnderScrim()
 
     expect(
-      typeof document.elementFromPoint === 'function',
+      document.elementFromPoint instanceof Function,
       'without hit-testing there is no way to ask which element a user would have reached, so an overlay cannot participate in the test at all',
     ).toBe(expected.hasElementFromPoint)
   })

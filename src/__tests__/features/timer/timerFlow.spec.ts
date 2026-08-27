@@ -79,6 +79,34 @@ describe('workout timer flow', () => {
     ])
   })
 
+  /**
+   * The circuit path end to end: the block editor writes the draft, the draft
+   * becomes a custom config, and the run screen calls the phase by the
+   * block's own name rather than the generic word.
+   */
+  it('builds a circuit and runs it under its block names', async ({ circuitSetup: timer }) => {
+    await timer.setup.nameBlock(1, 'Burpees')
+    await timer.setup.setBlockDuration(1, '0', '45')
+    await timer.setup.addWorkBlock()
+    await timer.setup.start()
+    await timer.run.expectPhase('Burpees')
+
+    await timer.run.finish()
+    await timer.result.expectReady()
+
+    const [stored] = await storedSessions()
+    expect(stored?.status).toBe('completed')
+    expect(stored?.config).toMatchObject({
+      mode: 'custom',
+      repeat: 3,
+      blocks: [
+        { label: 'Burpees', kind: 'work', durationMs: 45_000 },
+        { label: '', kind: 'rest', durationMs: 15_000 },
+        { label: '', kind: 'work', durationMs: 30_000 },
+      ],
+    })
+  })
+
   it('offers recovery for an active session', async ({ recoverableTimer }) => {
     const { session, timer } = recoverableTimer
     await timer.expectRecovery()

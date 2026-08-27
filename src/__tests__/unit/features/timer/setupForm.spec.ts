@@ -3,18 +3,23 @@ import { describe, expect, it } from '@effect/vitest'
 import { Schema } from 'effect'
 import { DEFAULT_CONFIGS, isTimerConfig, TIMER_MODES } from '@/features/timer/domain'
 import {
+  appendCircuitBlock,
   applyConfigToDraft,
   BASE_DRAFT,
   durationOptions,
+  moveCircuitBlock,
+  removeCircuitBlock,
   roundOptions,
   setupConfigAtom,
   setupDraftAtom,
   setupKey,
   toTimerConfig,
+  updateCircuitBlock,
+  type CircuitBlockDraft,
   type TimerSetupDraft,
 } from '@/features/timer/setupForm'
 import { TimerConfigSchema } from '@/db/converters'
-import type { TimerConfig, TimerMode } from '@/db'
+import type { TimerMode } from '@/db'
 
 /**
  * The setup form used to be nine `ref`s and a seeding `watch` inside a
@@ -78,6 +83,45 @@ describe('setupDraftAtom', () => {
     )
     expect(setupKey({ mode: 'amrap', presetId: 'preset-2' })).not.toBe(
       setupKey({ mode: 'amrap', presetId: 'preset-1' }),
+    )
+  })
+})
+
+/**
+ * The key is the family's whole addressing scheme, and it goes out as a string
+ * and comes back as one — so reading it apart is a parse, not a cast, and this
+ * is where that parse is checked. `setupKeyAtom` can only ever produce a
+ * well-formed key; a family key is still a string, and the modes have a list
+ * that answers what a segment means.
+ */
+describe('reading a family key apart', () => {
+  const configFor = (key: string) => AtomRegistry.make().get(setupConfigAtom(key))
+
+  it('reads the mode back out of a key', () => {
+    expect(configFor(setupKey({ mode: 'emom', presetId: undefined })).mode).toBe('emom')
+    expect(configFor(setupKey({ mode: 'tabata', presetId: 'preset-1' })).mode).toBe('tabata')
+  })
+
+  it('falls back to AMRAP for a segment that names no mode', () => {
+    // The same fallback a hand-typed `/timer/nonsense` gets, rather than a
+    // cast that would carry the nonsense into a config.
+    expect(configFor('nonsense:').mode).toBe('amrap')
+    expect(configFor(':').mode).toBe('amrap')
+  })
+
+  it('separates the mode from the preset at the first colon, and only there', () => {
+    // A preset id is opaque, so a colon inside one belongs to the id.
+    const key = setupKey({ mode: 'emom', presetId: 'a:b' })
+    expect(key).toBe('emom:a:b')
+    expect(configFor(key).mode).toBe('emom')
+  })
+
+  it('treats an empty preset segment as "no preset", so the mode defaults win', () => {
+    // Both keys have no preset to seed from, so both read the mode's defaults —
+    // the distinction that matters is that neither goes looking for a preset
+    // whose id is the empty string.
+    expect(configFor(setupKey({ mode: 'tabata', presetId: undefined }))).toEqual(
+      configFor('tabata:'),
     )
   })
 })
@@ -148,6 +192,11 @@ describe('toTimerConfig', () => {
     rounds: 12,
     workSeconds: 30,
     restSeconds: 15,
+    blocks: [
+      { label: 'Burpees', kind: 'work', durationSeconds: 40 },
+      { label: '', kind: 'rest', durationSeconds: 20 },
+    ],
+    repeat: 4,
     workoutNotes: '',
     presetName: '',
   }
@@ -165,6 +214,14 @@ describe('toTimerConfig', () => {
       workMs: 30_000,
       restMs: 15_000,
       rounds: 12,
+    })
+    expect(toTimerConfig('custom', base)).toEqual({
+      mode: 'custom',
+      blocks: [
+        { label: 'Burpees', kind: 'work', durationMs: 40_000 },
+        { label: '', kind: 'rest', durationMs: 20_000 },
+      ],
+      repeat: 4,
     })
   })
 
@@ -206,17 +263,59 @@ describe('the draft, as a property', () => {
   const anyConfig = Schema.toArbitrary(TimerConfigSchema)
 
   it.prop('loads a config into the draft and reads the same one back', [anyConfig], ([config]) => {
-    const draft = applyConfigToDraft(BASE_DRAFT, config as TimerConfig)
+    const draft = applyConfigToDraft(BASE_DRAFT, config)
 
-    expect(toTimerConfig((config as TimerConfig).mode, draft)).toEqual(config)
+    expect(toTimerConfig(config.mode, draft)).toEqual(config)
   })
 
   it.prop('survives a second trip through the draft', [anyConfig], ([config]) => {
-    const once = applyConfigToDraft(BASE_DRAFT, config as TimerConfig)
-    const mode = (config as TimerConfig).mode
+    const once = applyConfigToDraft(BASE_DRAFT, config)
+    const mode = config.mode
     const twice = applyConfigToDraft(once, toTimerConfig(mode, once))
 
     expect(toTimerConfig(mode, twice)).toEqual(toTimerConfig(mode, once))
+  })
+})
+
+describe('circuit block edits', () => {
+  const blocks: ReadonlyArray<CircuitBlockDraft> = [
+    { label: 'A', kind: 'work', durationSeconds: 30 },
+    { label: 'B', kind: 'rest', durationSeconds: 15 },
+  ]
+
+  it('appends a block of the asked-for kind with its default duration', () => {
+    const next = appendCircuitBlock(blocks, 'work')
+
+    expect(next).toHaveLength(3)
+    expect(next[2]).toEqual({ label: '', kind: 'work', durationSeconds: 30 })
+    expect(appendCircuitBlock(blocks, 'rest')[2]).toEqual({
+      label: '',
+      kind: 'rest',
+      durationSeconds: 15,
+    })
+  })
+
+  it('refuses to grow past the schema cap', () => {
+    const full = Array.from({ length: 30 }, () => blocks[0]!)
+
+    expect(appendCircuitBlock(full, 'work')).toBe(full)
+  })
+
+  it('patches one block and leaves the others alone', () => {
+    const next = updateCircuitBlock(blocks, 1, { durationSeconds: 45 })
+
+    expect(next[1]).toEqual({ label: 'B', kind: 'rest', durationSeconds: 45 })
+    expect(next[0]).toBe(blocks[0])
+    expect(blocks[1]?.durationSeconds).toBe(15)
+  })
+
+  it('removes by index and reorders by one step, ignoring the impossible', () => {
+    expect(removeCircuitBlock(blocks, 0).map((block) => block.label)).toEqual(['B'])
+    expect(moveCircuitBlock(blocks, 1, -1).map((block) => block.label)).toEqual(['B', 'A'])
+    expect(moveCircuitBlock(blocks, 0, 1).map((block) => block.label)).toEqual(['B', 'A'])
+    expect(moveCircuitBlock(blocks, 0, -1)).toBe(blocks)
+    expect(moveCircuitBlock(blocks, 1, 1)).toBe(blocks)
+    expect(moveCircuitBlock(blocks, 5, -1)).toBe(blocks)
   })
 })
 

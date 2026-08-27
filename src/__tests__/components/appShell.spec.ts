@@ -1,33 +1,51 @@
 import type { Router } from 'vue-router'
-import { AtomRegistry, registryKey } from '@effect/atom-vue'
+import { AtomRegistry } from '@effect/atom-vue'
 import { NotebookPen, Settings } from '@lucide/vue'
 import { page } from 'vitest/browser'
 import { render } from 'vitest-browser-vue'
 import { describe, expect } from 'vitest'
+import type { VNode } from 'vue'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
 import { i18n } from '@/i18n'
+import { RouteNames } from '@/router/routeNames'
 import { connectRoute } from '@/state/route'
 import type { NavItem } from '@/types/navigation'
 import { it as base } from '../fixtures'
+import { provideRegistry } from '../helpers/provideRegistry'
 
 const Stub = defineComponent({ render: () => h('div', 'stub view') })
 
+/** What `AppShell` declares — the optional slot is the variation these tests turn on. */
+type ShellSlots = {
+  default: () => VNode
+  'center-action'?: () => VNode
+}
+
+/**
+ * Three routes, standing in for the app's own table.
+ *
+ * The *names* are real ones from `RouteNames`, because `connectRoute` matches
+ * a location against that vocabulary — a name outside it is not a route this
+ * app has, and the snapshot says so by carrying no name at all. The labels
+ * stay arbitrary: the shell renders `label` verbatim, which is the thing
+ * these tests are about.
+ */
 function makeRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', name: 'home', component: Stub },
-      { path: '/second', name: 'second', component: Stub },
-      { path: '/focus', name: 'focus', component: Stub, meta: { hideNav: true } },
+      { path: '/', name: RouteNames.timer, component: Stub },
+      { path: '/second', name: RouteNames.history, component: Stub },
+      { path: '/focus', name: RouteNames.timerRun, component: Stub, meta: { hideNav: true } },
     ],
   })
 }
 
 const items: Array<NavItem> = [
-  { routeName: 'home', icon: NotebookPen, label: 'Home' },
-  { routeName: 'second', icon: Settings, label: 'Second' },
+  { routeName: RouteNames.timer, icon: NotebookPen, label: 'Home' },
+  { routeName: RouteNames.history, icon: Settings, label: 'Second' },
 ]
 
 const it = base.extend('renderShell', async ({}, { onCleanup }) => {
@@ -46,17 +64,15 @@ const it = base.extend('renderShell', async ({}, { onCleanup }) => {
     const registry = AtomRegistry.make()
     connectRoute(router, registry)
 
+    const slots: ShellSlots = { default: () => h('div', 'page content') }
+    if (withCenterAction) slots['center-action'] = () => h('button', { type: 'button' }, 'center')
+
     mounted = render(AppShell, {
       props: { items },
-      slots: {
-        default: () => h('div', 'page content'),
-        ...(withCenterAction
-          ? { 'center-action': () => h('button', { type: 'button' }, 'center') }
-          : {}),
-      },
+      slots,
       global: {
         plugins: [i18n, router],
-        provide: { [registryKey as symbol]: registry },
+        provide: provideRegistry(registry),
       },
     })
 
@@ -81,7 +97,7 @@ describe('AppShell', () => {
 
     await page.getByRole('button', { name: 'Second' }).click()
 
-    await expect.poll(() => router.currentRoute.value.name).toBe('second')
+    await expect.poll(() => router.currentRoute.value.name).toBe(RouteNames.history)
   })
 
   it('hides the tab bar on routes with meta.hideNav', async ({ renderShell }) => {

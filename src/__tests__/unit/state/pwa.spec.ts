@@ -24,6 +24,9 @@ afterEach(() => {
  * `matchMedia('(display-mode: standalone)')` → false), which is the same reason
  * these modules are importable here at all.
  */
+// SAFETY: nothing reads this event. `deferredPromptAtom` only has to hold
+// *something* for the install chain to consider itself armed, and every
+// property the real event carries is the browser's business, not this test's.
 const captured = {} as BeforeInstallPromptEvent
 
 function installable() {
