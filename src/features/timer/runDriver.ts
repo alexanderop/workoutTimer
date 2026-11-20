@@ -4,6 +4,7 @@ import { finishSession, markSessionRunning, sessionMutation, type DbServices } f
 import { currentSessionAtom, nowAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
 import {
   capturesRoundSplits,
+  coachesByVoice,
   deriveTimer,
   SECOND_MS,
   type DerivedTimer,
@@ -178,13 +179,17 @@ export const timerCueAtom = Atom.make((get): null => {
     runDerivedTimerAtom,
     (state) => {
       if (state === undefined || state.phase === 'finished') return
-      const settings = get.registry.get(timerSettingsValueAtom)
       const session = get.registry.get(currentSessionAtom)
+      const stored = get.registry.get(timerSettingsValueAtom)
+      // A workout set up to be coached speaks whatever the global switch says.
+      const settings =
+        session !== undefined && coachesByVoice(session.config)
+          ? { ...stored, spokenCountdownEnabled: true }
+          : stored
       // The coach's line for this tick, if she has one: "Round three", "Rest",
       // "Halfway there", "Ten seconds". It rides along with the beep where
       // there is one and stands alone where there is not.
-      const voice =
-        session === undefined ? undefined : voiceCueFor(previous, state, session.config.mode)
+      const voice = session === undefined ? undefined : voiceCueFor(previous, state, session)
 
       if (previous !== undefined && previous.phase !== state.phase) {
         emitTimerCue(settings, 'phase', voice)

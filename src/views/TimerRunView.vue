@@ -15,13 +15,14 @@ import {
   type FinishReason,
   updateTimerSettings,
 } from '@/db'
-import { currentSessionAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
+import { currentSessionAtom, runCallAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
 import { audioUnlockEffectAtom } from '@/features/timer/audioUnlock'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
 import { capturesRoundSplits, formatDuration, SECOND_MS } from '@/features/timer/domain'
-import { modeName, runPhaseName } from '@/features/timer/labels'
+import { modeName, runPhaseName, themeHint, themeName } from '@/features/timer/labels'
 import { timerCueAtom, timerRunDriverAtom } from '@/features/timer/runDriver'
 import { emitTimerCue, unlockTimerAudio } from '@/features/timer/timerFeedback'
+import { callSteps } from '@/features/timer/voiceCues'
 import { wakeLockEffectAtom } from '@/features/timer/wakeLock'
 import { failureReporter } from '@/lib/reportFailure'
 import { RouteNames } from '@/router/routeNames'
@@ -42,6 +43,7 @@ const reportFailure = failureReporter('timer-run', showToast)
 const session = useAtomValue(() => currentSessionAtom)
 const settings = useAtomValue(() => timerSettingsValueAtom)
 const derived = useAtomValue(() => runDerivedTimerAtom)
+const call = useAtomValue(() => runCallAtom)
 
 // Subscribing is what starts them: the transition machine, the audio cues, the
 // wake lock and the first-gesture audio unlock all live in atoms and run only
@@ -206,6 +208,86 @@ function toggleSound(): Promise<void> {
           {{ displayTime() }}
         </p>
       </TimerRing>
+
+      <!--
+        Between rounds is the only time anyone reads this screen — mid-round
+        the athlete has gloves up and hears the coach instead. So the break
+        says where they are and what the next round asks for.
+      -->
+      <section
+        v-if="derived.upNext"
+        class="w-full max-w-sm rounded-2xl border border-white/15 bg-white/5 p-4 text-center"
+        aria-live="polite"
+      >
+        <p class="text-xs font-bold tracking-[0.2em] text-white/60 uppercase">
+          {{ t('timer.run.upNext') }} ·
+          {{ t('timer.run.round', { current: derived.upNext.round, total: derived.upNext.total }) }}
+        </p>
+        <template v-if="derived.upNext.theme">
+          <p class="mt-1 text-3xl font-bold tracking-tight text-[var(--mode-color)]">
+            {{ themeName(derived.upNext.theme, t) }}
+          </p>
+          <p class="mt-1 text-base text-white/80">{{ themeHint(derived.upNext.theme, t) }}</p>
+        </template>
+        <ol
+          v-if="derived.upNext.total <= 12"
+          class="mt-3 flex justify-center gap-1.5"
+          aria-hidden="true"
+        >
+          <li
+            v-for="round in derived.upNext.total"
+            :key="round"
+            class="h-2 rounded-full"
+            :class="
+              round < derived.upNext.round
+                ? 'w-2 bg-white/70'
+                : round === derived.upNext.round
+                  ? 'w-6 bg-[var(--mode-color)]'
+                  : 'w-2 bg-white/20'
+            "
+          />
+        </ol>
+      </section>
+
+      <!--
+        What the round asks for. In a round of called combinations that is the
+        call being worked on, with the hand for each punch — the voice says
+        "cross, hook, cross" and leaves left and right to the athlete. In a
+        themed round it is the one instruction the coach gave at the bell,
+        which stays put for anyone who missed it.
+
+        Not a live region: she has just said it aloud, and a screen reader
+        repeating her would talk over the next call. The height is held while
+        nothing is shown so the clock above does not shift.
+      -->
+      <div
+        v-else-if="call !== undefined"
+        class="flex min-h-24 w-full max-w-sm items-center justify-center text-center"
+      >
+        <ol v-if="call !== ''" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+          <li
+            v-for="(step, index) in callSteps(call)"
+            :key="index"
+            class="flex items-center gap-1.5 text-2xl leading-none font-bold tracking-tight"
+          >
+            {{ step.label }}
+            <span
+              v-if="step.side"
+              class="grid size-7 place-items-center rounded-md text-base"
+              :class="
+                step.side === 'L'
+                  ? 'bg-[var(--mode-color)] text-[var(--mode-foreground)]'
+                  : 'bg-white text-black'
+              "
+            >
+              {{ step.side }}
+            </span>
+          </li>
+        </ol>
+        <p v-else-if="derived.theme" class="text-lg text-balance text-white/80">
+          {{ themeHint(derived.theme, t) }}
+        </p>
+      </div>
 
       <div class="grid w-full max-w-sm grid-cols-2 gap-3">
         <Button

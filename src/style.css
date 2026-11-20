@@ -40,6 +40,7 @@
   --color-mode-for-time: var(--mode-for-time);
   --color-mode-emom: var(--mode-emom);
   --color-mode-tabata: var(--mode-tabata);
+  --color-mode-boxing: var(--mode-boxing);
 
   /* Spacing tokens - --spacing-* generates gap-*, space-y-*, p-*, etc. utilities */
   --spacing-section: 1.5rem; /* vertical rhythm between page sections (space-y-section) */
@@ -80,6 +81,7 @@
   --mode-for-time: oklch(0.62 0.2 270);
   --mode-emom: oklch(0.62 0.25 305);
   --mode-tabata: oklch(0.68 0.16 170);
+  --mode-boxing: oklch(0.6 0.22 25);
   --mode-custom: oklch(0.7 0.15 230);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
@@ -129,6 +131,11 @@
 [data-mode='tabata'] {
   --mode-color: var(--mode-tabata);
   --mode-foreground: oklch(0.14 0.03 170);
+}
+
+[data-mode='boxing'] {
+  --mode-color: var(--mode-boxing);
+  --mode-foreground: white;
 }
 
 [data-mode='custom'] {

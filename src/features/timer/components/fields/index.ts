@@ -2,6 +2,7 @@ import type { Component } from 'vue'
 import type { TimerMode } from '@/db'
 import type { TimerSetupDraft } from '@/features/timer/setupForm'
 import AmrapFields from './AmrapFields.vue'
+import BoxingFields from './BoxingFields.vue'
 import CircuitFields from './CircuitFields.vue'
 import EmomFields from './EmomFields.vue'
 import ForTimeFields from './ForTimeFields.vue'
@@ -27,5 +28,6 @@ export const MODE_FIELDS = {
   forTime: ForTimeFields,
   emom: EmomFields,
   tabata: TabataFields,
+  boxing: BoxingFields,
   custom: CircuitFields,
 } satisfies Readonly<Record<TimerMode, ModeFields>>

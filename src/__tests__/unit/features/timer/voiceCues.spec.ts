@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { DerivedTimer } from '@/features/timer/domain'
-import { countdownVoiceCue, voiceCueFor } from '@/features/timer/voiceCues'
+import type { TimerMode } from '@/db'
+import { DEFAULT_CONFIGS, type DerivedTimer } from '@/features/timer/domain'
+import {
+  countdownVoiceCue,
+  callSteps,
+  currentCall,
+  voiceCueFor,
+  type CueSession,
+} from '@/features/timer/voiceCues'
 
 /**
  * What the coach says, and — as much of the point — when she stays quiet.
@@ -20,6 +27,12 @@ const at = (patch: Partial<DerivedTimer>): DerivedTimer => ({
   ...patch,
 })
 
+/** A workout of `mode` at its defaults — what the coach is told about the session. */
+const session = (mode: TimerMode): CueSession => ({
+  id: 'session-1',
+  config: DEFAULT_CONFIGS[mode],
+})
+
 /** A state `remainingMs` from the end of a phase `durationMs` long. */
 const remaining = (
   remainingMs: number,
@@ -32,55 +45,59 @@ describe('phase announcements', () => {
   it('names the round when work begins after the start countdown', () => {
     const countdown = at({ phase: 'countdown', round: 0, primaryMs: 100 })
 
-    expect(voiceCueFor(countdown, at({ round: 1 }), 'tabata')).toBe('round-1')
+    expect(voiceCueFor(countdown, at({ round: 1 }), session('tabata'))).toBe('round-1')
   })
 
   it('says "Rest" when the work ends', () => {
-    expect(voiceCueFor(at({}), at({ phase: 'rest', primaryMs: 10_000 }), 'tabata')).toBe('rest')
+    expect(voiceCueFor(at({}), at({ phase: 'rest', primaryMs: 10_000 }), session('tabata'))).toBe(
+      'rest',
+    )
   })
 
   it('names the next round coming out of a rest', () => {
     const rest = at({ phase: 'rest', round: 2, primaryMs: 100 })
 
-    expect(voiceCueFor(rest, at({ round: 3 }), 'tabata')).toBe('round-3')
+    expect(voiceCueFor(rest, at({ round: 3 }), session('tabata'))).toBe('round-3')
   })
 
   it('calls the final round "Last round" rather than by its number', () => {
     const rest = at({ phase: 'rest', round: 7, primaryMs: 100 })
 
-    expect(voiceCueFor(rest, at({ round: 8 }), 'tabata')).toBe('last-round')
+    expect(voiceCueFor(rest, at({ round: 8 }), session('tabata'))).toBe('last-round')
   })
 
   it('does not call a one-round workout its own last round', () => {
     const countdown = at({ phase: 'countdown', round: 0, totalRounds: 1 })
 
-    expect(voiceCueFor(countdown, at({ totalRounds: 1 }), 'tabata')).toBe('round-1')
+    expect(voiceCueFor(countdown, at({ totalRounds: 1 }), session('tabata'))).toBe('round-1')
   })
 
   /** EMOM never leaves `work`: the round turning over is the only boundary it has. */
   it('names an EMOM round that turns over without a phase change', () => {
-    expect(voiceCueFor(at({ round: 4, primaryMs: 100 }), at({ round: 5 }), 'emom')).toBe('round-5')
+    expect(voiceCueFor(at({ round: 4, primaryMs: 100 }), at({ round: 5 }), session('emom'))).toBe(
+      'round-5',
+    )
   })
 
   it('falls back to "Go" past the rounds that were recorded', () => {
     const previous = at({ round: 20, totalRounds: 30, primaryMs: 100 })
 
-    expect(voiceCueFor(previous, at({ round: 21, totalRounds: 30 }), 'emom')).toBe('go')
+    expect(voiceCueFor(previous, at({ round: 21, totalRounds: 30 }), session('emom'))).toBe('go')
   })
 
   /** A circuit pass can hold several work blocks; only the first opens a round. */
   it('says "Go" for a later work block inside the same circuit pass', () => {
     const rest = at({ phase: 'rest', round: 2, primaryMs: 100 })
 
-    expect(voiceCueFor(rest, at({ round: 2 }), 'custom')).toBe('go')
+    expect(voiceCueFor(rest, at({ round: 2 }), session('custom'))).toBe('go')
   })
 
   it('says "Go" where the athlete counts the rounds, not the clock', () => {
     const countdown = at({ phase: 'countdown', round: 0, totalRounds: undefined })
     const work = at({ round: 0, totalRounds: undefined })
 
-    expect(voiceCueFor(countdown, work, 'amrap')).toBe('go')
-    expect(voiceCueFor(countdown, at({ round: 0, totalRounds: 5 }), 'forTime')).toBe('go')
+    expect(voiceCueFor(countdown, work, session('amrap'))).toBe('go')
+    expect(voiceCueFor(countdown, at({ round: 0, totalRounds: 5 }), session('forTime'))).toBe('go')
   })
 
   /** A tapped split already cues itself from the write. */
@@ -88,70 +105,70 @@ describe('phase announcements', () => {
     const before = remaining(300_000, 600_000, { round: 2, totalRounds: undefined })
     const after = remaining(299_900, 600_000, { round: 3, totalRounds: undefined })
 
-    expect(voiceCueFor(before, after, 'amrap')).toBeUndefined()
+    expect(voiceCueFor(before, after, session('amrap'))).toBeUndefined()
   })
 })
 
 describe('time remaining', () => {
   it('announces the halfway point of a long phase', () => {
-    expect(voiceCueFor(remaining(30_100, 60_000), remaining(30_000, 60_000), 'tabata')).toBe(
-      'halfway',
-    )
+    expect(
+      voiceCueFor(remaining(30_100, 60_000), remaining(30_000, 60_000), session('tabata')),
+    ).toBe('halfway')
   })
 
   it('announces it once, on the tick that crosses it', () => {
     expect(
-      voiceCueFor(remaining(30_000, 60_000), remaining(29_900, 60_000), 'tabata'),
+      voiceCueFor(remaining(30_000, 60_000), remaining(29_900, 60_000), session('tabata')),
     ).toBeUndefined()
     expect(
-      voiceCueFor(remaining(30_300, 60_000), remaining(30_200, 60_000), 'tabata'),
+      voiceCueFor(remaining(30_300, 60_000), remaining(30_200, 60_000), session('tabata')),
     ).toBeUndefined()
   })
 
   /** Halfway through 20 seconds *is* ten seconds: one line, not two. */
   it('lets "Ten seconds" stand in for halfway in a classic Tabata interval', () => {
-    expect(voiceCueFor(remaining(10_100, 20_000), remaining(10_000, 20_000), 'tabata')).toBe(
-      'ten-seconds',
-    )
+    expect(
+      voiceCueFor(remaining(10_100, 20_000), remaining(10_000, 20_000), session('tabata')),
+    ).toBe('ten-seconds')
   })
 
   it('leaves a phase under forty seconds without a halfway call', () => {
     expect(
-      voiceCueFor(remaining(15_100, 30_000), remaining(15_000, 30_000), 'tabata'),
+      voiceCueFor(remaining(15_100, 30_000), remaining(15_000, 30_000), session('tabata')),
     ).toBeUndefined()
-    expect(voiceCueFor(remaining(20_100, 40_000), remaining(20_000, 40_000), 'tabata')).toBe(
-      'halfway',
-    )
+    expect(
+      voiceCueFor(remaining(20_100, 40_000), remaining(20_000, 40_000), session('tabata')),
+    ).toBe('halfway')
   })
 
   /** A 10-second rest starts at ten seconds, right as she says "Rest". */
   it('does not count down a phase shorter than twenty seconds', () => {
     expect(
-      voiceCueFor(remaining(10_100, 19_000), remaining(10_000, 19_000), 'tabata'),
+      voiceCueFor(remaining(10_100, 19_000), remaining(10_000, 19_000), session('tabata')),
     ).toBeUndefined()
   })
 
   it('calls the last minute of a long piece, and not of a short one', () => {
-    expect(voiceCueFor(remaining(60_100, 600_000), remaining(60_000, 600_000), 'amrap')).toBe(
-      'one-minute',
-    )
-    expect(voiceCueFor(remaining(60_100, 180_000), remaining(60_000, 180_000), 'amrap')).toBe(
-      'one-minute',
-    )
     expect(
-      voiceCueFor(remaining(60_100, 170_000), remaining(60_000, 170_000), 'amrap'),
+      voiceCueFor(remaining(60_100, 600_000), remaining(60_000, 600_000), session('amrap')),
+    ).toBe('one-minute')
+    expect(
+      voiceCueFor(remaining(60_100, 180_000), remaining(60_000, 180_000), session('amrap')),
+    ).toBe('one-minute')
+    expect(
+      voiceCueFor(remaining(60_100, 170_000), remaining(60_000, 170_000), session('amrap')),
     ).toBeUndefined()
   })
 
   /** In a two-minute phase the minute mark is the halfway mark. */
   it('prefers "Halfway" when both land on the same second', () => {
-    expect(voiceCueFor(remaining(60_100, 120_000), remaining(60_000, 120_000), 'amrap')).toBe(
-      'halfway',
-    )
+    expect(
+      voiceCueFor(remaining(60_100, 120_000), remaining(60_000, 120_000), session('amrap')),
+    ).toBe('halfway')
   })
 
   it('still fires when a slow tick jumps clean over the mark', () => {
-    expect(voiceCueFor(remaining(10_400, 60_000), remaining(9_700, 60_000), 'emom')).toBe(
+    expect(voiceCueFor(remaining(10_400, 60_000), remaining(9_700, 60_000), session('emom'))).toBe(
       'ten-seconds',
     )
   })
@@ -161,22 +178,22 @@ describe('time remaining', () => {
     const before = at({ primaryMs: 149_900, remainingMs: 150_100, progress: 0.4997 })
     const after = at({ primaryMs: 150_000, remainingMs: 150_000, progress: 0.5 })
 
-    expect(voiceCueFor(before, after, 'forTime')).toBe('halfway')
+    expect(voiceCueFor(before, after, session('forTime'))).toBe('halfway')
   })
 
   it('has no time to call in an uncapped For Time', () => {
     const before = at({ primaryMs: 9_900, remainingMs: undefined, progress: 0 })
     const after = at({ primaryMs: 10_000, remainingMs: undefined, progress: 0 })
 
-    expect(voiceCueFor(before, after, 'forTime')).toBeUndefined()
-    expect(voiceCueFor(after, before, 'forTime')).toBeUndefined()
+    expect(voiceCueFor(before, after, session('forTime'))).toBeUndefined()
+    expect(voiceCueFor(after, before, session('forTime'))).toBeUndefined()
   })
 
   it('leaves the start countdown to the 3-2-1', () => {
     const before = remaining(10_100, 30_000, { phase: 'countdown', round: 0 })
     const after = remaining(10_000, 30_000, { phase: 'countdown', round: 0 })
 
-    expect(voiceCueFor(before, after, 'tabata')).toBeUndefined()
+    expect(voiceCueFor(before, after, session('tabata'))).toBeUndefined()
   })
 
   it('has nothing to measure once a phase reports itself complete', () => {
@@ -184,34 +201,372 @@ describe('time remaining', () => {
       voiceCueFor(
         at({ primaryMs: 10_100, progress: 1 }),
         at({ primaryMs: 10_000, progress: 1 }),
-        'emom',
+        session('emom'),
       ),
     ).toBeUndefined()
   })
 })
 
+describe('a boxing round', () => {
+  type Boxing = Extract<CueSession['config'], { mode: 'boxing' }>
+  const boxing = (patch: Partial<Boxing> = {}, id = 'session-1'): CueSession => ({
+    id,
+    config: { ...DEFAULT_CONFIGS.boxing, ...patch },
+  })
+  /** The tick that lands `elapsedMs` into a three-minute round, a hundred ms after the last. */
+  const tick = (elapsedMs: number, bout: CueSession = boxing(), round = 1) =>
+    voiceCueFor(
+      remaining(180_100 - elapsedMs, 180_000, { round }),
+      remaining(180_000 - elapsedMs, 180_000, { round }),
+      bout,
+    )
+  const everySlot = (bout: CueSession, round = 1) =>
+    Array.from({ length: 180 }, (_, second) => tick(second * 1_000, bout, round))
+
+  it('calls a combination on every slot of the chosen pace', () => {
+    expect(tick(5_000)).toMatch(/^(combo-\d\d|hands-up|keep-moving)$/)
+    expect(tick(10_000)).toBeDefined()
+    expect(tick(7_000)).toBeUndefined()
+    expect(tick(8_000, boxing({ paceMs: 8_000 }))).toBeDefined()
+    expect(tick(5_000, boxing({ paceMs: 8_000 }))).toBeUndefined()
+  })
+
+  /** She is still saying "Round one" on the bell. */
+  it('leaves the bell to the round announcement', () => {
+    expect(tick(0)).toBeUndefined()
+  })
+
+  it('keeps the basics to the jab, the cross and the hook', () => {
+    const basics = new Set(
+      everySlot(boxing({ paceMs: 3_000 })).filter((cue) => cue?.startsWith('combo-')),
+    )
+    const advanced = new Set(
+      everySlot(boxing({ paceMs: 3_000, callouts: 'advanced' })).filter((cue) =>
+        cue?.startsWith('combo-'),
+      ),
+    )
+
+    expect([...basics].every((cue) => Number(cue?.slice(6)) <= 12)).toBe(true)
+    expect([...advanced].some((cue) => Number(cue?.slice(6)) > 12)).toBe(true)
+    expect(basics.size).toBeGreaterThan(6)
+  })
+
+  it('says nothing between the time calls when combinations are off', () => {
+    const calls = everySlot(boxing({ callouts: 'off' })).filter((cue) => cue !== undefined)
+
+    expect(calls).toEqual(['halfway', 'one-minute', 'thirty-seconds', 'ten-seconds'])
+  })
+
+  /** A reload mid-round has to call the sequence it was already calling. */
+  it('calls the same sequence for the same round of the same workout', () => {
+    expect(everySlot(boxing())).toEqual(everySlot(boxing()))
+  })
+
+  it('calls a different sequence in another round, and in another workout', () => {
+    expect(everySlot(boxing(), 2)).not.toEqual(everySlot(boxing(), 1))
+    expect(everySlot(boxing({}, 'session-2'))).not.toEqual(everySlot(boxing()))
+  })
+
+  it('never calls the same line twice in a row', () => {
+    for (const round of [1, 2, 3, 4, 5, 6]) {
+      const spoken = everySlot(boxing({ paceMs: 3_000 }), round).filter((cue) => cue !== undefined)
+
+      expect(spoken.some((cue, index) => cue === spoken[index - 1])).toBe(false)
+    }
+  })
+
+  /** The time calls win their own tick, and no combination is cut off by one. */
+  it('makes room for the time calls and the closing ten seconds', () => {
+    for (const paceMs of [3_000, 5_000, 8_000] as const) {
+      const calls = everySlot(boxing({ paceMs }))
+      const marks = { 90: 'halfway', 120: 'one-minute', 150: 'thirty-seconds', 170: 'ten-seconds' }
+
+      for (const [second, cue] of Object.entries(marks)) {
+        const at = Number(second)
+        expect(calls[at]).toBe(cue)
+        // Three seconds for a combination to finish before, two for the call after.
+        expect(calls.slice(at - 2, at)).toEqual([undefined, undefined])
+        expect(calls[at + 1]).toBeUndefined()
+      }
+      expect(calls.slice(171).every((cue) => cue === undefined)).toBe(true)
+    }
+  })
+
+  it('stays quiet through the rest', () => {
+    const rest = { phase: 'rest', round: 1 } as const
+
+    expect(
+      voiceCueFor(remaining(55_100, 60_000, rest), remaining(55_000, 60_000, rest), boxing()),
+    ).toBeUndefined()
+  })
+
+  it('keeps "Thirty seconds" out of a round too short for it, and out of other modes', () => {
+    const short = boxing({ workMs: 60_000 })
+
+    expect(voiceCueFor(remaining(30_100, 60_000), remaining(30_000, 60_000), short)).toBe('halfway')
+    expect(
+      voiceCueFor(remaining(30_100, 180_000), remaining(30_000, 180_000), session('emom')),
+    ).toBeUndefined()
+  })
+
+  it('announces rounds and rests like every structural mode', () => {
+    const rest = remaining(100, 60_000, { phase: 'rest', round: 5, totalRounds: 6 })
+
+    expect(voiceCueFor(rest, at({ round: 6, totalRounds: 6 }), boxing())).toBe('last-round')
+    expect(voiceCueFor(at({}), at({ phase: 'rest' }), boxing())).toBe('rest')
+  })
+})
+
+describe('a themed boxing session', () => {
+  type Boxing = Extract<CueSession['config'], { mode: 'boxing' }>
+  const classic = (patch: Partial<Boxing> = {}): CueSession => ({
+    id: 'session-1',
+    config: {
+      ...DEFAULT_CONFIGS.boxing,
+      themes: ['warmup', 'power', 'power', 'speed', 'speed', 'endurance'],
+      ...patch,
+    },
+  })
+  /** Every second of one three-minute round, as the cue each tick produced. */
+  const roundOf = (round: number, bout: CueSession = classic()) =>
+    Array.from({ length: 180 }, (_, second) =>
+      voiceCueFor(
+        // A one-second tick, so a line due mid-second lands on the next one.
+        remaining(Math.min(180_100, 181_000 - second * 1_000), 180_000, { round }),
+        remaining(180_000 - second * 1_000, 180_000, { round }),
+        bout,
+      ),
+    )
+  const spoken = (cues: ReadonlyArray<string | undefined>) =>
+    cues.flatMap((cue, second) => (cue === undefined ? [] : [`${second}s ${cue}`]))
+  const TIME_CALLS = ['halfway', 'one-minute', 'thirty-seconds', 'ten-seconds']
+  const callsOf = (round: number, bout?: CueSession) =>
+    roundOf(round, bout).filter((cue) => cue !== undefined && !TIME_CALLS.includes(cue))
+
+  /** A beat after the bell: "Round four" has to finish first. */
+  it('opens each round with what it is for', () => {
+    const tick = (round: number, elapsedMs: number) =>
+      voiceCueFor(
+        remaining(180_100 - elapsedMs, 180_000, { round }),
+        remaining(180_000 - elapsedMs, 180_000, { round }),
+        classic(),
+      )
+
+    expect(tick(1, 1_500)).toBe('theme-warmup')
+    expect(tick(2, 1_500)).toBe('theme-power')
+    expect(tick(4, 1_500)).toBe('theme-speed')
+    expect(tick(6, 1_500)).toBe('theme-endurance')
+    expect(tick(4, 1_400)).toBeUndefined()
+    expect(tick(4, 1_600)).toBeUndefined()
+  })
+
+  /**
+   * A themed round is explained at the bell and then left alone: the athlete
+   * knows the job, and hears only the time until the next bell.
+   */
+  it('explains a themed round once, then calls nothing but the time', () => {
+    const openings = { 1: 'theme-warmup', 2: 'theme-power', 6: 'theme-endurance' }
+
+    for (const [round, opening] of Object.entries(openings)) {
+      expect(spoken(roundOf(Number(round))).map((line) => line.split(' ')[1])).toEqual([
+        opening,
+        'halfway',
+        'one-minute',
+        'thirty-seconds',
+        'ten-seconds',
+      ])
+    }
+  })
+
+  /**
+   * The opening line says "fast hands", so the first call is the breather —
+   * and no sprint is lost to "Halfway" or "One minute left".
+   */
+  it('alternates sprint and breather through a speed round', () => {
+    expect(
+      spoken(roundOf(4)).filter((line) => !TIME_CALLS.some((call) => line.endsWith(call))),
+    ).toEqual([
+      '2s theme-speed',
+      '22s easy-breathe',
+      '37s fast-hands',
+      '52s easy-breathe',
+      '67s fast-hands',
+      '82s easy-breathe',
+      '97s fast-hands',
+      '112s easy-breathe',
+      '127s fast-hands',
+      '142s easy-breathe',
+      '157s fast-hands',
+    ])
+  })
+
+  /** The explanation is a whole sentence; the first sprint call waits for it to end. */
+  it('lets the opening line finish before the first call', () => {
+    const quick = classic({ themes: ['speed'], workMs: 60_000 })
+    const calls = Array.from({ length: 30 }, (_, second) =>
+      voiceCueFor(
+        remaining(Math.min(60_100, 61_000 - second * 1_000), 60_000),
+        remaining(60_000 - second * 1_000, 60_000),
+        quick,
+      ),
+    )
+
+    expect(spoken(calls)).toEqual(['2s theme-speed', '22s easy-breathe'])
+  })
+
+  /** The one unthemed round of a program is still the round of called combinations. */
+  it('keeps calling combinations in a round themed "combos"', () => {
+    const beginner = classic({ themes: ['warmup', 'combos', 'endurance'] })
+    const calls = callsOf(2, beginner)
+
+    expect(calls.length).toBeGreaterThan(20)
+    expect(calls.every((cue) => /^(combo-\d\d|hands-up|keep-moving)$/.test(cue ?? ''))).toBe(true)
+  })
+
+  it('repeats the themes when the rounds outnumber them', () => {
+    expect(spoken(roundOf(7))[0]).toBe('2s theme-warmup')
+  })
+
+  /** "Off" quiets the round, not the plan: the athlete still hears what each round is. */
+  it('still announces the themes with the calls switched off', () => {
+    expect(callsOf(4, classic({ callouts: 'off' }))).toEqual(['theme-speed'])
+  })
+
+  /** In the rest, after "Rest" itself — the one moment she can say what is coming. */
+  it('says what the next round is, three seconds into the rest', () => {
+    const rest = (round: number, elapsedMs: number, bout: CueSession = classic()) =>
+      voiceCueFor(
+        remaining(60_100 - elapsedMs, 60_000, { phase: 'rest', round }),
+        remaining(60_000 - elapsedMs, 60_000, { phase: 'rest', round }),
+        bout,
+      )
+
+    expect(rest(1, 3_000)).toBe('next-power')
+    expect(rest(3, 3_000)).toBe('next-speed')
+    expect(rest(5, 3_000)).toBe('next-endurance')
+    expect(rest(1, 3_000, classic({ themes: ['warmup', 'combos'] }))).toBe('next-combos')
+    expect(rest(2, 3_000, classic({ themes: ['warmup', 'combos'] }))).toBe('next-warmup')
+    expect(rest(1, 2_900)).toBeUndefined()
+    expect(rest(1, 30_000)).toBe('halfway')
+  })
+
+  it('skips the preview in a rest too short to use it, and in a freestyle session', () => {
+    const short = classic({ restMs: 10_000 })
+    const tick = (bout: CueSession, restMs: number) =>
+      voiceCueFor(
+        remaining(restMs - 2_900, restMs, { phase: 'rest', round: 1 }),
+        remaining(restMs - 3_000, restMs, { phase: 'rest', round: 1 }),
+        bout,
+      )
+
+    expect(tick(short, 10_000)).toBeUndefined()
+    expect(tick(classic({ restMs: 15_000 }), 15_000)).toBe('next-power')
+    expect(tick(classic({ themes: [] }), 60_000)).toBeUndefined()
+  })
+})
+
+describe('the call on screen', () => {
+  type Boxing = Extract<CueSession['config'], { mode: 'boxing' }>
+  const boxing = (patch: Partial<Boxing> = {}): CueSession => ({
+    id: 'session-1',
+    config: { ...DEFAULT_CONFIGS.boxing, ...patch },
+  })
+  const at3min = (elapsedMs: number, patch: Partial<DerivedTimer> = {}) =>
+    remaining(180_000 - elapsedMs, 180_000, patch)
+  const shown = (cue: Parameters<typeof callSteps>[0]) =>
+    callSteps(cue)
+      .map((step) => (step.side === undefined ? step.label : `${step.label} ${step.side}`))
+      .join(' · ')
+
+  /** One source for the ear and the eye: the call shown is the clip that was just played. */
+  it('shows the call the voice just made, until the next one', () => {
+    const spoken = voiceCueFor(at3min(4_900), at3min(5_000), boxing())
+
+    expect(spoken).toMatch(/^(combo-\d\d|hands-up|keep-moving)$/)
+    expect(currentCall(at3min(5_000), boxing())).toBe(spoken)
+    expect(currentCall(at3min(9_900), boxing())).toBe(spoken)
+    expect(currentCall(at3min(10_000), boxing())).not.toBe(spoken)
+  })
+
+  /** A reload mid-round has no "previous" reading, and still shows the call. */
+  it('needs only the current reading', () => {
+    expect(currentCall(at3min(7_300), boxing())).toBe(currentCall(at3min(5_000), boxing()))
+  })
+
+  it('follows the theme of the round', () => {
+    const speed = boxing({ themes: ['speed'] })
+
+    expect(currentCall(at3min(25_000), speed)).toBe('easy-breathe')
+    expect(currentCall(at3min(40_000), speed)).toBe('fast-hands')
+    // A round that is explained once has no call to show.
+    expect(currentCall(at3min(20_000), boxing({ themes: ['endurance'] }))).toBe('')
+    expect(currentCall(at3min(20_000), boxing({ themes: ['power'] }))).toBe('')
+  })
+
+  /** Empty keeps the line's space on screen; the clock must not jump between calls. */
+  it('is empty, not absent, while a boxing round has nothing called', () => {
+    expect(currentCall(at3min(2_000), boxing())).toBe('')
+    expect(currentCall(at3min(90_000), boxing())).toBe('')
+    expect(currentCall(at3min(175_000), boxing())).toBe('')
+    expect(currentCall(at3min(60_000), boxing({ callouts: 'off' }))).toBe('')
+  })
+
+  it('is absent outside a boxing round', () => {
+    expect(currentCall(at3min(5_000, { phase: 'rest' }), boxing())).toBeUndefined()
+    expect(currentCall(at3min(5_000, { phase: 'countdown' }), boxing())).toBeUndefined()
+    expect(currentCall(at3min(5_000), session('tabata'))).toBeUndefined()
+    expect(currentCall(at({ remainingMs: undefined }), boxing())).toBeUndefined()
+  })
+
+  /** The voice leaves left and right to the athlete; the screen does not. */
+  it('names the hand for every punch: jab and hook lead, cross rear', () => {
+    expect(shown('combo-07')).toBe('Cross R · Hook L · Cross R')
+    expect(shown('combo-05')).toBe('Jab L · Cross R · Hook L')
+    expect(shown('combo-04')).toBe('Double jab L · Cross R')
+    expect(shown('combo-08')).toBe('Jab L · Hook L')
+  })
+
+  /** An uppercut is whichever hand the punch before it did not use. */
+  it('alternates into an uppercut', () => {
+    expect(shown('combo-13')).toBe('Jab L · Cross R · Uppercut L')
+    expect(shown('combo-14')).toBe('Jab L · Uppercut R · Hook L')
+    expect(shown('combo-23')).toBe('Jab L · Cross R · Hook L · Uppercut R')
+  })
+
+  it('gives a slip, a roll or a word from the corner no hand', () => {
+    expect(shown('combo-16')).toBe('Jab L · Cross R · Slip · Cross R')
+    expect(shown('combo-24')).toBe('Roll · Hook L · Cross R')
+    expect(shown('hands-up')).toBe('Hands up')
+    expect(shown('easy-breathe')).toBe('Easy · Breathe')
+  })
+
+  it('draws nothing for no call', () => {
+    expect(callSteps('')).toEqual([])
+  })
+})
+
 describe('the first thing she sees', () => {
   it('says "Get ready" when the start countdown leaves room for it', () => {
-    expect(voiceCueFor(undefined, at({ phase: 'countdown', remainingMs: 10_000 }), 'tabata')).toBe(
-      'get-ready',
-    )
+    expect(
+      voiceCueFor(undefined, at({ phase: 'countdown', remainingMs: 10_000 }), session('tabata')),
+    ).toBe('get-ready')
   })
 
   /** Three seconds of countdown is "Three" already. */
   it('does not talk over a short countdown', () => {
     expect(
-      voiceCueFor(undefined, at({ phase: 'countdown', remainingMs: 4_000 }), 'tabata'),
+      voiceCueFor(undefined, at({ phase: 'countdown', remainingMs: 4_000 }), session('tabata')),
     ).toBeUndefined()
   })
 
   /** A reload mid-workout: nothing just happened, so nothing is announced. */
   it('announces nothing when it joins a workout already under way', () => {
-    expect(voiceCueFor(undefined, at({ round: 3 }), 'tabata')).toBeUndefined()
+    expect(voiceCueFor(undefined, at({ round: 3 }), session('tabata'))).toBeUndefined()
   })
 
   it('announces nothing for a finished workout', () => {
     expect(
-      voiceCueFor(at({}), at({ phase: 'finished', isComplete: true }), 'tabata'),
+      voiceCueFor(at({}), at({ phase: 'finished', isComplete: true }), session('tabata')),
     ).toBeUndefined()
   })
 })

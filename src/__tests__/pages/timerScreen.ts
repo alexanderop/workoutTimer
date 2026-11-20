@@ -29,7 +29,9 @@ export class TimerScreen extends AppScreen {
   // Scoped to the chooser region: mode names are substrings of the buttons'
   // accessible names, and outside the region a saved preset named "AMRAP 20"
   // would make the lookup ambiguous.
-  async chooseMode(name: 'AMRAP' | 'For Time' | 'EMOM' | 'Tabata' | 'Circuit'): Promise<void> {
+  async chooseMode(
+    name: 'AMRAP' | 'For Time' | 'EMOM' | 'Tabata' | 'Boxing' | 'Circuit',
+  ): Promise<void> {
     const chooser = await this.modeChooser()
     await chooser.getByRole('button', { name }).click()
   }

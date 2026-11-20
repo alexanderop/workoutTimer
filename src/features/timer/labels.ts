@@ -1,5 +1,5 @@
 import { circuitCycleMs, formatDuration } from './domain'
-import type { DerivedTimer, HistoryFilter, TimerPhase } from './domain'
+import type { BoxingTheme, DerivedTimer, HistoryFilter, TimerPhase } from './domain'
 import type { SessionStatus, TimerConfig, TimerMode } from '@/db'
 
 /**
@@ -25,6 +25,7 @@ type ModeKey = `timer.modes.${TimerMode}.${'name' | 'description'}`
 type UnitKey = `timer.setup.units.${'hoursShort' | 'minutesShort' | 'secondsShort'}`
 type RunPhaseKey = `timer.run.${'paused' | RunPhaseWord}`
 type HistoryFilterKey = `history.${HistoryFilter}`
+type ThemeKey = `timer.themes.${BoxingTheme}.${'name' | 'hint'}`
 
 /**
  * The slice of vue-i18n's `t` these functions use. `t` accepts every key in
@@ -32,12 +33,22 @@ type HistoryFilterKey = `history.${HistoryFilter}`
  * reach for a key outside the set.
  */
 export type Translate = (
-  key: ModeKey | UnitKey | RunPhaseKey | HistoryFilterKey,
+  key: ModeKey | UnitKey | RunPhaseKey | HistoryFilterKey | ThemeKey,
   named?: Record<string, number>,
 ) => string
 
 export function modeName(mode: TimerMode, t: Translate): string {
   return t(`timer.modes.${mode}.name`)
+}
+
+/** What a boxing round is for, in a word: "Speed". */
+export function themeName(theme: BoxingTheme, t: Translate): string {
+  return t(`timer.themes.${theme}.name`)
+}
+
+/** And what to do in it, in a line: "15 s fast hands, 15 s easy — repeat". */
+export function themeHint(theme: BoxingTheme, t: Translate): string {
+  return t(`timer.themes.${theme}.hint`)
 }
 
 export function modeDescription(mode: TimerMode, t: Translate): string {
@@ -63,6 +74,7 @@ export function configSummary(config: TimerConfig, t: Translate): string {
     case 'emom':
       return `${config.rounds} × ${formatDuration(config.intervalMs)}`
     case 'tabata':
+    case 'boxing':
       return `${config.rounds} × ${formatDuration(config.workMs)} / ${formatDuration(config.restMs)}`
     case 'custom':
       return `${config.repeat} × ${formatDuration(circuitCycleMs(config.blocks))}`
@@ -115,7 +127,7 @@ const RUN_PHASE_WORDS = {
 
 /**
  * What the running timer is doing, in one word: paused beats everything, a
- * named circuit block says what to do, and the phase's own word is the
+ * named circuit block or a themed boxing round says what to do, and the phase's own word is the
  * fallback. `undefined` for either argument is the moment before the session
  * row has arrived, which reads as the work phase — the screen renders its
  * "workout not found" branch instead in that case, so the word is never seen.
@@ -127,6 +139,7 @@ export function runPhaseName(
 ): string {
   if (status === 'paused') return t('timer.run.paused')
   if (timer?.phaseLabel !== undefined) return timer.phaseLabel
+  if (timer?.theme !== undefined) return themeName(timer.theme, t)
   return t(`timer.run.${RUN_PHASE_WORDS[timer?.phase ?? 'work']}`)
 }
 

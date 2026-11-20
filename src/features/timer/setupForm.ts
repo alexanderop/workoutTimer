@@ -1,6 +1,7 @@
 import { Atom } from '@effect/atom-vue'
-import { isPresetDraft } from '@/db'
+import { BOXING_PACES_MS, isPresetDraft } from '@/db'
 import {
+  BOXING_PROGRAMS,
   DEFAULT_CIRCUIT_BLOCKS,
   DEFAULT_CONFIGS,
   isTimerConfig,
@@ -51,6 +52,9 @@ export interface CircuitBlockDraft {
   readonly durationSeconds: number
 }
 
+type BoxingConfig = Extract<TimerConfig, { mode: 'boxing' }>
+type BoxingCallouts = BoxingConfig['callouts']
+
 export interface TimerSetupDraft {
   readonly durationSeconds: number
   readonly timeCapSeconds: number | undefined
@@ -59,6 +63,9 @@ export interface TimerSetupDraft {
   readonly rounds: number
   readonly workSeconds: number
   readonly restSeconds: number
+  readonly callouts: BoxingCallouts
+  readonly paceSeconds: number
+  readonly themes: BoxingConfig['themes']
   readonly blocks: ReadonlyArray<CircuitBlockDraft>
   readonly repeat: number
   readonly workoutNotes: string
@@ -74,6 +81,9 @@ const NOTHING_SET: TimerSetupDraft = {
   rounds: 0,
   workSeconds: 0,
   restSeconds: 0,
+  callouts: 'off',
+  paceSeconds: 0,
+  themes: [],
   blocks: [],
   repeat: 0,
   workoutNotes: '',
@@ -144,6 +154,16 @@ export function applyConfigToDraft(draft: TimerSetupDraft, config: TimerConfig):
         workSeconds: config.workMs / SECOND_MS,
         restSeconds: config.restMs / SECOND_MS,
         rounds: config.rounds,
+      }
+    case 'boxing':
+      return {
+        ...draft,
+        workSeconds: config.workMs / SECOND_MS,
+        restSeconds: config.restMs / SECOND_MS,
+        rounds: config.rounds,
+        callouts: config.callouts,
+        paceSeconds: config.paceMs / SECOND_MS,
+        themes: config.themes,
       }
     case 'custom':
       return {
@@ -285,6 +305,20 @@ export function toTimerConfig(mode: TimerMode, draft: TimerSetupDraft): TimerCon
         restMs: Math.round(draft.restSeconds * SECOND_MS),
         rounds: Math.round(draft.rounds),
       }
+    case 'boxing':
+      return {
+        mode: 'boxing',
+        workMs: Math.round(draft.workSeconds * SECOND_MS),
+        restMs: Math.round(draft.restSeconds * SECOND_MS),
+        rounds: Math.round(draft.rounds),
+        callouts: draft.callouts,
+        // The pace is one of three chips, never typed — anything else is a
+        // draft no screen can produce, and reads as the default.
+        paceMs:
+          BOXING_PACES_MS.find((pace) => pace === draft.paceSeconds * SECOND_MS) ??
+          DEFAULT_CONFIGS.boxing.paceMs,
+        themes: draft.themes,
+      }
     case 'custom':
       return {
         mode: 'custom',
@@ -342,6 +376,36 @@ export function moveCircuitBlock(
   const displaced: CircuitBlockDraft | undefined = blocks[to]
   if (moved === undefined || displaced === undefined) return blocks
   return blocks.map((block, at) => (at === from ? displaced : at === to ? moved : block))
+}
+
+/** The session a boxing draft is following: a named program, none, or one edited since. */
+export type BoxingProgram = keyof typeof BOXING_PROGRAMS
+export const BOXING_PROGRAM_NAMES =
+  // SAFETY: as with TIMER_MODES — the record's keys are exactly this union.
+  Object.keys(BOXING_PROGRAMS) as ReadonlyArray<BoxingProgram>
+
+/**
+ * Which program chip is lit. A program is its list of themes, so the draft
+ * says which one it follows without storing a name that could disagree with
+ * the rounds actually configured.
+ */
+export function boxingProgramOf(
+  themes: TimerSetupDraft['themes'],
+): BoxingProgram | 'freestyle' | undefined {
+  if (themes.length === 0) return 'freestyle'
+  return BOXING_PROGRAM_NAMES.find((name) => BOXING_PROGRAMS[name].themes.join() === themes.join())
+}
+
+/** The fields choosing a program sets: its themes, and the rounds they were written for. */
+export function boxingProgramPatch(program: BoxingProgram | 'freestyle'): Partial<TimerSetupDraft> {
+  if (program === 'freestyle') return { themes: [] }
+  const { workMs, restMs, themes } = BOXING_PROGRAMS[program]
+  return {
+    themes,
+    rounds: themes.length,
+    workSeconds: workMs / SECOND_MS,
+    restSeconds: restMs / SECOND_MS,
+  }
 }
 
 export const setupConfigAtom = Atom.family((key: string) =>

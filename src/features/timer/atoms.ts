@@ -10,6 +10,7 @@ import {
 } from '@/state/timerData'
 import { routeParamAtom } from '@/state/route'
 import { deriveTimer, finalResult, sortPresets, sortSessions } from '@/features/timer/domain'
+import { currentCall, type CallCue } from '@/features/timer/voiceCues'
 import type { WorkoutSession } from '@/db'
 import type { DerivedTimer, HistoryFilter } from '@/features/timer/domain'
 
@@ -179,4 +180,18 @@ export const resultNotesAtom = Atom.family((sessionId: string) =>
 export const keepAwakeAtom = Atom.make((get): boolean => {
   const session = get(currentSessionAtom)
   return get(timerSettingsValueAtom).keepAwake && session !== undefined && isLive(session)
+})
+
+/**
+ * The boxing call on screen: what the coach last asked for, until she asks
+ * for something else. Empty between calls, and `undefined` outside a boxing
+ * round altogether — the screen keeps the line's space for the first and
+ * gives it up for the second, so the clock does not jump as calls come and go.
+ * A cue name, so it only republishes when the call changes — not ten times a
+ * second with the clock it is derived from.
+ */
+export const runCallAtom = Atom.make((get): CallCue | '' | undefined => {
+  const session = get(currentSessionAtom)
+  const timer = get(runDerivedTimerAtom)
+  return session === undefined || timer === undefined ? undefined : currentCall(timer, session)
 })

@@ -2,7 +2,10 @@ import { describe, expect, it } from '@effect/vitest'
 import { Result, Schema } from 'effect'
 import { FastCheck } from 'effect/testing'
 import {
+  BOXING_PROGRAMS,
+  boxingThemeAt,
   capturesRoundSplits,
+  coachesByVoice,
   DEFAULT_CONFIGS,
   deriveTimer,
   elapsedSessionMs,
@@ -51,6 +54,15 @@ describe('timer domain', () => {
       forTime: { mode: 'forTime' },
       emom: { mode: 'emom', intervalMs: 60_000, rounds: 10 },
       tabata: { mode: 'tabata', workMs: 20_000, restMs: 10_000, rounds: 8 },
+      boxing: {
+        mode: 'boxing',
+        workMs: 180_000,
+        restMs: 60_000,
+        rounds: 6,
+        callouts: 'basic',
+        paceMs: 5_000,
+        themes: [],
+      },
       custom: {
         mode: 'custom',
         blocks: [
@@ -308,6 +320,110 @@ describe('timer domain', () => {
     })
   })
 
+  /** Boxing adds a voice, not a clock: every reading matches the Tabata it is shaped like. */
+  it('times a boxing workout exactly like the Tabata with the same rounds', () => {
+    const bout = { workMs: 180_000, restMs: 60_000, rounds: 3 }
+    const config = {
+      mode: 'boxing',
+      ...bout,
+      callouts: 'advanced',
+      paceMs: 3_000,
+      themes: ['warmup', 'speed'],
+    } satisfies TimerConfig
+    const boxing = session(config)
+    const tabata = session({ mode: 'tabata', ...bout })
+
+    expect(totalDurationMs(boxing.config)).toBe(660_000)
+    for (const now of [1_000, 91_000, 181_000, 240_999, 241_000, 660_999, 661_000]) {
+      // What boxing adds is coaching, read separately below.
+      const { theme: _theme, upNext: _upNext, ...clock } = deriveTimer(boxing, now)
+
+      expect(clock).toEqual(deriveTimer(tabata, now))
+    }
+    expect(deriveTimer(boxing, 181_000)).toMatchObject({ phase: 'rest', remainingMs: 60_000 })
+    expect(isTimerConfig(config)).toBe(true)
+    expect(isTimerConfig({ ...config, restMs: -1 })).toBe(false)
+  })
+
+  it('names the theme of the round being fought, and of the one coming up', () => {
+    const boxing = session(
+      { ...DEFAULT_CONFIGS.boxing, rounds: 3, themes: ['warmup', 'speed'] },
+      { status: 'countdown', startedAt: 4_000, countdownDurationMs: 3_000 },
+    )
+    const started = { ...boxing, status: 'running' as const }
+
+    // Before the bell and in every break: what is next, and how far along.
+    expect(deriveTimer(boxing, 2_000)).toMatchObject({
+      phase: 'countdown',
+      upNext: { round: 1, total: 3, theme: 'warmup' },
+    })
+    expect(deriveTimer(started, 4_000 + 190_000)).toMatchObject({
+      phase: 'rest',
+      upNext: { round: 2, total: 3, theme: 'speed' },
+    })
+    // The themes start over when the rounds outnumber them.
+    expect(deriveTimer(started, 4_000 + 430_000).upNext).toEqual({
+      round: 3,
+      total: 3,
+      theme: 'warmup',
+    })
+
+    // Mid-round there is nothing to look ahead to, only the round itself.
+    const fighting = deriveTimer(started, 4_000 + 250_000)
+    expect(fighting).toMatchObject({ phase: 'work', round: 2, theme: 'speed' })
+    expect(fighting.upNext).toBeUndefined()
+    expect(deriveTimer(started, 4_000 + 9_999_999)).not.toHaveProperty('upNext')
+  })
+
+  it('still says which round is next in a freestyle session, with no theme to name', () => {
+    const freestyle = session(DEFAULT_CONFIGS.boxing)
+
+    expect(deriveTimer(freestyle, 1_000 + 200_000).upNext).toEqual({
+      round: 2,
+      total: 6,
+      theme: undefined,
+    })
+    expect(deriveTimer(freestyle, 2_000).theme).toBeUndefined()
+    expect(deriveTimer(session(DEFAULT_CONFIGS.tabata), 1_000 + 25_000)).not.toHaveProperty(
+      'upNext',
+    )
+  })
+
+  it("repeats a program's themes from the start, and has none for freestyle", () => {
+    expect([1, 2, 3, 4].map((round) => boxingThemeAt(['warmup', 'power', 'speed'], round))).toEqual(
+      ['warmup', 'power', 'speed', 'warmup'],
+    )
+    expect(boxingThemeAt([], 1)).toBeUndefined()
+    expect(boxingThemeAt(['power'], 0)).toBe('power')
+  })
+
+  it('ships programs with one round per theme', () => {
+    expect(BOXING_PROGRAMS.classic.themes).toEqual([
+      'warmup',
+      'power',
+      'power',
+      'speed',
+      'speed',
+      'endurance',
+    ])
+    expect(BOXING_PROGRAMS.beginner).toEqual({
+      workMs: 120_000,
+      restMs: 60_000,
+      themes: ['warmup', 'combos', 'endurance'],
+    })
+  })
+
+  it('coaches a boxing workout by voice only when combinations were chosen', () => {
+    const boxing = DEFAULT_CONFIGS.boxing
+
+    expect(coachesByVoice(boxing)).toBe(true)
+    expect(coachesByVoice({ ...boxing, callouts: 'advanced' })).toBe(true)
+    expect(coachesByVoice({ ...boxing, callouts: 'off' })).toBe(false)
+    // A themed session is coached even with the calls off: the themes are spoken.
+    expect(coachesByVoice({ ...boxing, callouts: 'off', themes: ['speed'] })).toBe(true)
+    expect(coachesByVoice(DEFAULT_CONFIGS.tabata)).toBe(false)
+  })
+
   it('alternates Tabata work and rest without a final rest', () => {
     const tabata = session({ mode: 'tabata', workMs: 20_000, restMs: 10_000, rounds: 2 })
     expect(totalDurationMs(tabata.config)).toBe(50_000)
@@ -509,7 +625,7 @@ describe('timer domain', () => {
  */
 describe('timer vocabulary', () => {
   it('lists every mode, in the order the home screen offers them', () => {
-    expect(TIMER_MODES).toEqual(['amrap', 'forTime', 'emom', 'tabata', 'custom'])
+    expect(TIMER_MODES).toEqual(['amrap', 'forTime', 'emom', 'tabata', 'boxing', 'custom'])
   })
 
   /**
@@ -718,6 +834,17 @@ describe('timer domain, as properties', () => {
       workMs: nearMissNumber,
       restMs: nearMissNumber,
       rounds: nearMissNumber,
+    }),
+    FastCheck.record({
+      mode: FastCheck.constant('boxing' as const),
+      workMs: nearMissNumber,
+      restMs: nearMissNumber,
+      rounds: nearMissNumber,
+      callouts: FastCheck.constantFrom('off' as const, 'basic' as const, 'advanced' as const),
+      paceMs: FastCheck.constantFrom(3_000 as const, 5_000 as const, 8_000 as const),
+      themes: FastCheck.array(FastCheck.constantFrom('warmup' as const, 'speed' as const), {
+        maxLength: 32,
+      }),
     }),
     // Blocks perturbed one level down as well: the top-level `oneFieldOff`
     // only replaces the whole array, so the per-block bounds need their own

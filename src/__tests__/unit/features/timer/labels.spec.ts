@@ -7,6 +7,8 @@ import {
   modeDescription,
   modeName,
   runPhaseName,
+  themeHint,
+  themeName,
   type Translate,
 } from '@/features/timer/labels'
 import en from '@/i18n/messages/en'
@@ -31,6 +33,7 @@ describe('timer labels', () => {
       'For Time',
       'EMOM',
       'Tabata',
+      'Boxing',
       'Circuit',
     ])
     expect(TIMER_MODES.map((mode) => modeDescription(mode, translate))).toEqual([
@@ -38,6 +41,7 @@ describe('timer labels', () => {
       'Finish the work as fast as you can',
       'Start work on every interval',
       'Alternate focused work and rest',
+      'Rounds with combinations called out loud',
       'Build your own sequence of blocks',
     ])
   })
@@ -60,6 +64,17 @@ describe('timer labels', () => {
     expect(summarise({ mode: 'amrap', durationMs: 600_000 })).toBe('10:00')
     expect(summarise({ mode: 'forTime', timeCapMs: 900_000 })).toBe('15:00')
     expect(summarise({ mode: 'emom', intervalMs: 60_000, rounds: 12 })).toBe('12 × 01:00')
+    expect(
+      summarise({
+        mode: 'boxing',
+        workMs: 180_000,
+        restMs: 60_000,
+        rounds: 6,
+        callouts: 'basic',
+        paceMs: 5_000,
+        themes: [],
+      }),
+    ).toBe('6 × 03:00 / 01:00')
     expect(summarise({ mode: 'tabata', workMs: 20_000, restMs: 10_000, rounds: 8 })).toBe(
       '8 × 00:20 / 00:10',
     )
@@ -149,6 +164,18 @@ describe('the running timer in one word', () => {
     expect(runPhaseName('running', timer({ phase: 'rest', phaseLabel: 'Walk' }), translate)).toBe(
       'Walk',
     )
+  })
+
+  /** A themed boxing round says what it is for, where a plain one says "Work". */
+  it('names a themed boxing round by its theme', () => {
+    expect(runPhaseName('running', timer({ phase: 'work', theme: 'speed' }), translate)).toBe(
+      'Speed',
+    )
+    expect(runPhaseName('paused', timer({ phase: 'work', theme: 'speed' }), translate)).toBe(
+      'Paused',
+    )
+    expect(themeName('endurance', translate)).toBe('Endurance')
+    expect(themeHint('speed', translate)).toBe('15 sec fast hands, 15 sec easy, repeat')
   })
 
   it('gives the end of a workout a word of its own', () => {

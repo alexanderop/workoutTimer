@@ -5,6 +5,8 @@ import { DEFAULT_CONFIGS, isTimerConfig, TIMER_MODES } from '@/features/timer/do
 import {
   appendCircuitBlock,
   applyConfigToDraft,
+  boxingProgramOf,
+  boxingProgramPatch,
   BASE_DRAFT,
   durationOptions,
   moveCircuitBlock,
@@ -192,6 +194,9 @@ describe('toTimerConfig', () => {
     rounds: 12,
     workSeconds: 30,
     restSeconds: 15,
+    callouts: 'advanced',
+    paceSeconds: 3,
+    themes: ['warmup', 'speed'],
     blocks: [
       { label: 'Burpees', kind: 'work', durationSeconds: 40 },
       { label: '', kind: 'rest', durationSeconds: 20 },
@@ -215,6 +220,15 @@ describe('toTimerConfig', () => {
       restMs: 15_000,
       rounds: 12,
     })
+    expect(toTimerConfig('boxing', base)).toEqual({
+      mode: 'boxing',
+      workMs: 30_000,
+      restMs: 15_000,
+      rounds: 12,
+      callouts: 'advanced',
+      paceMs: 3_000,
+      themes: ['warmup', 'speed'],
+    })
     expect(toTimerConfig('custom', base)).toEqual({
       mode: 'custom',
       blocks: [
@@ -223,6 +237,48 @@ describe('toTimerConfig', () => {
       ],
       repeat: 4,
     })
+  })
+
+  /** The pace is one of three chips; a draft holding anything else reads as the default. */
+  it('falls back to the default pace for a value no chip offers', () => {
+    expect(toTimerConfig('boxing', { ...base, paceSeconds: 4 })).toMatchObject({ paceMs: 5_000 })
+    expect(toTimerConfig('boxing', { ...base, paceSeconds: 8 })).toMatchObject({ paceMs: 8_000 })
+  })
+
+  it('reads a boxing config back into the fields it was built from', () => {
+    const config = toTimerConfig('boxing', base)
+
+    expect(toTimerConfig('boxing', applyConfigToDraft(BASE_DRAFT, config))).toEqual(config)
+    expect(applyConfigToDraft(BASE_DRAFT, config)).toMatchObject({
+      callouts: 'advanced',
+      paceSeconds: 3,
+      themes: ['warmup', 'speed'],
+    })
+  })
+
+  /** A program is its themes, so the draft says which chip is lit without storing a name. */
+  it('recognises the program a draft is following', () => {
+    expect(boxingProgramOf([])).toBe('freestyle')
+    expect(boxingProgramOf(boxingProgramPatch('classic').themes ?? [])).toBe('classic')
+    expect(boxingProgramOf(boxingProgramPatch('beginner').themes ?? [])).toBe('beginner')
+    expect(boxingProgramOf(['speed', 'speed'])).toBeUndefined()
+  })
+
+  it('sets the rounds a program was written for, and leaves them alone for freestyle', () => {
+    expect(boxingProgramPatch('classic')).toMatchObject({
+      rounds: 6,
+      workSeconds: 180,
+      restSeconds: 60,
+    })
+    expect(boxingProgramPatch('beginner')).toMatchObject({
+      rounds: 3,
+      workSeconds: 120,
+      restSeconds: 60,
+    })
+    expect(boxingProgramPatch('freestyle')).toEqual({ themes: [] })
+    expect(
+      isTimerConfig(toTimerConfig('boxing', { ...base, ...boxingProgramPatch('classic') })),
+    ).toBe(true)
   })
 
   // An empty time cap is "no cap", not "a cap of zero" — the key has to be

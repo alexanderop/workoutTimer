@@ -71,6 +71,41 @@ const TabataConfigSchema = Schema.Struct({
 })
 
 /**
+ * How much the coach calls during a boxing round, and how often. Spelled once
+ * like `START_COUNTDOWN_OPTIONS`: the schema's literal sets are the lists the
+ * setup screen renders, so it cannot offer a value the schema would refuse.
+ */
+export const BOXING_CALLOUTS = ['off', 'basic', 'advanced'] as const
+export const BOXING_PACES_MS = [8_000, 5_000, 3_000] as const
+/**
+ * What a round is *for*. A bag session where every round is the same is the
+ * thing coaches warn against: the round's theme decides what the voice asks
+ * for — easy jabs, hard single shots, fifteen-second sprints, non-stop work.
+ * `combos` is the unthemed round, called by level and pace.
+ */
+export const BOXING_THEMES = ['combos', 'warmup', 'power', 'speed', 'endurance'] as const
+
+/**
+ * A Tabata by structure — work, rest, rounds — which is why it shares those
+ * field names: the clock derives both the same way. What makes it boxing is
+ * the second voice layer: what the coach calls inside each round, and what
+ * each round is for.
+ */
+const BoxingConfigSchema = Schema.Struct({
+  mode: Schema.Literal('boxing'),
+  workMs: Duration,
+  restMs: RestDuration,
+  rounds: Count,
+  callouts: Schema.Literals(BOXING_CALLOUTS),
+  paceMs: Schema.Literals(BOXING_PACES_MS),
+  /**
+   * One theme per round, repeated from the start when there are more rounds
+   * than themes. Empty is the freestyle session: no themes at all.
+   */
+  themes: Schema.Array(Schema.Literals(BOXING_THEMES)).check(Schema.isMaxLength(30)),
+})
+
+/**
  * One step of a custom circuit: what to do, for how long, under what name.
  * The label may be empty — the run screen then falls back to the kind's own
  * word — but it is always present, so a block is one shape, not two.
@@ -105,6 +140,7 @@ export const TimerConfigSchema = Schema.Union([
   ForTimeConfigSchema,
   EmomConfigSchema,
   TabataConfigSchema,
+  BoxingConfigSchema,
   CustomConfigSchema,
 ])
 

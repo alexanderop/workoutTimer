@@ -1,4 +1,4 @@
-import { FINISHED_STATUSES } from '@/db'
+import { BOXING_CALLOUTS, BOXING_PACES_MS, BOXING_THEMES, FINISHED_STATUSES } from '@/db'
 import type {
   CircuitBlock,
   SessionStatus,
@@ -37,6 +37,15 @@ export const DEFAULT_CONFIGS = {
   forTime: { mode: 'forTime' },
   emom: { mode: 'emom', intervalMs: MINUTE_MS, rounds: 10 },
   tabata: { mode: 'tabata', workMs: 20 * SECOND_MS, restMs: 10 * SECOND_MS, rounds: 8 },
+  boxing: {
+    mode: 'boxing',
+    workMs: 3 * MINUTE_MS,
+    restMs: MINUTE_MS,
+    rounds: 6,
+    callouts: 'basic',
+    paceMs: 5_000,
+    themes: [],
+  },
   custom: {
     mode: 'custom',
     blocks: [DEFAULT_CIRCUIT_BLOCKS.work, DEFAULT_CIRCUIT_BLOCKS.rest],
@@ -73,6 +82,72 @@ export function capturesRoundSplits(mode: TimerMode): boolean {
   return mode === 'amrap' || mode === 'forTime'
 }
 
+/**
+ * Whether this workout was set up to be coached out loud. Combinations are
+ * the point of a boxing round, so choosing them is the athlete asking for the
+ * voice — the global setting, off by default, must not leave them shadow-boxing
+ * in silence.
+ */
+export function coachesByVoice(config: TimerConfig): boolean {
+  return config.mode === 'boxing' && (config.callouts !== 'off' || config.themes.length > 0)
+}
+
+type BoxingConfig = Extract<TimerConfig, { mode: 'boxing' }>
+export type BoxingTheme = BoxingConfig['themes'][number]
+
+/**
+ * The theme of round `round` (1-based). The list repeats when the workout has
+ * more rounds than themes, so adding a seventh round to a six-round program
+ * starts it over rather than leaving the round without one. `undefined` for a
+ * freestyle session, which has no themes to speak of.
+ */
+export function boxingThemeAt(
+  themes: ReadonlyArray<BoxingTheme>,
+  round: number,
+): BoxingTheme | undefined {
+  return themes[(Math.max(1, round) - 1) % Math.max(1, themes.length)]
+}
+
+/**
+ * Ready-made sessions: the round themes, and the round shape they were
+ * written for. `classic` is the six-round bag workout most coaching guides
+ * converge on — warm up, two rounds of power, two of speed, one of non-stop
+ * work. Each program is exactly as many rounds as it has themes.
+ */
+export const BOXING_PROGRAMS = {
+  classic: {
+    workMs: 3 * MINUTE_MS,
+    restMs: MINUTE_MS,
+    themes: ['warmup', 'power', 'power', 'speed', 'speed', 'endurance'],
+  },
+  beginner: {
+    workMs: 2 * MINUTE_MS,
+    restMs: MINUTE_MS,
+    themes: ['warmup', 'combos', 'endurance'],
+  },
+} satisfies Readonly<
+  Record<string, { workMs: number; restMs: number; themes: ReadonlyArray<BoxingTheme> }>
+>
+
+/**
+ * What a boxing session adds to a derived reading: the theme of the round
+ * being fought, or — in the breaks, when the athlete is actually looking at
+ * the phone — which round comes next and what it is for.
+ */
+function boxingCoaching(
+  config: TimerConfig,
+  phase: TimerPhase,
+  round: number,
+): Pick<DerivedTimer, 'theme' | 'upNext'> {
+  if (config.mode !== 'boxing') return {}
+  if (phase === 'work') return { theme: boxingThemeAt(config.themes, round) }
+  if (phase === 'finished') return {}
+  const next = phase === 'countdown' ? 1 : round + 1
+  return {
+    upNext: { round: next, total: config.rounds, theme: boxingThemeAt(config.themes, next) },
+  }
+}
+
 /** `all`, or one of the ways a workout can be over. */
 export type HistoryFilter = 'all' | SessionStatus
 
@@ -94,6 +169,21 @@ function isCount(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 1 && value <= 999
 }
 
+/** Work, rest and rounds — the part of a config Tabata and boxing share. */
+function isIntervalPlan(plan: {
+  readonly workMs: number
+  readonly restMs: number
+  readonly rounds: number
+}): boolean {
+  return (
+    isDuration(plan.workMs) &&
+    Number.isSafeInteger(plan.restMs) &&
+    plan.restMs >= 0 &&
+    plan.restMs <= MAX_DURATION_MS &&
+    isCount(plan.rounds)
+  )
+}
+
 export function isTimerConfig(config: TimerConfig): boolean {
   switch (config.mode) {
     case 'amrap':
@@ -106,12 +196,15 @@ export function isTimerConfig(config: TimerConfig): boolean {
     case 'emom':
       return isDuration(config.intervalMs) && isCount(config.rounds)
     case 'tabata':
+      return isIntervalPlan(config)
+    case 'boxing':
       return (
-        isDuration(config.workMs) &&
-        Number.isSafeInteger(config.restMs) &&
-        config.restMs >= 0 &&
-        config.restMs <= MAX_DURATION_MS &&
-        isCount(config.rounds)
+        isIntervalPlan(config) &&
+        BOXING_CALLOUTS.some((level) => level === config.callouts) &&
+        BOXING_PACES_MS.some((pace) => pace === config.paceMs) &&
+        Array.isArray(config.themes) &&
+        config.themes.length <= MAX_CIRCUIT_BLOCKS &&
+        config.themes.every((theme) => BOXING_THEMES.some((known) => known === theme))
       )
     case 'custom':
       return (
@@ -137,6 +230,7 @@ export function totalDurationMs(config: TimerConfig): number | undefined {
     case 'emom':
       return config.intervalMs * config.rounds
     case 'tabata':
+    case 'boxing':
       return config.workMs * config.rounds + config.restMs * Math.max(0, config.rounds - 1)
     case 'custom':
       return circuitCycleMs(config.blocks) * config.repeat
@@ -178,6 +272,17 @@ export type DerivedTimer = {
    * on the mode itself (the arch tier's V1 rule).
    */
   readonly phaseLabel?: string
+  /** What the boxing round being fought is for. Absent in a freestyle session. */
+  readonly theme?: BoxingTheme | undefined
+  /**
+   * The boxing round the athlete is about to start, set during the start
+   * countdown and every rest — the only moments anyone reads the screen.
+   */
+  readonly upNext?: {
+    readonly round: number
+    readonly total: number
+    readonly theme: BoxingTheme | undefined
+  }
   readonly round: number
   /**
    * Rounds actually finished, which is what result screens report: tapped
@@ -251,6 +356,7 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       completedRounds: 0,
       progress: clamp(1 - remaining / Math.max(1, session.countdownDurationMs), 0, 1),
       isComplete: false,
+      ...boxingCoaching(session.config, 'countdown', 0),
     }
   }
 
@@ -319,7 +425,9 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
         isComplete: complete,
       }
     }
-    case 'tabata': {
+    // Boxing keeps Tabata's clock: what it adds is spoken, not timed.
+    case 'tabata':
+    case 'boxing': {
       const total = totalDurationMs(session.config) ?? 0
       const cappedElapsed = Math.min(elapsed, total)
       const complete = completedInStorage || elapsed >= total
@@ -350,16 +458,20 @@ export function deriveTimer(session: WorkoutSession, now: number): DerivedTimer 
       const phaseDuration = resting ? session.config.restMs : session.config.workMs
       const phaseElapsed = resting ? withinCycle - session.config.workMs : withinCycle
 
+      const phase = resting ? 'rest' : 'work'
+      const round = Math.min(session.config.rounds, roundIndex + 1)
+
       return {
         elapsedMs: cappedElapsed,
         primaryMs: Math.max(0, phaseDuration - phaseElapsed),
         remainingMs: Math.max(0, phaseDuration - phaseElapsed),
-        phase: resting ? 'rest' : 'work',
-        round: Math.min(session.config.rounds, roundIndex + 1),
+        phase,
+        round,
         completedRounds,
         totalRounds: session.config.rounds,
         progress: clamp(phaseElapsed / Math.max(1, phaseDuration), 0, 1),
         isComplete: false,
+        ...boxingCoaching(session.config, phase, round),
       }
     }
     case 'custom': {
