@@ -1,0 +1,53 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# One deployment at a time, and never cancel one half-way: a cancelled Pages
+# deployment can leave the site on the previous build with no run to blame.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build for GitHub Pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/setup
+      # A project site is served from /<repository>/, not from the domain
+      # root. The base is passed here rather than set in vite.config.ts so
+      # that dev, preview and the e2e tier keep running at "/". The router,
+      # the PWA manifest and the voice clips all read it from Vite.
+      - name: Build
+        run: pnpm build-only --base=/workoutTimer/
+      # Pages has no rewrite rules: a reload on /workoutTimer/session/abc is a
+      # 404 unless the 404 page is the app itself, which then routes it.
+      - name: Serve the app for deep links
+        run: cp dist/index.html dist/404.html
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # publish the uploaded artifact as the site
+      id-token: write # prove to Pages that this run is the one deploying
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
