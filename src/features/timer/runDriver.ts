@@ -2,8 +2,14 @@ import { Atom, type AtomRegistry } from '@effect/atom-vue'
 import { Effect, Schedule } from 'effect'
 import { finishSession, markSessionRunning, sessionMutation, type DbServices } from '@/db'
 import { currentSessionAtom, nowAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
-import { capturesRoundSplits, deriveTimer, SECOND_MS } from '@/features/timer/domain'
+import {
+  capturesRoundSplits,
+  deriveTimer,
+  SECOND_MS,
+  type DerivedTimer,
+} from '@/features/timer/domain'
 import { emitTimerCue } from '@/features/timer/timerFeedback'
+import { countdownVoiceCue, voiceCueFor } from '@/features/timer/voiceCues'
 import { i18n } from '@/i18n'
 import { RouteNames } from '@/router/routeNames'
 import { navigationAtom } from '@/state/route'
@@ -141,7 +147,7 @@ export const timerRunDriverAtom = Atom.make((get): null => {
     `${session.id}:finished`,
     finishSession(session.id, reason).pipe(
       Effect.retry(RETRY_POLICY),
-      Effect.tap(() => Effect.sync(() => emitTimerCue(settings, 'complete'))),
+      Effect.tap(() => Effect.sync(() => emitTimerCue(settings, 'complete', 'complete'))),
       Effect.catchTag('Db.DatabaseError', (error) =>
         report('finish workout')(error).pipe(
           Effect.andThen(
@@ -155,8 +161,8 @@ export const timerRunDriverAtom = Atom.make((get): null => {
 })
 
 /**
- * The audible half of the same screen: a cue on every phase change, and one
- * per second over the last three.
+ * The audible half of the same screen: a cue on every phase change, one per
+ * second over the last three, and the coach's spoken lines in between.
  *
  * The `let`s below are the reason this is a subscription rather than a
  * dependency of `timerRunDriverAtom`'s read. "Did the phase change?" needs the
@@ -165,8 +171,7 @@ export const timerRunDriverAtom = Atom.make((get): null => {
  * volume change from restarting the sequence and re-announcing "3".
  */
 export const timerCueAtom = Atom.make((get): null => {
-  let previousPhase: string | undefined
-  let previousRound: number | undefined
+  let previous: DerivedTimer | undefined
   let previousCountdownSecond: number | undefined
 
   get.subscribe(
@@ -174,10 +179,16 @@ export const timerCueAtom = Atom.make((get): null => {
     (state) => {
       if (state === undefined || state.phase === 'finished') return
       const settings = get.registry.get(timerSettingsValueAtom)
+      const session = get.registry.get(currentSessionAtom)
+      // The coach's line for this tick, if she has one: "Round three", "Rest",
+      // "Halfway there", "Ten seconds". It rides along with the beep where
+      // there is one and stands alone where there is not.
+      const voice =
+        session === undefined ? undefined : voiceCueFor(previous, state, session.config.mode)
 
-      if (previousPhase !== undefined && previousPhase !== state.phase) {
-        emitTimerCue(settings, 'phase')
-      } else if (previousRound !== undefined && previousRound !== state.round) {
+      if (previous !== undefined && previous.phase !== state.phase) {
+        emitTimerCue(settings, 'phase', voice)
+      } else if (previous !== undefined && previous.round !== state.round) {
         // EMOM's phase is `work` from the first second to the last, so the
         // phase cue above never fires for it — the athlete heard the 3-2-1 and
         // then silence at the exact moment the round turned over, in the one
@@ -189,13 +200,13 @@ export const timerCueAtom = Atom.make((get): null => {
         // `round` is the number of splits the athlete has tapped, and the tap
         // already cues itself in `TimerRunView.addRound` — from the write,
         // so that a debounced tap makes no sound.
-        const session = get.registry.get(currentSessionAtom)
         if (session !== undefined && !capturesRoundSplits(session.config.mode)) {
-          emitTimerCue(settings, 'phase')
+          emitTimerCue(settings, 'phase', voice)
         }
+      } else if (voice !== undefined) {
+        emitTimerCue(settings, 'voice', voice)
       }
-      previousPhase = state.phase
-      previousRound = state.round
+      previous = state
 
       // `remainingMs`, not `primaryMs`. The two agree in every mode whose big
       // clock counts down, which is why this read the wrong field for so
@@ -204,7 +215,7 @@ export const timerCueAtom = Atom.make((get): null => {
       const remaining = state.remainingMs
       const second = remaining === undefined ? undefined : Math.ceil(remaining / SECOND_MS)
       if (second !== undefined && second <= 3 && second > 0 && second !== previousCountdownSecond) {
-        emitTimerCue(settings, 'countdown', String(second))
+        emitTimerCue(settings, 'countdown', countdownVoiceCue(second))
       }
       previousCountdownSecond = second
     },

@@ -34,6 +34,9 @@ export default defineConfig({
         display: 'standalone',
       },
       workbox: {
+        // The coach's clips are fetched at run time, so the default js/css/html
+        // glob would leave them out of the precache and the voice offline.
+        globPatterns: ['**/*.{js,css,html,mp3}'],
         runtimeCaching: [
           {
             // `sameOrigin` is load-bearing, not tidiness: a cross-origin

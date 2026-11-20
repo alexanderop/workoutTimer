@@ -149,7 +149,7 @@ export default {
       sound: 'Sounds',
       soundVolume: 'Sound volume',
       haptics: 'Haptics',
-      spokenCountdown: 'Spoken countdown',
+      spokenCountdown: 'Voice coach',
       startCountdown: 'Start countdown',
       countdownOff: 'Off',
       countdownSeconds: '{count} seconds',

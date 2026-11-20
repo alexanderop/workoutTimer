@@ -151,7 +151,7 @@ const de: MessageSchema = {
       sound: 'Töne',
       soundVolume: 'Lautstärke',
       haptics: 'Haptik',
-      spokenCountdown: 'Gesprochener Countdown',
+      spokenCountdown: 'Sprachansagen',
       startCountdown: 'Start-Countdown',
       countdownOff: 'Aus',
       countdownSeconds: '{count} Sekunden',
