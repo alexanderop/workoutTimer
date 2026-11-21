@@ -14,6 +14,7 @@ export { exportData, importData } from './backup'
 // predicates, and the lists themselves are for the repository's index lookup
 // and for the specs that walk every status.
 export {
+  BOXING_CALL_STYLES,
   BOXING_CALLOUTS,
   BOXING_PACES_MS,
   BOXING_THEMES,

@@ -10,7 +10,7 @@ import {
 } from '@/state/timerData'
 import { routeParamAtom } from '@/state/route'
 import { deriveTimer, finalResult, sortPresets, sortSessions } from '@/features/timer/domain'
-import { currentCall, type CallCue } from '@/features/timer/voiceCues'
+import { callStyleOf, currentCall, type CallCue } from '@/features/timer/voiceCues'
 import type { WorkoutSession } from '@/db'
 import type { DerivedTimer, HistoryFilter } from '@/features/timer/domain'
 
@@ -194,4 +194,10 @@ export const runCallAtom = Atom.make((get): CallCue | '' | undefined => {
   const session = get(currentSessionAtom)
   const timer = get(runDerivedTimerAtom)
   return session === undefined || timer === undefined ? undefined : currentCall(timer, session)
+})
+
+/** Whether the screen writes a call in names or in punch numbers: whichever the voice is using. */
+export const runCallStyleAtom = Atom.make((get) => {
+  const session = get(currentSessionAtom)
+  return session === undefined ? 'names' : callStyleOf(session)
 })

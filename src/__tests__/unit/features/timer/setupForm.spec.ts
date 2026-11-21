@@ -195,6 +195,7 @@ describe('toTimerConfig', () => {
     workSeconds: 30,
     restSeconds: 15,
     callouts: 'advanced',
+    callsAs: 'numbers',
     paceSeconds: 3,
     themes: ['warmup', 'speed'],
     blocks: [
@@ -226,6 +227,7 @@ describe('toTimerConfig', () => {
       restMs: 15_000,
       rounds: 12,
       callouts: 'advanced',
+      callsAs: 'numbers',
       paceMs: 3_000,
       themes: ['warmup', 'speed'],
     })
@@ -251,6 +253,7 @@ describe('toTimerConfig', () => {
     expect(toTimerConfig('boxing', applyConfigToDraft(BASE_DRAFT, config))).toEqual(config)
     expect(applyConfigToDraft(BASE_DRAFT, config)).toMatchObject({
       callouts: 'advanced',
+      callsAs: 'numbers',
       paceSeconds: 3,
       themes: ['warmup', 'speed'],
     })

@@ -61,6 +61,7 @@ describe('timer domain', () => {
         rounds: 6,
         callouts: 'basic',
         paceMs: 5_000,
+        callsAs: 'names',
         themes: [],
       },
       custom: {
@@ -328,6 +329,7 @@ describe('timer domain', () => {
       ...bout,
       callouts: 'advanced',
       paceMs: 3_000,
+      callsAs: 'numbers',
       themes: ['warmup', 'speed'],
     } satisfies TimerConfig
     const boxing = session(config)
@@ -842,6 +844,7 @@ describe('timer domain, as properties', () => {
       rounds: nearMissNumber,
       callouts: FastCheck.constantFrom('off' as const, 'basic' as const, 'advanced' as const),
       paceMs: FastCheck.constantFrom(3_000 as const, 5_000 as const, 8_000 as const),
+      callsAs: FastCheck.constantFrom('names' as const, 'numbers' as const),
       themes: FastCheck.array(FastCheck.constantFrom('warmup' as const, 'speed' as const), {
         maxLength: 32,
       }),

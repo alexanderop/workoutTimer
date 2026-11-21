@@ -4,6 +4,7 @@ import { DEFAULT_CONFIGS, type DerivedTimer } from '@/features/timer/domain'
 import {
   countdownVoiceCue,
   callSteps,
+  callStyleOf,
   currentCall,
   voiceCueFor,
   type CueSession,
@@ -224,7 +225,7 @@ describe('a boxing round', () => {
     Array.from({ length: 180 }, (_, second) => tick(second * 1_000, bout, round))
 
   it('calls a combination on every slot of the chosen pace', () => {
-    expect(tick(5_000)).toMatch(/^(combo-\d\d|hands-up|keep-moving)$/)
+    expect(tick(5_000)).toMatch(/^combo-\d\d$/)
     expect(tick(10_000)).toBeDefined()
     expect(tick(7_000)).toBeUndefined()
     expect(tick(8_000, boxing({ paceMs: 8_000 }))).toBeDefined()
@@ -236,19 +237,37 @@ describe('a boxing round', () => {
     expect(tick(0)).toBeUndefined()
   })
 
-  it('keeps the basics to the jab, the cross and the hook', () => {
-    const basics = new Set(
-      everySlot(boxing({ paceMs: 3_000 })).filter((cue) => cue?.startsWith('combo-')),
-    )
-    const advanced = new Set(
-      everySlot(boxing({ paceMs: 3_000, callouts: 'advanced' })).filter((cue) =>
-        cue?.startsWith('combo-'),
+  /** Every punch the screen would show across six rounds of a session, call by call. */
+  const callsShown = (bout: CueSession) =>
+    [1, 2, 3, 4, 5, 6].flatMap((round) =>
+      Array.from({ length: 180 }, (_, second) =>
+        callSteps(currentCall(remaining(180_000 - second * 1_000, 180_000, { round }), bout) ?? ''),
       ),
     )
 
-    expect([...basics].every((cue) => Number(cue?.slice(6)) <= 12)).toBe(true)
-    expect([...advanced].some((cue) => Number(cue?.slice(6)) > 12)).toBe(true)
-    expect(basics.size).toBeGreaterThan(6)
+  /** Read off what the screen shows, so a new combination cannot slip into the wrong set. */
+  it('keeps the basics to the jab, the cross and the hook', () => {
+    const punches = (bout: CueSession) =>
+      new Set(
+        callsShown(bout)
+          .flat()
+          .map((step) => step.label),
+      )
+    const basics = punches(boxing({ paceMs: 3_000 }))
+    const advanced = punches(boxing({ paceMs: 3_000, callouts: 'advanced' }))
+
+    expect([...basics].toSorted()).toEqual(['Cross', 'Double jab', 'Hook', 'Jab'])
+    expect(advanced).toContain('Uppercut')
+    expect(advanced).toContain('Slip')
+    expect(advanced).toContain('Hook to the body')
+  })
+
+  it('never asks for more than four punches', () => {
+    const lengths = callsShown(boxing({ paceMs: 3_000, callouts: 'advanced' })).map(
+      (steps) => steps.length,
+    )
+
+    expect(Math.max(...lengths)).toBe(4)
   })
 
   it('says nothing between the time calls when combinations are off', () => {
@@ -267,12 +286,31 @@ describe('a boxing round', () => {
     expect(everySlot(boxing({}, 'session-2'))).not.toEqual(everySlot(boxing()))
   })
 
-  it('never calls the same line twice in a row', () => {
+  /**
+   * Once to hear it, once to throw it, once to throw it hard — then a new one.
+   * A different call every few seconds is a memory test, not bag work.
+   */
+  it('calls each combination three times running, then moves on', () => {
     for (const round of [1, 2, 3, 4, 5, 6]) {
-      const spoken = everySlot(boxing({ paceMs: 3_000 }), round).filter((cue) => cue !== undefined)
+      const [first, second, third, fourth, fifth, sixth, seventh] = [5, 10, 15, 20, 25, 30, 35].map(
+        (second) => tick(second * 1_000, boxing(), round),
+      )
 
-      expect(spoken.some((cue, index) => cue === spoken[index - 1])).toBe(false)
+      expect([second, third]).toEqual([first, first])
+      expect(fourth).not.toBe(first)
+      expect([fifth, sixth]).toEqual([fourth, fourth])
+      expect(seventh).not.toBe(fourth)
     }
+  })
+
+  /** A time call takes a slot from the set it lands in; the set does not start over after it. */
+  it('lets a time call interrupt a set without restarting it', () => {
+    const calls = everySlot(boxing())
+
+    // Slots 16-18 are 80 s, 85 s and 90 s: "Halfway" owns the third.
+    expect(calls[85]).toBe(calls[80])
+    expect(calls[90]).toBe('halfway')
+    expect(calls[95]).not.toBe(calls[85])
   })
 
   /** The time calls win their own tick, and no combination is cut off by one. */
@@ -420,7 +458,7 @@ describe('a themed boxing session', () => {
     const calls = callsOf(2, beginner)
 
     expect(calls.length).toBeGreaterThan(20)
-    expect(calls.every((cue) => /^(combo-\d\d|hands-up|keep-moving)$/.test(cue ?? ''))).toBe(true)
+    expect(calls.every((cue) => /^combo-\d\d$/.test(cue ?? ''))).toBe(true)
   })
 
   it('repeats the themes when the rounds outnumber them', () => {
@@ -482,10 +520,11 @@ describe('the call on screen', () => {
   it('shows the call the voice just made, until the next one', () => {
     const spoken = voiceCueFor(at3min(4_900), at3min(5_000), boxing())
 
-    expect(spoken).toMatch(/^(combo-\d\d|hands-up|keep-moving)$/)
+    expect(spoken).toMatch(/^combo-\d\d$/)
     expect(currentCall(at3min(5_000), boxing())).toBe(spoken)
-    expect(currentCall(at3min(9_900), boxing())).toBe(spoken)
-    expect(currentCall(at3min(10_000), boxing())).not.toBe(spoken)
+    // Three calls of it, five seconds apart — and it stays up between them.
+    expect(currentCall(at3min(19_900), boxing())).toBe(spoken)
+    expect(currentCall(at3min(20_000), boxing())).not.toBe(spoken)
   })
 
   /** A reload mid-round has no "previous" reading, and still shows the call. */
@@ -536,8 +575,45 @@ describe('the call on screen', () => {
   it('gives a slip, a roll or a word from the corner no hand', () => {
     expect(shown('combo-16')).toBe('Jab L · Cross R · Slip · Cross R')
     expect(shown('combo-24')).toBe('Roll · Hook L · Cross R')
-    expect(shown('hands-up')).toBe('Hands up')
+    expect(shown('fast-hands')).toBe('Fast hands')
     expect(shown('easy-breathe')).toBe('Easy · Breathe')
+  })
+
+  /** The gym's numbers, for a right-hander: 1 jab, 2 cross, 3 hook, 5 and 6 the uppercuts. */
+  it('writes a call in punch numbers when the voice is using them', () => {
+    const numbered = (cue: Parameters<typeof callSteps>[0]) =>
+      callSteps(cue, 'numbers')
+        .map((step) => (step.side === undefined ? step.label : `${step.label} ${step.side}`))
+        .join(' · ')
+
+    expect(numbered('combo-04')).toBe('1 · 1 L · 2 R')
+    expect(numbered('combo-09')).toBe('1 L · 2 R · 3 L · 2 R')
+    expect(numbered('combo-25')).toBe('1 L · 6 R · 3 L · 2 R')
+    expect(numbered('combo-26')).toBe('1 L · 2 R · 5 L · 2 R')
+    expect(numbered('combo-18')).toBe('2 R · 3 body L')
+    // A slip has no number, and neither does a sprint call.
+    expect(numbered('combo-16')).toBe('1 L · 2 R · Slip · 2 R')
+    expect(numbered('fast-hands')).toBe('Fast hands')
+  })
+
+  /** One combination, one clip per style: the number clip carries the same index. */
+  it('plays the number clip for the combination it would have named', () => {
+    const named = voiceCueFor(at3min(4_900), at3min(5_000), boxing())
+    const numbered = voiceCueFor(at3min(4_900), at3min(5_000), boxing({ callsAs: 'numbers' }))
+
+    expect(named).toMatch(/^combo-\d\d$/)
+    expect(numbered).toBe(named?.replace('combo-', 'num-'))
+    // The screen keeps its own key either way; only the words on it change.
+    expect(currentCall(at3min(5_000), boxing({ callsAs: 'numbers' }))).toBe(named)
+    expect(callStyleOf(boxing({ callsAs: 'numbers' }))).toBe('numbers')
+    expect(callStyleOf(boxing())).toBe('names')
+    expect(callStyleOf(session('tabata'))).toBe('names')
+  })
+
+  it('leaves the sprint calls of a speed round as they are', () => {
+    const speed = boxing({ themes: ['speed'], callsAs: 'numbers' })
+
+    expect(voiceCueFor(at3min(21_900), at3min(22_000), speed)).toBe('easy-breathe')
   })
 
   it('draws nothing for no call', () => {

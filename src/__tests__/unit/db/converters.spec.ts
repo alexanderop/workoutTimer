@@ -56,13 +56,35 @@ describe('workout schemas', () => {
       paceMs: 5_000,
       themes: ['warmup', 'speed'],
     }
-    const decode = (config: typeof boxing) =>
+    const decode = (config: typeof boxing & { callsAs?: string }) =>
       Effect.runPromise(decodePresetDraft({ name: 'Bag work', config, workoutNotes: '' }))
 
     await expect(decode(boxing)).resolves.toMatchObject({ config: boxing })
     await expect(decode({ ...boxing, paceMs: 4_000 })).rejects.toBeDefined()
     await expect(decode({ ...boxing, callouts: 'expert' })).rejects.toBeDefined()
     await expect(decode({ ...boxing, themes: ['sparring'] })).rejects.toBeDefined()
+    await expect(decode({ ...boxing, callsAs: 'numbers' })).resolves.toMatchObject({
+      config: { callsAs: 'numbers' },
+    })
+    await expect(decode({ ...boxing, callsAs: 'letters' })).rejects.toBeDefined()
+  })
+
+  /** A boxing preset saved before the choice existed has no `callsAs`, and was using names. */
+  it('reads a boxing config saved before combinations could be called by number', async () => {
+    const saved = {
+      mode: 'boxing',
+      workMs: 180_000,
+      restMs: 60_000,
+      rounds: 6,
+      callouts: 'basic',
+      paceMs: 5_000,
+      themes: [],
+    }
+    const draft = await Effect.runPromise(
+      decodePresetDraft({ name: 'Bag work', config: saved, workoutNotes: '' }),
+    )
+
+    expect(draft.config).toEqual({ ...saved, callsAs: 'names' })
   })
 
   it('defaults soundVolume to full for settings rows written before db v2', async () => {

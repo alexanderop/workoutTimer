@@ -15,7 +15,12 @@ import {
   type FinishReason,
   updateTimerSettings,
 } from '@/db'
-import { currentSessionAtom, runCallAtom, runDerivedTimerAtom } from '@/features/timer/atoms'
+import {
+  currentSessionAtom,
+  runCallAtom,
+  runCallStyleAtom,
+  runDerivedTimerAtom,
+} from '@/features/timer/atoms'
 import { audioUnlockEffectAtom } from '@/features/timer/audioUnlock'
 import TimerRing from '@/features/timer/components/TimerRing.vue'
 import { capturesRoundSplits, formatDuration, SECOND_MS } from '@/features/timer/domain'
@@ -44,6 +49,7 @@ const session = useAtomValue(() => currentSessionAtom)
 const settings = useAtomValue(() => timerSettingsValueAtom)
 const derived = useAtomValue(() => runDerivedTimerAtom)
 const call = useAtomValue(() => runCallAtom)
+const callStyle = useAtomValue(() => runCallStyleAtom)
 
 // Subscribing is what starts them: the transition machine, the audio cues, the
 // wake lock and the first-gesture audio unlock all live in atoms and run only
@@ -266,7 +272,7 @@ function toggleSound(): Promise<void> {
       >
         <ol v-if="call !== ''" class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
           <li
-            v-for="(step, index) in callSteps(call)"
+            v-for="(step, index) in callSteps(call, callStyle)"
             :key="index"
             class="flex items-center gap-1.5 text-2xl leading-none font-bold tracking-tight"
           >

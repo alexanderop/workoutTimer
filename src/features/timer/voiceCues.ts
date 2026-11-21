@@ -19,8 +19,15 @@ const ROUND_CUES = Array.from(
 /**
  * The boxing combinations, as whole recorded phrases — "Jab, cross, hook" —
  * rather than single punches stitched together, which sounds like a machine
- * reading a list. The first dozen use only the jab, the cross and the hook;
- * the second adds uppercuts, body shots, slips and rolls.
+ * reading a list. None is longer than four punches: past that a call stops
+ * being something to throw and becomes something to remember.
+ *
+ * The basics use only the jab, the cross and the hook, and hold the
+ * combinations every coaching guide teaches first: the one-two, the double
+ * jab-cross, jab-cross-hook, jab-cross-hook-cross, cross-hook-cross. The
+ * advanced set adds uppercuts, body shots, slips and rolls — among them the
+ * two classic uppercut variations, jab-uppercut-hook-cross and
+ * jab-cross-uppercut-cross.
  */
 const BASIC_COMBOS = [
   'combo-01',
@@ -35,6 +42,9 @@ const BASIC_COMBOS = [
   'combo-10',
   'combo-11',
   'combo-12',
+  'combo-27',
+  'combo-28',
+  'combo-30',
 ] as const
 const ADVANCED_COMBOS = [
   'combo-13',
@@ -49,9 +59,22 @@ const ADVANCED_COMBOS = [
   'combo-22',
   'combo-23',
   'combo-24',
+  'combo-25',
+  'combo-26',
+  'combo-29',
 ] as const
-/** What a corner says between combinations. One in the pool each, so they stay rare. */
-const CORNER_LINES = ['hands-up', 'keep-moving'] as const
+
+type ComboCue = (typeof BASIC_COMBOS)[number] | (typeof ADVANCED_COMBOS)[number]
+/** The same combination called by punch number: `combo-05` is also `num-05`. */
+type NumberCue = ComboCue extends `combo-${infer Index}` ? `num-${Index}` : never
+
+function asNumbers(cue: ComboCue): NumberCue {
+  // SAFETY: every `combo-NN` has a `num-NN` clip — `NumberCue` is derived from
+  // `ComboCue` by that exact rewrite, which `slice` performs on the value.
+  return `num-${cue.slice('combo-'.length)}` as NumberCue
+}
+
+const NUMBER_COMBOS = [...BASIC_COMBOS, ...ADVANCED_COMBOS].map(asNumbers)
 
 /** How each themed round opens, a beat after "Round four". */
 const THEME_INTROS = ['theme-warmup', 'theme-power', 'theme-speed', 'theme-endurance'] as const
@@ -83,7 +106,7 @@ export const VOICE_CUES = [
   ...ROUND_CUES,
   ...BASIC_COMBOS,
   ...ADVANCED_COMBOS,
-  ...CORNER_LINES,
+  ...NUMBER_COMBOS,
   ...THEME_INTROS,
   ...NEXT_UP,
   ...SPEED_CALLS,
@@ -95,7 +118,6 @@ export type VoiceCue = (typeof VOICE_CUES)[number]
 export type CallCue =
   | (typeof BASIC_COMBOS)[number]
   | (typeof ADVANCED_COMBOS)[number]
-  | (typeof CORNER_LINES)[number]
   | (typeof SPEED_CALLS)[number]
 
 /** The clip for a 3-2-1 tick. */
@@ -130,8 +152,8 @@ type Callouts = BoxingConfig['callouts']
 
 const COMBO_POOLS = {
   off: [],
-  basic: [...BASIC_COMBOS, ...CORNER_LINES],
-  advanced: [...BASIC_COMBOS, ...ADVANCED_COMBOS, ...CORNER_LINES],
+  basic: BASIC_COMBOS,
+  advanced: [...BASIC_COMBOS, ...ADVANCED_COMBOS],
 } satisfies Readonly<Record<Callouts, ReadonlyArray<CallCue>>>
 
 /**
@@ -196,7 +218,7 @@ const NEXT_UP_MIN_REST_MS = 15 * SECOND_MS
 const THIRTY_SECONDS_MS = 30 * SECOND_MS
 const THIRTY_SECONDS_MIN_MS = 90 * SECOND_MS
 /** Room a combination needs before a time call, and after one, to be heard whole. */
-const CALLOUT_LEAD_MS = 3 * SECOND_MS
+const CALLOUT_LEAD_MS = 4 * SECOND_MS
 const CALLOUT_TRAIL_MS = 2 * SECOND_MS
 
 /** FNV-1a, 32 bit. Only its spread matters: it turns a slot's name into a pick. */
@@ -218,17 +240,26 @@ function timeMarks(durationMs: number, boxing: boolean): ReadonlyArray<number> {
   ]
 }
 
+/** How many slots in a row get the same combination before the coach moves on. */
+const COMBO_REPEATS = 3
+
 /**
- * The combination for one slot of one round. Picked by hashing the slot's
- * name rather than by `Math.random`, so the timer stays a function of the
- * session and the clock: a reload mid-round calls the same sequence, and a
- * test can name the line it expects. A slot that would repeat the one before
- * it takes the next line instead.
+ * The combination for one slot of one round. A combination is called
+ * `COMBO_REPEATS` times running: once to hear it, once to throw it properly,
+ * once to throw it hard. A new call every few seconds is a memory test, not
+ * bag work.
+ *
+ * Picked by hashing the set's name rather than by `Math.random`, so the timer
+ * stays a function of the session and the clock: a reload mid-round calls the
+ * same sequence, and a test can name the line it expects. A set that would
+ * repeat the one before it takes the next line instead.
  */
 function comboAt(sessionId: string, round: number, slot: number, pool: ReadonlyArray<CallCue>) {
   const pick = (at: number): number => hash(`${sessionId}:${round}:${at}`) % pool.length
-  const index = pick(slot)
-  return pool[index === pick(slot - 1) ? (index + 1) % pool.length : index]
+  // Slots count from 1 — the bell itself is never a call.
+  const set = Math.floor((slot - 1) / COMBO_REPEATS)
+  const index = pick(set)
+  return pool[index === pick(set - 1) ? (index + 1) % pool.length : index]
 }
 
 /**
@@ -286,19 +317,32 @@ function roundCall(
   left: number,
 ): VoiceCue | undefined {
   const now = callInSlot(session, config, round, left)
-  return now.slot === callInSlot(session, config, round, before).slot ? undefined : now.cue
+  if (now.slot === callInSlot(session, config, round, before).slot) return undefined
+  const { cue } = now
+  // The sprint calls have no number; everything else in a round is a combination.
+  if (cue === undefined || cue === 'fast-hands' || cue === 'easy-breathe') return cue
+  return config.callsAs === 'numbers' ? asNumbers(cue) : cue
 }
 
 /** Which hand throws a punch, by stance rather than by side: the jab hand, or the power hand. */
 type Hand = 'lead' | 'rear'
 /** One word of a call as the screen shows it, with the hand that throws it where it is a punch. */
-type CallStep = readonly [label: string, hand?: Hand]
+/**
+ * `number` is the same step in the gym's punch numbers, for a right-hander:
+ * 1 jab, 2 cross, 3 lead hook, 5 lead uppercut, 6 rear uppercut. A slip or a
+ * roll has none and is called by name either way.
+ */
+type CallStep = readonly [label: string, hand?: Hand, number?: string]
 
-const JAB = ['Jab', 'lead'] as const
-const DOUBLE_JAB = ['Double jab', 'lead'] as const
-const CROSS = ['Cross', 'rear'] as const
+const JAB = ['Jab', 'lead', '1'] as const
+const DOUBLE_JAB = ['Double jab', 'lead', '1 · 1'] as const
+const CROSS = ['Cross', 'rear', '2'] as const
 /** The hook is the lead hand's punch unless a call says otherwise; none here does. */
-const HOOK = ['Hook', 'lead'] as const
+const HOOK = ['Hook', 'lead', '3'] as const
+const LEAD_UPPERCUT = ['Uppercut', 'lead', '5'] as const
+const REAR_UPPERCUT = ['Uppercut', 'rear', '6'] as const
+const BODY_JAB = ['Jab to the body', 'lead', '1 body'] as const
+const BODY_HOOK = ['Hook to the body', 'lead', '3 body'] as const
 const SLIP = ['Slip'] as const
 const ROLL = ['Roll'] as const
 
@@ -326,20 +370,24 @@ const CALL_STEPS = {
   'combo-10': [HOOK, CROSS],
   'combo-11': [JAB, CROSS, JAB, CROSS],
   'combo-12': [DOUBLE_JAB, CROSS, HOOK],
-  'combo-13': [JAB, CROSS, ['Uppercut', 'lead']],
-  'combo-14': [JAB, ['Uppercut', 'rear'], HOOK],
-  'combo-15': [['Jab to the body', 'lead'], CROSS],
+  'combo-13': [JAB, CROSS, LEAD_UPPERCUT],
+  'combo-14': [JAB, REAR_UPPERCUT, HOOK],
+  'combo-15': [BODY_JAB, CROSS],
   'combo-16': [JAB, CROSS, SLIP, CROSS],
   'combo-17': [JAB, CROSS, ROLL, HOOK],
-  'combo-18': [CROSS, ['Hook to the body', 'lead']],
+  'combo-18': [CROSS, BODY_HOOK],
   'combo-19': [SLIP, CROSS, HOOK],
-  'combo-20': [['Uppercut', 'rear'], HOOK, CROSS],
-  'combo-21': [JAB, CROSS, ['Hook to the body', 'lead']],
+  'combo-20': [REAR_UPPERCUT, HOOK, CROSS],
+  'combo-21': [JAB, CROSS, BODY_HOOK],
   'combo-22': [DOUBLE_JAB, CROSS, ROLL],
-  'combo-23': [JAB, CROSS, HOOK, ['Uppercut', 'rear']],
+  'combo-23': [JAB, CROSS, HOOK, REAR_UPPERCUT],
   'combo-24': [ROLL, HOOK, CROSS],
-  'hands-up': [['Hands up']],
-  'keep-moving': [['Keep moving']],
+  'combo-25': [JAB, REAR_UPPERCUT, HOOK, CROSS],
+  'combo-26': [JAB, CROSS, LEAD_UPPERCUT, CROSS],
+  'combo-27': [JAB, HOOK, CROSS],
+  'combo-28': [HOOK, CROSS, HOOK],
+  'combo-29': [JAB, CROSS, BODY_HOOK, HOOK],
+  'combo-30': [CROSS, HOOK, CROSS, HOOK],
   'fast-hands': [['Fast hands']],
   'easy-breathe': [['Easy'], ['Breathe']],
 } satisfies Readonly<Record<CallCue, ReadonlyArray<CallStep>>>
@@ -353,14 +401,25 @@ export interface ShownStep {
 /** A right-hander's stance: left foot and left hand forward. */
 const SIDES = { lead: 'L', rear: 'R' } as const
 
-/** A call as the screen shows it: "Cross R · Hook L · Cross R". Empty for no call. */
-export function callSteps(cue: CallCue | ''): ReadonlyArray<ShownStep> {
+/**
+ * A call as the screen shows it — "Cross R · Hook L · Cross R", or in the
+ * numbers the voice is using, "2 R · 3 L · 2 R". Empty for no call.
+ */
+export function callSteps(
+  cue: CallCue | '',
+  callsAs: BoxingConfig['callsAs'] = 'names',
+): ReadonlyArray<ShownStep> {
   if (cue === '') return []
   const steps: ReadonlyArray<CallStep> = CALL_STEPS[cue]
-  return steps.map(([label, hand]) => ({
-    label,
+  return steps.map(([label, hand, number]) => ({
+    label: callsAs === 'numbers' ? (number ?? label) : label,
     side: hand === undefined ? undefined : SIDES[hand],
   }))
+}
+
+/** How this workout's combinations are called — and so how the screen should write them. */
+export function callStyleOf(session: CueSession): BoxingConfig['callsAs'] {
+  return session.config.mode === 'boxing' ? session.config.callsAs : 'names'
 }
 
 /**

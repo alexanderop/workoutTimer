@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { BOXING_CALLOUTS, BOXING_PACES_MS } from '@/db'
+import { BOXING_CALL_STYLES, BOXING_CALLOUTS, BOXING_PACES_MS } from '@/db'
 import { chipClass } from '@/features/timer/components/chip'
 import TimePicker from '@/features/timer/components/TimePicker.vue'
 import ValuePicker from '@/features/timer/components/ValuePicker.vue'
@@ -90,6 +90,24 @@ const PLAN_ROWS = 15
           {{ t(`timer.setup.calloutLevels.${level}`) }}
         </button>
       </div>
+    </fieldset>
+    <fieldset v-if="draft.callouts !== 'off'" class="min-w-0 sm:col-span-3">
+      <legend class="mb-3 text-sm font-medium">{{ t('timer.setup.callsAs') }}</legend>
+      <div class="flex flex-wrap gap-2">
+        <button
+          v-for="style in BOXING_CALL_STYLES"
+          :key="style"
+          type="button"
+          :class="chipClass(draft.callsAs === style)"
+          :aria-pressed="draft.callsAs === style"
+          @click="emit('edit', { callsAs: style })"
+        >
+          {{ t(`timer.setup.callStyles.${style}`) }}
+        </button>
+      </div>
+      <p v-if="draft.callsAs === 'numbers'" class="mt-2 text-sm text-muted-foreground">
+        {{ t('timer.setup.numbersLegend') }}
+      </p>
     </fieldset>
     <fieldset v-if="draft.callouts !== 'off'" class="min-w-0 sm:col-span-3">
       <legend class="mb-3 text-sm font-medium">{{ t('timer.setup.pace') }}</legend>

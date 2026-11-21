@@ -78,6 +78,15 @@ const TabataConfigSchema = Schema.Struct({
 export const BOXING_CALLOUTS = ['off', 'basic', 'advanced'] as const
 export const BOXING_PACES_MS = [8_000, 5_000, 3_000] as const
 /**
+ * How a combination is called: by name ("jab, cross, hook") or by the gym's
+ * punch numbers ("one, two, three"). Sessions and presets saved before this
+ * choice existed lack the key, so it decodes to the names they were using.
+ */
+export const BOXING_CALL_STYLES = ['names', 'numbers'] as const
+const CallStyle = Schema.Literals(BOXING_CALL_STYLES).pipe(
+  Schema.withDecodingDefaultKey(Effect.succeed('names' as const)),
+)
+/**
  * What a round is *for*. A bag session where every round is the same is the
  * thing coaches warn against: the round's theme decides what the voice asks
  * for — easy jabs, hard single shots, fifteen-second sprints, non-stop work.
@@ -98,6 +107,7 @@ const BoxingConfigSchema = Schema.Struct({
   rounds: Count,
   callouts: Schema.Literals(BOXING_CALLOUTS),
   paceMs: Schema.Literals(BOXING_PACES_MS),
+  callsAs: CallStyle,
   /**
    * One theme per round, repeated from the start when there are more rounds
    * than themes. Empty is the freestyle session: no themes at all.

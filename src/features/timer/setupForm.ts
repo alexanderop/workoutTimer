@@ -64,6 +64,7 @@ export interface TimerSetupDraft {
   readonly workSeconds: number
   readonly restSeconds: number
   readonly callouts: BoxingCallouts
+  readonly callsAs: BoxingConfig['callsAs']
   readonly paceSeconds: number
   readonly themes: BoxingConfig['themes']
   readonly blocks: ReadonlyArray<CircuitBlockDraft>
@@ -82,6 +83,7 @@ const NOTHING_SET: TimerSetupDraft = {
   workSeconds: 0,
   restSeconds: 0,
   callouts: 'off',
+  callsAs: 'names',
   paceSeconds: 0,
   themes: [],
   blocks: [],
@@ -162,6 +164,7 @@ export function applyConfigToDraft(draft: TimerSetupDraft, config: TimerConfig):
         restSeconds: config.restMs / SECOND_MS,
         rounds: config.rounds,
         callouts: config.callouts,
+        callsAs: config.callsAs,
         paceSeconds: config.paceMs / SECOND_MS,
         themes: config.themes,
       }
@@ -312,6 +315,7 @@ export function toTimerConfig(mode: TimerMode, draft: TimerSetupDraft): TimerCon
         restMs: Math.round(draft.restSeconds * SECOND_MS),
         rounds: Math.round(draft.rounds),
         callouts: draft.callouts,
+        callsAs: draft.callsAs,
         // The pace is one of three chips, never typed — anything else is a
         // draft no screen can produce, and reads as the default.
         paceMs:

@@ -1,4 +1,10 @@
-import { BOXING_CALLOUTS, BOXING_PACES_MS, BOXING_THEMES, FINISHED_STATUSES } from '@/db'
+import {
+  BOXING_CALL_STYLES,
+  BOXING_CALLOUTS,
+  BOXING_PACES_MS,
+  BOXING_THEMES,
+  FINISHED_STATUSES,
+} from '@/db'
 import type {
   CircuitBlock,
   SessionStatus,
@@ -44,6 +50,7 @@ export const DEFAULT_CONFIGS = {
     rounds: 6,
     callouts: 'basic',
     paceMs: 5_000,
+    callsAs: 'names',
     themes: [],
   },
   custom: {
@@ -202,6 +209,7 @@ export function isTimerConfig(config: TimerConfig): boolean {
         isIntervalPlan(config) &&
         BOXING_CALLOUTS.some((level) => level === config.callouts) &&
         BOXING_PACES_MS.some((pace) => pace === config.paceMs) &&
+        BOXING_CALL_STYLES.some((style) => style === config.callsAs) &&
         Array.isArray(config.themes) &&
         config.themes.length <= MAX_CIRCUIT_BLOCKS &&
         config.themes.every((theme) => BOXING_THEMES.some((known) => known === theme))

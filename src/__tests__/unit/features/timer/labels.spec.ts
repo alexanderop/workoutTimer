@@ -72,6 +72,7 @@ describe('timer labels', () => {
         rounds: 6,
         callouts: 'basic',
         paceMs: 5_000,
+        callsAs: 'names',
         themes: [],
       }),
     ).toBe('6 × 03:00 / 01:00')
